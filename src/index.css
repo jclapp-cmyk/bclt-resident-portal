@@ -1,0 +1,90 @@
+:root {
+  font-family: 'DM Sans', Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* ── PRINT STYLES ─────────────────────────────── */
+@media print {
+  /* Hide navigation, controls, and non-content elements */
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Force light theme */
+  :root {
+    --t-bg: #FFFFFF !important;
+    --t-surface: #FFFFFF !important;
+    --t-card: #FFFFFF !important;
+    --t-text: #1A1A1A !important;
+    --t-muted: #666666 !important;
+    --t-dim: #999999 !important;
+    --t-border: #CCCCCC !important;
+    --t-borderLight: #E0E0E0 !important;
+    --t-accent: #2E5090 !important;
+    --t-shadow: none !important;
+  }
+
+  /* Full-width content */
+  body {
+    min-width: auto !important;
+  }
+
+  #root > div > div:last-child {
+    max-width: 100% !important;
+    padding: 20px !important;
+    flex: 1 !important;
+  }
+
+  /* Hide all buttons (export, print, tabs within pages, toggles) */
+  button {
+    display: none !important;
+  }
+
+  /* But keep badge/status elements that happen to be in spans */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  table th,
+  table td {
+    border: 1px solid #CCCCCC !important;
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+    background: #FFFFFF !important;
+    color: #1A1A1A !important;
+  }
+
+  table th {
+    background: #F0F0F0 !important;
+    font-weight: 700 !important;
+  }
+
+  /* Prevent cards and tables from breaking across pages */
+  div[style*="borderRadius"],
+  table {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Remove box shadows in print */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Ensure content area fills page width without sidebar */
+  #root > div {
+    display: block !important;
+  }
+}
