@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident } from "./lib/data";
+import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 
 /* ═══════════════════════════════════════════════════════════
    BCLT RESIDENT PORTAL — Affordable Housing / Section 8
@@ -905,13 +906,13 @@ const BOTTOM_TABS = {
 // ── PAGE COMPONENTS ────────────────────────────────────────
 
 // --- RESIDENT DASHBOARD ---
-const ResidentDashboard = ({ mobile, maintenance, threads, notifications }) => {
+const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc }) => {
   const daysUntilRecert = Math.ceil((new Date(MOCK_RECERT.deadline) - new Date()) / 86400000);
-  const openRequests = maintenance.filter(m => m.unit === "B-204" && m.status !== "completed").length;
+  const openRequests = maintenance.filter(m => m.unit === rc?.unit && m.status !== "completed").length;
   return (
     <div>
-      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, Maria</h1>
-      <p style={s.sectionSub}>Unit B-204 — Bolinas Community Land Trust</p>
+      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, {rc?.firstName || "Resident"}</h1>
+      <p style={s.sectionSub}>Unit {rc?.unit || "—"} — Bolinas Community Land Trust</p>
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
         <StatCard label="Rent Balance" value="$0.00" accent={T.success} mobile={mobile} />
         <StatCard label="Open Requests" value={openRequests} accent={openRequests > 0 ? T.warn : T.success} mobile={mobile} />
@@ -933,7 +934,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications }) => {
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Recent Messages</div>
-        {threads.filter(t => t.type === "broadcast" || t.participants.includes("maria-santos")).sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).slice(0, 3).map(t => (
+        {threads.filter(t => t.type === "broadcast" || t.participants.includes(rc?.id || "")).sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).slice(0, 3).map(t => (
           <div key={t.id} style={{ padding: "10px 0", borderBottom: `1px solid ${T.borderLight}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontWeight: 600, fontSize: 14 }}>{t.subject}</span>
@@ -1119,17 +1120,17 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications }) => {
 };
 
 // --- MAINTENANCE PAGE (Resident) ---
-const ResidentMaintenance = ({ mobile, maintenance, onSubmit }) => {
+const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
   const [showForm, setShowForm] = useState(false);
   const [success, showSuccess] = useSuccess();
   const [formData, setFormData] = useState({ category: "Plumbing", urgency: "routine", description: "", permission: "Yes, enter anytime" });
-  const myRequests = maintenance.filter(m => m.unit === "B-204");
+  const myRequests = maintenance.filter(m => m.unit === (rc?.unit || "B-204"));
 
   const handleSubmit = () => {
     if (!formData.description.trim()) return;
     const newReq = {
       id: `MR-${2406 + maintenance.length}`,
-      unit: "B-204",
+      unit: rc?.unit || "B-204",
       category: formData.category,
       priority: formData.urgency,
       status: "submitted",
@@ -1268,7 +1269,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate }) => {
 };
 
 // --- RENT & PAYMENTS ---
-const RentPayments = ({ mobile }) => {
+const RentPayments = ({ mobile, rc }) => {
   const [showPay, setShowPay] = useState(false);
   return (
     <div>
@@ -1432,12 +1433,13 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
 };
 
 // --- UNIT DETAILS (Resident) ---
-const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile }) => {
+const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
   const u = MOCK_UNIT;
-  const residentDocs = leaseDocs["maria-santos"] || [];
+  const rid = rc?.id || "maria-santos";
+  const residentDocs = leaseDocs[rid] || [];
 
   const handleUpload = (doc) => {
-    setLeaseDocs(prev => ({ ...prev, "maria-santos": [...(prev["maria-santos"] || []), doc] }));
+    setLeaseDocs(prev => ({ ...prev, [rid]: [...(prev[rid] || []), doc] }));
   };
 
   return (
@@ -1491,15 +1493,16 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile }) => {
 
 
 // --- RESIDENT PROFILE ---
-const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, onUpdateEmergencyContacts }) => {
+const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, onUpdateEmergencyContacts, rc }) => {
   const tabs = ["Contact", "Emergency Contacts", "Household", "Lease Summary", "Preferences"];
   const [tab, setTab] = useState(tabs[0]);
   const [editingContact, setEditingContact] = useState(false);
-  const [contactForm, setContactForm] = useState({ phone: LIVE_RESIDENTS[0].phone, email: LIVE_RESIDENTS[0].email });
+  const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || LIVE_RESIDENTS[0];
+  const [contactForm, setContactForm] = useState({ phone: myRes.phone, email: myRes.email });
   const [editingEC, setEditingEC] = useState(null);
   const [ecForm, setEcForm] = useState({ name: "", relationship: "", phone: "", email: "" });
   const [success, showSuccess] = useSuccess();
-  const myContacts = emergencyContacts["maria-santos"] || [];
+  const myContacts = emergencyContacts[rc?.id || "maria-santos"] || [];
 
   const saveContact = () => {
     setEditingContact(false);
@@ -1522,12 +1525,12 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
     } else {
       updated = myContacts.map(ec => ec.id === editingEC ? { ...ec, ...ecForm } : ec);
     }
-    onUpdateEmergencyContacts("maria-santos", updated);
+    onUpdateEmergencyContacts(rc?.id || "maria-santos", updated);
     setEditingEC(null);
     showSuccess(editingEC === "new" ? "Emergency contact added!" : "Emergency contact updated!");
   };
   const deleteEC = (id) => {
-    onUpdateEmergencyContacts("maria-santos", myContacts.filter(ec => ec.id !== id));
+    onUpdateEmergencyContacts(rc?.id || "maria-santos", myContacts.filter(ec => ec.id !== id));
     showSuccess("Emergency contact removed.");
   };
 
@@ -2395,15 +2398,15 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 };
 
 // --- INSPECTIONS (All Roles — Unified) ---
-const Inspections = ({ role, mobile, unitInspections, onSchedule }) => {
+const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
   const isResident = role === "resident";
   const isAdmin = role === "admin";
   const tabs = isResident ? null : isAdmin ? ["Regulatory", "Unit History", "Categories", "Schedule"] : ["Unit History", "Categories", "My Assigned"];
   const [tab, setTab] = useState(isResident ? null : tabs[0]);
   const [success, showSuccess] = useSuccess();
-  const [schedForm, setSchedForm] = useState({ category: "", unit: "B-204", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
+  const [schedForm, setSchedForm] = useState({ category: "", unit: rc?.unit || "B-204", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
 
-  const unitData = isResident ? unitInspections.filter(i => i.unit === "B-204") : unitInspections;
+  const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "B-204")) : unitInspections;
   // Derive property filter from unitInspections — if all same property, filter reg inspections too
   const propIds = [...new Set(unitInspections.map(i => i.propertyId).filter(Boolean))];
   const regInsp = propIds.length === 1 ? MOCK_REG_INSPECTIONS.filter(i => i.propertyId === propIds[0]) : MOCK_REG_INSPECTIONS;
@@ -2697,7 +2700,7 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
   );
 };
 
-const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, onAddThread, onAddMessage, onUpdateThread }) => {
+const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, onAddThread, onAddMessage, onUpdateThread, rc }) => {
   const isAdmin = role === "admin";
   const isMaint = role === "maintenance";
   const tabs = isAdmin ? ["Inbox", "Compose", "Templates"] : isMaint ? ["Messages"] : ["Messages", "Preferences"];
@@ -2719,7 +2722,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   // Filter threads by role
   const threads = isAdmin ? threadData
     : isMaint ? threadData.filter(t => t.type === "broadcast" || t.subject.toLowerCase().includes("maintenance"))
-    : threadData.filter(t => t.type === "broadcast" || t.participants.includes("maria-santos"));
+    : threadData.filter(t => t.type === "broadcast" || t.participants.includes(rc?.id || ""));
   const sortedThreads = [...threads].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate));
   const unreadCount = sortedThreads.filter(t => t.unread > 0).length;
 
@@ -3916,10 +3919,73 @@ const OnboardingChecklist = ({ mobile, selectedProperty }) => {
   );
 };
 
+// ── LOGIN PAGE ─────────────────────────────────────────────
+
+const LoginPage = () => {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      await signInWithMagicLink(email.trim());
+      setSent(true);
+    } catch (err) {
+      setError(err.message || "Failed to send login link");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bg, padding: 20 }}>
+      <div style={{ ...s.card, maxWidth: 420, width: "100%", padding: 32, textAlign: "center" }}>
+        <div style={{ fontSize: 28, fontWeight: 800, color: T.accent, marginBottom: 4 }}>BCLT Portal</div>
+        <div style={{ fontSize: 13, color: T.muted, marginBottom: 28 }}>Bolinas Community Land Trust</div>
+        {sent ? (
+          <div>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>📬</div>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>Check your email</div>
+            <div style={{ color: T.muted, fontSize: 13, lineHeight: 1.5, marginBottom: 20 }}>
+              We sent a login link to <strong style={{ color: T.text }}>{email}</strong>. Click the link in the email to sign in.
+            </div>
+            <button onClick={() => { setSent(false); setEmail(""); }} style={{ ...s.btn("ghost"), fontSize: 13 }}>Use a different email</button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <div style={{ textAlign: "left", marginBottom: 16 }}>
+              <label style={{ ...s.label, marginBottom: 6 }}>Email Address</label>
+              <input
+                type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="you@example.com" required autoFocus
+                style={{ ...s.input, width: "100%", padding: "12px 14px", fontSize: 14 }}
+              />
+            </div>
+            {error && <div style={{ color: T.danger, fontSize: 13, marginBottom: 12 }}>{error}</div>}
+            <button type="submit" disabled={loading} style={{ ...s.btn("primary"), width: "100%", padding: "12px", fontSize: 14, marginBottom: 16 }}>
+              {loading ? "Sending..." : "Send Login Link"}
+            </button>
+            <div style={{ color: T.dim, fontSize: 12 }}>Don't have an account? Contact your property manager.</div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ── MAIN APP ───────────────────────────────────────────────
 
 export default function App() {
-  const [role, setRole] = useState("resident");
+  const [authUser, setAuthUser] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [roleOverride, setRoleOverride] = useState(null);
+  const role = roleOverride || profile?.role || "resident";
   const [page, setPage] = useState("dashboard");
   const [commPrefs, setCommPrefs] = useState(MOCK_COMM_PREFS);
   const [leaseDocs, setLeaseDocs] = useState(MOCK_LEASE_DOCS);
@@ -3981,6 +4047,42 @@ export default function App() {
     loadFromSupabase();
     return () => { cancelled = true; };
   }, []);
+
+  // Auth: check session on mount, listen for changes
+  useEffect(() => {
+    getCurrentSession().then(session => {
+      if (session?.user) {
+        setAuthUser(session.user);
+        fetchProfile(session.user.id, session.user.email).then(p => { if (p) setProfile(p); });
+      }
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = onAuthStateChange(session => {
+      if (session?.user) {
+        setAuthUser(session.user);
+        fetchProfile(session.user.id, session.user.email).then(p => { if (p) setProfile(p); });
+      } else {
+        setAuthUser(null);
+        setProfile(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Resident context — derived from profile for logged-in residents, or from View As for admins
+  const residentCtx = (() => {
+    if (role === "resident") {
+      if (profile?.role === "resident" && profile.residentSlug) {
+        return { id: profile.residentSlug, name: profile.residentName, firstName: profile.residentName?.split(" ")[0], unit: profile.unit, propertyId: profile.propertySlug };
+      }
+      // Admin impersonating a resident — use roleOverride with a selected resident
+      // Falls back to first resident
+      const r = LIVE_RESIDENTS[0];
+      const ext = LIVE_RESIDENTS_EXTENDED[r?.id] || {};
+      return { id: r?.id || "maria-santos", name: r?.name || "Maria Santos", firstName: (r?.name || "Maria").split(" ")[0], unit: r?.unit || "B-204", propertyId: r?.propertyId || "wharf" };
+    }
+    return null;
+  })();
 
   // Note: LIVE_PROPERTIES / LIVE_RESIDENTS / LIVE_RESIDENTS_EXTENDED are module-level
   // bindings updated by the Supabase useEffect above. All components read from those.
@@ -4062,14 +4164,14 @@ export default function App() {
     navBadges["work-orders"] = maintenance.filter(m => !m.assignedTo).length;
     navBadges.messages = threads.filter(t => t.unread > 0 && (t.type === "broadcast" || t.subject.toLowerCase().includes("maintenance"))).length;
   } else {
-    navBadges.messages = threads.filter(t => t.unread > 0 && (t.participants.includes("maria-santos") || t.type === "broadcast")).length;
+    navBadges.messages = threads.filter(t => t.unread > 0 && (t.participants.includes(residentCtx?.id || "") || t.type === "broadcast")).length;
   }
 
   const handleRoleChange = useCallback((newRole) => {
-    setRole(newRole);
+    setRoleOverride(newRole === profile?.role ? null : newRole);
     setPage("dashboard");
     setSidebarOpen(false);
-  }, []);
+  }, [profile]);
 
   const handleNav = (id) => {
     setPage(id);
@@ -4092,16 +4194,17 @@ export default function App() {
 
   const renderPage = () => {
     if (role === "resident") {
+      const rc = residentCtx;
       switch (page) {
-        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} />;
-        case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={maintenance} onSubmit={addMaintenanceN} />;
-        case "rent": return <RentPayments mobile={mobile} />;
+        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} rc={rc} />;
+        case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={maintenance} onSubmit={addMaintenanceN} rc={rc} />;
+        case "rent": return <RentPayments mobile={mobile} rc={rc} />;
         case "recert": return <Recertification role="resident" mobile={mobile} />;
-        case "unit": return <UnitDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} />;
-        case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} />;
-        case "profile": return <ResidentProfile mobile={mobile} commPrefs={commPrefs} setCommPrefs={setCommPrefs} emergencyContacts={emergencyContacts} onUpdateEmergencyContacts={updateEmergencyContacts} />;
-        case "messages": return <Communications role="resident" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
-        default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} />;
+        case "unit": return <UnitDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} rc={rc} />;
+        case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} rc={rc} />;
+        case "profile": return <ResidentProfile mobile={mobile} commPrefs={commPrefs} setCommPrefs={setCommPrefs} emergencyContacts={emergencyContacts} onUpdateEmergencyContacts={updateEmergencyContacts} rc={rc} />;
+        case "messages": return <Communications role="resident" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} rc={rc} />;
+        default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} rc={rc} />;
       }
     }
     if (role === "admin") {
@@ -4156,17 +4259,19 @@ export default function App() {
           {mobile && <button onClick={() => setSidebarOpen(false)} style={{ background: "none", border: "none", fontSize: 22, color: T.muted, cursor: "pointer", padding: 4 }}>✕</button>}
         </div>
       </div>
-      <div style={{ padding: "12px 12px 0" }}>
-        <div style={{ fontSize: 10, fontWeight: 600, color: T.dim, textTransform: "uppercase", letterSpacing: "1px", padding: "0 6px", marginBottom: 6 }}>View As</div>
-        {["resident", "admin", "maintenance"].map(r => (
-          <button key={r} onClick={() => handleRoleChange(r)} style={{
-            display: "block", width: "100%", textAlign: "left", padding: mobile ? "10px 12px" : "7px 12px", marginBottom: 2, borderRadius: 6,
-            background: role === r ? T.accentDim : "transparent", color: role === r ? T.accent : T.muted,
-            border: "none", cursor: "pointer", fontSize: 13, fontWeight: role === r ? 700 : 500, textTransform: "capitalize",
-            minHeight: mobile ? 44 : undefined,
-          }}>{r === "maintenance" ? "Maint. Staff" : r}</button>
-        ))}
-      </div>
+      {profile?.role === "admin" && (
+        <div style={{ padding: "12px 12px 0" }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: T.dim, textTransform: "uppercase", letterSpacing: "1px", padding: "0 6px", marginBottom: 6 }}>View As</div>
+          {["resident", "admin", "maintenance"].map(r => (
+            <button key={r} onClick={() => handleRoleChange(r)} style={{
+              display: "block", width: "100%", textAlign: "left", padding: mobile ? "10px 12px" : "7px 12px", marginBottom: 2, borderRadius: 6,
+              background: role === r ? T.accentDim : "transparent", color: role === r ? T.accent : T.muted,
+              border: "none", cursor: "pointer", fontSize: 13, fontWeight: role === r ? 700 : 500, textTransform: "capitalize",
+              minHeight: mobile ? 44 : undefined,
+            }}>{r === "maintenance" ? "Maint. Staff" : r}</button>
+          ))}
+        </div>
+      )}
       {role === "admin" && (
         <div style={{ padding: "10px 12px 0" }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: T.dim, textTransform: "uppercase", letterSpacing: "1px", padding: "0 6px", marginBottom: 6 }}>Property</div>
@@ -4210,15 +4315,20 @@ export default function App() {
       </div>
       <div style={{ padding: "14px 18px", borderTop: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: 32, height: 32, borderRadius: "50%", background: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, color: T.white }}>
-          {role === "resident" ? "MS" : role === "admin" ? "AD" : "MR"}
+          {(profile?.displayName || profile?.email || "?").slice(0, 2).toUpperCase()}
         </div>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{role === "resident" ? "Maria Santos" : role === "admin" ? "Admin" : "Mike R."}</div>
-          <div style={{ fontSize: 11, color: T.dim }}>{role === "resident" ? "Unit B-204" : role === "admin" ? "Management" : "Maintenance"}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{profile?.displayName || profile?.email?.split("@")[0] || "User"}</div>
+          <div style={{ fontSize: 11, color: T.dim }}>{profile?.role === "resident" ? `Unit ${profile.unit}` : profile?.role === "admin" ? "Management" : "Maintenance"}</div>
         </div>
+        <button onClick={() => signOut()} style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }}>Sign Out</button>
       </div>
     </>
   );
+
+  // Auth gate
+  if (authLoading) return <div style={{ ...s.page, ...themeVars, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}><div style={{ color: T.muted, fontSize: 14 }}>Loading...</div></div>;
+  if (!authUser || !profile) return <div style={themeVars}><LoginPage /></div>;
 
   return (
     <div style={{ ...s.page, ...themeVars, display: "flex", flexDirection: mobile ? "column" : "row" }}>
@@ -4230,7 +4340,7 @@ export default function App() {
             <button onClick={() => setDarkMode(d => !d)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", padding: 4, minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }} title={darkMode ? "Light mode" : "Dark mode"}>{darkMode ? "☀️" : "🌙"}</button>
             <NotificationBell count={unreadCount} onClick={() => setShowNotifPanel(!showNotifPanel)} mobile={mobile} />
             <div style={{ width: 32, height: 32, borderRadius: "50%", background: T.accent, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 12, color: T.white }}>
-              {role === "resident" ? "MS" : role === "admin" ? "AD" : "MR"}
+              {(profile?.displayName || profile?.email || "?").slice(0, 2).toUpperCase()}
             </div>
           </div>
         </div>
