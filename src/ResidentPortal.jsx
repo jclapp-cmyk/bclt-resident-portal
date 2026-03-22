@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident } from "./lib/data";
 
 /* ═══════════════════════════════════════════════════════════
    BCLT RESIDENT PORTAL — Affordable Housing / Section 8
@@ -48,7 +49,7 @@ const MOCK_PROPERTIES = [
     ],
   },
 ];
-const getProperty = (id) => MOCK_PROPERTIES.find(p => p.id === id) || MOCK_PROPERTIES[0];
+const getProperty = (id) => LIVE_PROPERTIES.find(p => p.id === id) || LIVE_PROPERTIES[0];
 const MOCK_PROPERTY = MOCK_PROPERTIES[0]; // backward compat for resident views
 
 const MOCK_UNIT = {
@@ -370,6 +371,11 @@ const DEFAULT_SETTINGS = {
   rent: { dueDay: "1", gracePeriodDays: "5", lateFeeAmount: "50", leaseTermDefault: "12", autoRenewal: true },
   maint: { categories: ["Plumbing", "Electrical", "HVAC", "Appliance", "Structural", "Pest", "Other"], defaultPriority: "routine", autoAssign: false, emergencyPhone: "(415) 555-0199" },
 };
+
+// Live data bindings — start as mock, updated by Supabase fetch in App
+let LIVE_PROPERTIES = MOCK_PROPERTIES;
+let LIVE_RESIDENTS = MOCK_RESIDENTS;
+let LIVE_RESIDENTS_EXTENDED = MOCK_RESIDENTS_EXTENDED;
 
 // ── DESIGN TOKENS (Light Theme) ──────────────────────────────
 
@@ -765,7 +771,7 @@ const buildSearchResults = (query, role, maintenance, threads, vendors, unitInsp
 
   // Residents (admin only)
   if (role === "admin") {
-    const res = MOCK_RESIDENTS.filter(r => r.name.toLowerCase().includes(q) || r.unit.toLowerCase().includes(q) || r.email.toLowerCase().includes(q)).slice(0, 5);
+    const res = LIVE_RESIDENTS.filter(r => r.name.toLowerCase().includes(q) || r.unit.toLowerCase().includes(q) || r.email.toLowerCase().includes(q)).slice(0, 5);
     if (res.length) groups.push({ cat: "Residents", icon: "👥", items: res.map(r => ({ id: r.id, label: r.name, sub: `${r.unit} · ${r.email}`, page: "residents" })) });
   }
 
@@ -963,7 +969,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
   const upcomingInsp = regInsp.filter(i => new Date(i.nextDue) < new Date("2026-06-01")).length;
   const expVendors = vendorData.filter(v => !v.active || new Date(v.licenseExp) < new Date("2026-06-01")).length;
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
-  const totalUnits = selectedProperty === "all" ? MOCK_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0) : getProperty(selectedProperty).totalUnits;
+  const totalUnits = selectedProperty === "all" ? LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0) : getProperty(selectedProperty).totalUnits;
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Admin Dashboard</h1>
@@ -980,11 +986,11 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Property Performance</div>
           <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap" }}>
-            {MOCK_PROPERTIES.map(p => {
+            {LIVE_PROPERTIES.map(p => {
               const pMaint = MOCK_MAINTENANCE.filter(m => m.propertyId === p.id);
               const pOpen = pMaint.filter(m => m.status !== "completed").length;
               const pCrit = pMaint.filter(m => m.priority === "critical" && m.status !== "completed").length;
-              const pRes = MOCK_RESIDENTS.filter(r => r.propertyId === p.id);
+              const pRes = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
               const pLedger = MOCK_RENT_LEDGER.filter(r => r.propertyId === p.id);
               const pRent = pLedger.reduce((s, r) => s + r.rentDue, 0);
               const pColl = pLedger.reduce((s, r) => s + r.tenantPaid + r.hapReceived, 0);
@@ -1489,7 +1495,7 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
   const tabs = ["Contact", "Emergency Contacts", "Household", "Lease Summary", "Preferences"];
   const [tab, setTab] = useState(tabs[0]);
   const [editingContact, setEditingContact] = useState(false);
-  const [contactForm, setContactForm] = useState({ phone: MOCK_RESIDENTS[0].phone, email: MOCK_RESIDENTS[0].email });
+  const [contactForm, setContactForm] = useState({ phone: LIVE_RESIDENTS[0].phone, email: LIVE_RESIDENTS[0].email });
   const [editingEC, setEditingEC] = useState(null);
   const [ecForm, setEcForm] = useState({ name: "", relationship: "", phone: "", email: "" });
   const [success, showSuccess] = useSuccess();
@@ -1680,7 +1686,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const detailTabs = ["Overview", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
 
   if (selectedResident) {
-    const ext = MOCK_RESIDENTS_EXTENDED[selectedResident.id] || {};
+    const ext = LIVE_RESIDENTS_EXTENDED[selectedResident.id] || {};
     const resMaintenance = maintenance.filter(m => m.unit === selectedResident.unit);
     const resThreads = threads.filter(t => t.participants.includes(selectedResident.id) || t.type === "broadcast");
     const resNotes = adminNotes[selectedResident.id] || [];
@@ -1895,11 +1901,11 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22, marginBottom: 0 }}>Residents</h1>
         <ExportButton mobile={mobile} onClick={() => generateCSV(
           [{ label: "Name", key: "name" }, { label: "Unit", key: "unit" }, { label: "BR", key: "bedrooms" }, { label: "Rent", key: "rentAmount" }, { label: "Lease Start", key: "leaseStart" }, { label: "Lease End", key: "leaseEnd" }, { label: "Phone", key: "phone" }, { label: "Email", key: "email" }],
-          filterByProperty(MOCK_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(MOCK_RESIDENTS_EXTENDED[r.id] || {}) })), "residents"
+          filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) })), "residents"
         )} />
       </div>
       {(() => {
-        const fr = filterByProperty(MOCK_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(MOCK_RESIDENTS_EXTENDED[r.id] || {}) }));
+        const fr = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
         const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
         return (<>
       <p style={s.sectionSub}>{propLabel} — {fr.length} Residents</p>
@@ -1934,7 +1940,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
 
 // --- PROPERTY DETAILS (Admin) ---
 const PropertyCard = ({ p, mobile, onSelect }) => {
-  const residents = MOCK_RESIDENTS.filter(r => r.propertyId === p.id);
+  const residents = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
   const maint = MOCK_MAINTENANCE.filter(m => m.propertyId === p.id);
   const openMaint = maint.filter(m => m.status !== "completed").length;
   const ledger = MOCK_RENT_LEDGER.filter(r => r.propertyId === p.id);
@@ -2033,28 +2039,28 @@ const PropertySingleView = ({ p, mobile }) => (
 
 const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty }) => {
   const isAll = !selectedProperty || selectedProperty === "all";
-  const totalUnits = MOCK_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0);
-  const totalResidents = MOCK_RESIDENTS.length;
-  const totalSF = MOCK_PROPERTIES.reduce((s, p) => s + p.totalSF, 0);
+  const totalUnits = LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0);
+  const totalResidents = LIVE_RESIDENTS.length;
+  const totalSF = LIVE_PROPERTIES.reduce((s, p) => s + p.totalSF, 0);
 
   if (isAll) {
     return (
       <div>
         <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Property Portfolio</h1>
-        <p style={s.sectionSub}>BCLT — {MOCK_PROPERTIES.length} Properties · {totalUnits} Units · {totalSF.toLocaleString()} SF</p>
+        <p style={s.sectionSub}>BCLT — {LIVE_PROPERTIES.length} Properties · {totalUnits} Units · {totalSF.toLocaleString()} SF</p>
         <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 20 }}>
-          <StatCard label="Properties" value={MOCK_PROPERTIES.length} mobile={mobile} />
+          <StatCard label="Properties" value={LIVE_PROPERTIES.length} mobile={mobile} />
           <StatCard label="Total Units" value={totalUnits} accent={T.accent} mobile={mobile} />
           <StatCard label="Total Residents" value={totalResidents} accent={T.info} mobile={mobile} />
           <StatCard label="Total SF" value={totalSF.toLocaleString()} accent={T.success} mobile={mobile} />
         </div>
-        {MOCK_PROPERTIES.map(p => <PropertyCard key={p.id} p={p} mobile={mobile} onSelect={() => onSelectProperty?.(p.id, "property")} />)}
+        {LIVE_PROPERTIES.map(p => <PropertyCard key={p.id} p={p} mobile={mobile} onSelect={() => onSelectProperty?.(p.id, "property")} />)}
       </div>
     );
   }
 
   const p = getProperty(selectedProperty);
-  const propResidents = MOCK_RESIDENTS.filter(r => r.propertyId === selectedProperty);
+  const propResidents = LIVE_RESIDENTS.filter(r => r.propertyId === selectedProperty);
   const propMaint = MOCK_MAINTENANCE.filter(m => m.propertyId === selectedProperty);
   return (
     <div>
@@ -2089,16 +2095,16 @@ const ONBOARDING_STATUS = {
 const AdminDocuments = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty }) => {
   const tabs = ["All Documents", "By Resident", "Property", "Compliance"];
   const [tab, setTab] = useState(tabs[0]);
-  const filteredResidents = filterByProperty(MOCK_RESIDENTS, selectedProperty);
-  const [selectedResident, setSelectedResident] = useState(filteredResidents[0]?.id || MOCK_RESIDENTS[0].id);
+  const filteredResidents = filterByProperty(LIVE_RESIDENTS, selectedProperty);
+  const [selectedResident, setSelectedResident] = useState(filteredResidents[0]?.id || LIVE_RESIDENTS[0].id);
   const [success, showSuccess] = useSuccess();
 
   const resIds = new Set(filteredResidents.map(r => r.id));
   const allDocs = Object.entries(leaseDocs).filter(([resId]) => resIds.has(resId)).flatMap(([resId, docs]) => {
-    const res = MOCK_RESIDENTS.find(r => r.id === resId);
+    const res = LIVE_RESIDENTS.find(r => r.id === resId);
     return docs.map(d => ({ ...d, residentName: res?.name || resId, unit: res?.unit || "—", residentId: resId }));
   });
-  const propObj = selectedProperty === "all" ? MOCK_PROPERTIES[0] : getProperty(selectedProperty);
+  const propObj = selectedProperty === "all" ? LIVE_PROPERTIES[0] : getProperty(selectedProperty);
   const propertyDocs = (propObj.documents || []).map((d, i) => ({
     id: `PD-${i}`, name: d.name, type: d.type, residentName: "Property", unit: "—",
     size: null, uploadedAt: d.uploaded + "T00:00:00Z", uploadedBy: "Admin",
@@ -2190,12 +2196,12 @@ const AdminDocuments = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty }) =
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
             <ExportButton mobile={mobile} onClick={() => generateCSV(
-              [{ label: "Resident", key: "residentId", exportValue: r => MOCK_RESIDENTS.find(res => res.id === r.residentId)?.name || r.residentId }, { label: "Unit", key: "unit" }, { label: "Document Type", key: "docType", exportValue: r => LEASE_DOC_TYPES[r.docType] || r.docType }, { label: "Status", key: "status" }, { label: "Expires", key: "expires", exportValue: r => r.expires || "N/A" }, { label: "Last Uploaded", key: "lastUploaded", exportValue: r => r.lastUploaded || "Never" }],
+              [{ label: "Resident", key: "residentId", exportValue: r => LIVE_RESIDENTS.find(res => res.id === r.residentId)?.name || r.residentId }, { label: "Unit", key: "unit" }, { label: "Document Type", key: "docType", exportValue: r => LEASE_DOC_TYPES[r.docType] || r.docType }, { label: "Status", key: "status" }, { label: "Expires", key: "expires", exportValue: r => r.expires || "N/A" }, { label: "Last Uploaded", key: "lastUploaded", exportValue: r => r.lastUploaded || "Never" }],
               compDocsF, "compliance_documents"
             )} />
           </div>
           <SortableTable mobile={mobile} columns={[
-            { key: "residentId", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{MOCK_RESIDENTS.find(r => r.id === v)?.name || v}</span>, sortValue: r => MOCK_RESIDENTS.find(res => res.id === r.residentId)?.name || "", filterValue: r => MOCK_RESIDENTS.find(res => res.id === r.residentId)?.name || "" },
+            { key: "residentId", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{LIVE_RESIDENTS.find(r => r.id === v)?.name || v}</span>, sortValue: r => LIVE_RESIDENTS.find(res => res.id === r.residentId)?.name || "", filterValue: r => LIVE_RESIDENTS.find(res => res.id === r.residentId)?.name || "" },
             { key: "unit", label: "Unit" },
             { key: "docType", label: "Document", render: v => LEASE_DOC_TYPES[v] || v, filterOptions: [...new Set(compDocsF.map(d => d.docType))] },
             { key: "status", label: "Status", render: v => { const c = COMPLIANCE_STATUS[v] || COMPLIANCE_STATUS.missing; return <span style={s.badge(c.bg, c.text)}>{v.charAt(0).toUpperCase() + v.slice(1)}</span>; }, filterOptions: ["current", "expired", "missing"] },
@@ -2232,7 +2238,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
   const priCounts = { critical: dMaint.filter(m => m.priority === "critical" && m.status !== "completed").length, urgent: dMaint.filter(m => m.priority === "urgent" && m.status !== "completed").length, routine: dMaint.filter(m => m.priority === "routine" && m.status !== "completed").length };
 
   // Financial aggregations
-  const residents = filterByProperty(MOCK_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(MOCK_RESIDENTS_EXTENDED[r.id] || {}) }));
+  const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
@@ -2309,8 +2315,8 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
           {selectedProperty === "all" && (
             <div style={s.card}>
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Financial by Property</div>
-              <MiniBarChart bars={MOCK_PROPERTIES.map((p, i) => {
-                const pRent = MOCK_RESIDENTS.filter(r => r.propertyId === p.id).map(r => ({ ...r, ...(MOCK_RESIDENTS_EXTENDED[r.id] || {}) })).reduce((s, r) => s + (r.rentAmount || 0), 0);
+              <MiniBarChart bars={LIVE_PROPERTIES.map((p, i) => {
+                const pRent = LIVE_RESIDENTS.filter(r => r.propertyId === p.id).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) })).reduce((s, r) => s + (r.rentAmount || 0), 0);
                 return { label: p.name.split(" ")[0], value: pRent, color: [T.accent, T.success, T.warn][i] };
               })} mobile={mobile} />
             </div>
@@ -2648,7 +2654,7 @@ const CHANNEL_BADGES = { sms: { bg: T.successDim, text: T.success, label: "SMS" 
 const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessage, onUpdateThread }) => {
   const [reply, setReply] = useState("");
   const messages = allMessages.filter(m => m.threadId === thread.id);
-  const resident = MOCK_RESIDENTS.find(r => thread.participants.includes(r.id));
+  const resident = LIVE_RESIDENTS.find(r => thread.participants.includes(r.id));
   const isBroadcast = thread.type === "broadcast";
 
   return (
@@ -2662,13 +2668,13 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
             <span style={{ ...s.badge(CHANNEL_BADGES[thread.channel].bg, CHANNEL_BADGES[thread.channel].text), marginLeft: 10 }}>{CHANNEL_BADGES[thread.channel].label}</span>
           </div>
         </div>
-        {isBroadcast && <span style={s.badge(T.successDim, T.success)}>{MOCK_RESIDENTS.length} delivered</span>}
+        {isBroadcast && <span style={s.badge(T.successDim, T.success)}>{LIVE_RESIDENTS.length} delivered</span>}
       </div>
       <div style={{ ...s.card, padding: 0, overflow: "hidden" }}>
         <div style={{ padding: mobile ? 12 : 20, maxHeight: mobile ? "60vh" : 400, overflowY: "auto" }}>
           {messages.map(msg => {
             const isAdmin = msg.from === "admin";
-            const sender = isAdmin ? "Management" : (MOCK_RESIDENTS.find(r => r.id === msg.from)?.name || msg.from);
+            const sender = isAdmin ? "Management" : (LIVE_RESIDENTS.find(r => r.id === msg.from)?.name || msg.from);
             return (
               <div key={msg.id} style={{ display: "flex", justifyContent: isAdmin ? "flex-end" : "flex-start", marginBottom: 12 }}>
                 <div style={{ maxWidth: mobile ? "85%" : "70%", padding: "10px 14px", borderRadius: 12, background: isAdmin ? T.accent : T.bg, color: isAdmin ? T.white : T.text, borderBottomRightRadius: isAdmin ? 4 : 12, borderBottomLeftRadius: isAdmin ? 12 : 4 }}>
@@ -2736,7 +2742,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   // Thread list item renderer
   const ThreadItem = ({ thread: t }) => {
     const isBroadcast = t.type === "broadcast";
-    const resident = !isBroadcast ? MOCK_RESIDENTS.find(r => t.participants.includes(r.id)) : null;
+    const resident = !isBroadcast ? LIVE_RESIDENTS.find(r => t.participants.includes(r.id)) : null;
     const name = isBroadcast ? "All Residents" : (resident?.name || "Unknown");
     const chBadge = CHANNEL_BADGES[t.channel];
     return (
@@ -2797,7 +2803,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               <label style={s.label}>To</label>
               <select style={{ ...s.select, width: "100%" }} value={composeData.to} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))}>
                 <option value="">Select resident...</option>
-                {MOCK_RESIDENTS.map(r => (
+                {LIVE_RESIDENTS.map(r => (
                   <option key={r.id} value={r.id}>{r.name} — Unit {r.unit} ({r.preferredChannel})</option>
                 ))}
               </select>
@@ -2838,7 +2844,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
           </div>
           {composeData.broadcast && (
             <div style={{ padding: 12, background: T.warnDim, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, color: T.warn }}>
-              This message will be sent to all {MOCK_RESIDENTS.length} residents via their preferred channel.
+              This message will be sent to all {LIVE_RESIDENTS.length} residents via their preferred channel.
             </div>
           )}
           <div style={{ display: "flex", gap: 10 }}>
@@ -3154,7 +3160,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Bulk Data Export</div>
             <p style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>Download complete datasets as CSV files</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              <ExportButton label="All Residents" mobile={mobile} onClick={() => generateCSV([{ label: "Name", key: "name" }, { label: "Unit", key: "unit" }, { label: "Phone", key: "phone" }, { label: "Email", key: "email" }, { label: "Channel", key: "preferredChannel" }], MOCK_RESIDENTS, "residents")} />
+              <ExportButton label="All Residents" mobile={mobile} onClick={() => generateCSV([{ label: "Name", key: "name" }, { label: "Unit", key: "unit" }, { label: "Phone", key: "phone" }, { label: "Email", key: "email" }, { label: "Channel", key: "preferredChannel" }], LIVE_RESIDENTS, "residents")} />
               <ExportButton label="All Vendors" mobile={mobile} onClick={() => generateCSV([{ label: "Company", key: "company" }, { label: "Contact", key: "contact" }, { label: "Trade", key: "trade" }, { label: "Phone", key: "phone" }, { label: "Active", key: "active", exportValue: r => r.active ? "Yes" : "No" }], vendors, "vendors")} />
               <ExportButton label="All Maintenance" mobile={mobile} onClick={() => generateCSV([{ label: "ID", key: "id" }, { label: "Unit", key: "unit" }, { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" }, { label: "Submitted", key: "submitted" }], maintenance, "maintenance")} />
               <ExportButton label="All Inspections" mobile={mobile} onClick={() => generateCSV([{ label: "Date", key: "date" }, { label: "Unit", key: "unit" }, { label: "Category", key: "category" }, { label: "Result", key: "result" }, { label: "Inspector", key: "inspector" }], unitInspections, "inspections")} />
@@ -3202,8 +3208,8 @@ const buildCalendarEvents = (maintenance, vendors, unitInspections) => {
   });
   // Recertification
   add(MOCK_RECERT.deadline, "recert", "📋", T.danger, "Recertification Deadline", "Maria Santos — Annual recert due", "recert");
-  Object.entries(MOCK_RESIDENTS_EXTENDED).forEach(([id, r]) => {
-    const res = MOCK_RESIDENTS.find(rr => rr.id === id);
+  Object.entries(LIVE_RESIDENTS_EXTENDED).forEach(([id, r]) => {
+    const res = LIVE_RESIDENTS.find(rr => rr.id === id);
     add(r.leaseEnd, "recert", "📋", T.danger, `Lease Expiry — ${r.unit}`, res ? res.name : id, "recert");
   });
   // Vendor compliance
@@ -3380,11 +3386,11 @@ const ComplianceDashboard = ({ mobile, vendors, unitInspections, selectedPropert
   // Risk items
   const risks = [];
   compDocs.filter(d => d.status === "expired").forEach(d => {
-    const name = MOCK_RESIDENTS.find(r => r.id === d.residentId)?.name || d.residentId;
+    const name = LIVE_RESIDENTS.find(r => r.id === d.residentId)?.name || d.residentId;
     risks.push({ icon: "📄", text: `${name} — ${LEASE_DOC_TYPES[d.docType] || d.docType} expired`, color: T.danger });
   });
   compDocs.filter(d => d.status === "missing").forEach(d => {
-    const name = MOCK_RESIDENTS.find(r => r.id === d.residentId)?.name || d.residentId;
+    const name = LIVE_RESIDENTS.find(r => r.id === d.residentId)?.name || d.residentId;
     risks.push({ icon: "⚠️", text: `${name} — ${LEASE_DOC_TYPES[d.docType] || d.docType} missing`, color: T.warn });
   });
   regInsp.forEach(i => {
@@ -3403,7 +3409,7 @@ const ComplianceDashboard = ({ mobile, vendors, unitInspections, selectedPropert
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
         <div><h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Compliance & Audit</h1><p style={s.sectionSub}>{propLabel} — HUD, LIHTC, and regulatory compliance</p></div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Resident", key: "residentId", exportValue: r => MOCK_RESIDENTS.find(res => res.id === r.residentId)?.name || r.residentId }, { label: "Unit", key: "unit" }, { label: "Doc Type", key: "docType", exportValue: r => LEASE_DOC_TYPES[r.docType] || r.docType }, { label: "Status", key: "status" }, { label: "Expires", key: "expires", exportValue: r => r.expires || "N/A" }, { label: "Last Uploaded", key: "lastUploaded", exportValue: r => r.lastUploaded || "Never" }], compDocs, "compliance_docs")} />
+          <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Resident", key: "residentId", exportValue: r => LIVE_RESIDENTS.find(res => res.id === r.residentId)?.name || r.residentId }, { label: "Unit", key: "unit" }, { label: "Doc Type", key: "docType", exportValue: r => LEASE_DOC_TYPES[r.docType] || r.docType }, { label: "Status", key: "status" }, { label: "Expires", key: "expires", exportValue: r => r.expires || "N/A" }, { label: "Last Uploaded", key: "lastUploaded", exportValue: r => r.lastUploaded || "Never" }], compDocs, "compliance_docs")} />
           <PrintButton mobile={mobile} />
         </div>
       </div>
@@ -3442,7 +3448,7 @@ const ComplianceDashboard = ({ mobile, vendors, unitInspections, selectedPropert
             ))}
           </div>
           <SortableTable mobile={mobile} columns={[
-            { key: "residentId", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{MOCK_RESIDENTS.find(r => r.id === v)?.name || v}</span> },
+            { key: "residentId", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{LIVE_RESIDENTS.find(r => r.id === v)?.name || v}</span> },
             { key: "unit", label: "Unit" },
             { key: "docType", label: "Document", render: v => LEASE_DOC_TYPES[v] || v },
             { key: "status", label: "Status", render: v => { const c = COMPLIANCE_STATUS[v] || COMPLIANCE_STATUS.missing; return <span style={s.badge(c.bg, c.text)}>{v.charAt(0).toUpperCase() + v.slice(1)}</span>; }, filterOptions: ["current", "expired", "missing"] },
@@ -3488,7 +3494,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const [tab, setTab] = useState(tabs[0]);
   const [dateRange, setDateRange] = useState({ preset: "all", from: null, to: null });
 
-  const residents = filterByProperty(MOCK_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(MOCK_RESIDENTS_EXTENDED[r.id] || {}) }));
+  const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
   const ledger = filterByProperty(MOCK_RENT_LEDGER, selectedProperty);
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
@@ -3526,8 +3532,8 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
               <table style={s.table}>
                 <thead><tr>{["Property", "Rent Roll", "HAP", "Tenant", "Collected", "Collection", "Delinquent"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {MOCK_PROPERTIES.map(p => {
-                    const pRes = MOCK_RESIDENTS.filter(r => r.propertyId === p.id).map(r => ({ ...r, ...(MOCK_RESIDENTS_EXTENDED[r.id] || {}) }));
+                  {LIVE_PROPERTIES.map(p => {
+                    const pRes = LIVE_RESIDENTS.filter(r => r.propertyId === p.id).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
                     const pLedger = MOCK_RENT_LEDGER.filter(r => r.propertyId === p.id);
                     const pRent = pRes.reduce((s, r) => s + (r.rentAmount || 0), 0);
                     const pHap = pRes.reduce((s, r) => s + (r.hapPayment || 0), 0);
@@ -3565,8 +3571,8 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
             <div style={s.card}>
               <div style={{ fontWeight: 700, marginBottom: 14 }}>Revenue Sources</div>
               <DonutChart segments={selectedProperty === "all"
-                ? MOCK_PROPERTIES.map((p, i) => {
-                    const pRent = MOCK_RESIDENTS.filter(r => r.propertyId === p.id).map(r => ({ ...r, ...(MOCK_RESIDENTS_EXTENDED[r.id] || {}) })).reduce((s, r) => s + (r.rentAmount || 0), 0);
+                ? LIVE_PROPERTIES.map((p, i) => {
+                    const pRent = LIVE_RESIDENTS.filter(r => r.propertyId === p.id).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) })).reduce((s, r) => s + (r.rentAmount || 0), 0);
                     return { label: `${p.name.split(" ")[0]} ($${pRent.toLocaleString()})`, value: pRent, color: [THEMES.light.info, THEMES.light.success, THEMES.light.warn][i] };
                   })
                 : [
@@ -3680,8 +3686,8 @@ const PropertySelector = ({ value, onChange, mobile }) => (
     ...s.mSelect(mobile), width: "100%", fontSize: 12, padding: mobile ? "8px 10px" : "6px 8px",
     background: T.bg, color: T.text, fontWeight: 600,
   }}>
-    <option value="all">All Properties ({MOCK_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0)} units)</option>
-    {MOCK_PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name} ({p.totalUnits})</option>)}
+    <option value="all">All Properties ({LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0)} units)</option>
+    {LIVE_PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name} ({p.totalUnits})</option>)}
   </select>
 );
 
@@ -3801,7 +3807,7 @@ const OnboardingChecklist = ({ mobile, selectedProperty }) => {
     const steps = newType === "move-in"
       ? { appReview: false, bgCheck: false, leaseSigning: false, keyHandoff: false, unitWalkthrough: false, utilitySetup: false, welcomePacket: false }
       : { noticeReceived: false, inspectionScheduled: false, finalWalkthrough: false, depositReview: false, keyReturn: false, unitTurnover: false };
-    const resProp = MOCK_RESIDENTS.find(r => r.id === newResident)?.propertyId || "wharf";
+    const resProp = LIVE_RESIDENTS.find(r => r.id === newResident)?.propertyId || "wharf";
     setRecords(prev => [...prev, {
       id: `OB-${Date.now()}`, propertyId: resProp, residentId: newResident, type: newType, status: "not-started",
       startDate: new Date().toISOString().slice(0, 10), targetDate: "", steps,
@@ -3828,7 +3834,7 @@ const OnboardingChecklist = ({ mobile, selectedProperty }) => {
             <StatCard label="Overdue" value={overdue} accent={overdue > 0 ? T.danger : T.success} mobile={mobile} />
           </div>
           {active.length === 0 ? <EmptyState icon="✨" text="No active onboardings" /> : active.map(rec => {
-            const res = MOCK_RESIDENTS.find(r => r.id === rec.residentId);
+            const res = LIVE_RESIDENTS.find(r => r.id === rec.residentId);
             const stepEntries = Object.entries(rec.steps);
             const done = stepEntries.filter(([, v]) => v).length;
             const pct = Math.round((done / stepEntries.length) * 100);
@@ -3871,8 +3877,8 @@ const OnboardingChecklist = ({ mobile, selectedProperty }) => {
       {tab === "Completed" && (
         <div>
           {completed.length === 0 ? <EmptyState icon="📋" text="No completed onboardings yet" /> : (
-            <SortableTable mobile={mobile} keyField="id" data={completed.map(r => ({ ...r, _unit: MOCK_RESIDENTS.find(res => res.id === r.residentId)?.unit || "—" }))} columns={[
-              { key: "residentId", label: "Resident", render: v => { const r = MOCK_RESIDENTS.find(res => res.id === v); return <span style={{ fontWeight: 600 }}>{r?.name || v}</span>; } },
+            <SortableTable mobile={mobile} keyField="id" data={completed.map(r => ({ ...r, _unit: LIVE_RESIDENTS.find(res => res.id === r.residentId)?.unit || "—" }))} columns={[
+              { key: "residentId", label: "Resident", render: v => { const r = LIVE_RESIDENTS.find(res => res.id === v); return <span style={{ fontWeight: 600 }}>{r?.name || v}</span>; } },
               { key: "_unit", label: "Unit" },
               { key: "type", label: "Type", render: v => <span style={s.badge(v === "move-in" ? T.infoDim : T.warnDim, v === "move-in" ? T.info : T.warn)}>{v === "move-in" ? "Move-In" : "Move-Out"}</span>, filterOptions: ["move-in", "move-out"] },
               { key: "startDate", label: "Started" },
@@ -3892,7 +3898,7 @@ const OnboardingChecklist = ({ mobile, selectedProperty }) => {
               <label style={s.label}>Resident</label>
               <select style={{ ...s.mSelect(mobile), width: "100%" }} value={newResident} onChange={e => setNewResident(e.target.value)}>
                 <option value="">Select resident...</option>
-                {filterByProperty(MOCK_RESIDENTS, selectedProperty).map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
+                {filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
               </select>
             </div>
             <div>
@@ -3939,7 +3945,45 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState("all");
+  const [sbProperties, setSbProperties] = useState(null);
+  const [sbResidents, setSbResidents] = useState(null);
+  const [sbResidentsExt, setSbResidentsExt] = useState(null);
+  const [dataReady, setDataReady] = useState(false);
   const mobile = useIsMobile();
+
+  // Load core data from Supabase on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function loadFromSupabase() {
+      try {
+        const [props, res, resExt, docs] = await Promise.all([
+          fetchProperties(),
+          fetchResidents(),
+          fetchResidentsExtended(),
+          fetchLeaseDocsByResident(),
+        ]);
+        if (!cancelled) {
+          // Update module-level live bindings so all components see Supabase data
+          LIVE_PROPERTIES = props;
+          LIVE_RESIDENTS = res;
+          LIVE_RESIDENTS_EXTENDED = resExt;
+          setSbProperties(props);
+          setSbResidents(res);
+          setSbResidentsExt(resExt);
+          setLeaseDocs(docs);
+          setDataReady(true);
+        }
+      } catch (err) {
+        console.warn('Supabase load failed, using mock data:', err);
+        if (!cancelled) setDataReady(true);
+      }
+    }
+    loadFromSupabase();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Note: LIVE_PROPERTIES / LIVE_RESIDENTS / LIVE_RESIDENTS_EXTENDED are module-level
+  // bindings updated by the Supabase useEffect above. All components read from those.
 
   const themeVars = Object.fromEntries(
     Object.entries(THEMES[darkMode ? "dark" : "light"]).map(([k, v]) => [`--t-${k}`, v])
@@ -3955,12 +3999,23 @@ export default function App() {
   const addInspection = (insp) => setUnitInspections(prev => [insp, ...prev]);
   const updateEmergencyContacts = (residentId, contacts) => setEmergencyContacts(prev => ({ ...prev, [residentId]: contacts }));
   const addAdminNote = (residentId, note) => setAdminNotes(prev => ({ ...prev, [residentId]: [...(prev[residentId] || []), note] }));
-  const resetAllState = () => {
+  const resetAllState = async () => {
+    // Re-fetch Supabase data for core tables
+    try {
+      const [props, res, resExt, docs] = await Promise.all([
+        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(),
+      ]);
+      LIVE_PROPERTIES = props; LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt;
+      setSbProperties(props); setSbResidents(res); setSbResidentsExt(resExt); setLeaseDocs(docs);
+    } catch (err) {
+      console.warn('Reset fetch failed:', err);
+      setLeaseDocs(MOCK_LEASE_DOCS);
+    }
+    // Reset non-Supabase state to mocks
     setMaintenance(MOCK_MAINTENANCE); setThreads(MOCK_THREADS); setMessages(MOCK_MESSAGES);
     setVendors(MOCK_VENDORS); setUnitInspections(MOCK_UNIT_INSPECTIONS);
     setEmergencyContacts(MOCK_EMERGENCY_CONTACTS); setAdminNotes(MOCK_ADMIN_NOTES);
-    setLeaseDocs(MOCK_LEASE_DOCS); setCommPrefs(MOCK_COMM_PREFS);
-    setSettings(DEFAULT_SETTINGS); setPage("dashboard");
+    setCommPrefs(MOCK_COMM_PREFS); setSettings(DEFAULT_SETTINGS); setPage("dashboard");
   };
 
   // Notification-aware wrappers
