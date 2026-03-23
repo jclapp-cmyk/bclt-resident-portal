@@ -1465,7 +1465,11 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <button style={s.btn("ghost")}>View</button>
+              <button style={s.btn("ghost")} onClick={async () => {
+                if (doc.storagePath) {
+                  try { const url = await getLeaseFileUrl(doc.storagePath); if (url) window.open(url, "_blank"); else alert("File not found"); } catch { alert("Error opening file"); }
+                } else { alert("No file stored — metadata only"); }
+              }}>View</button>
               {canDelete && onDelete && <button style={{ ...s.btn("danger"), padding: "4px 10px", fontSize: 12 }} onClick={() => onDelete(doc.id)}>Delete</button>}
             </div>
           </div>
@@ -1758,7 +1762,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
     fetchHouseholdMembers(selectedResUuid).then(setHouseholdMembers).catch(() => setHouseholdMembers([]));
     try {
       const { data: docs } = await supabase.from('lease_documents').select('*').eq('resident_id', selectedResUuid).order('uploaded_at', { ascending: false });
-      setResidentDocs((docs || []).map(d => ({ id: d.id, name: d.name, type: d.type, size: d.size, uploadedAt: d.uploaded_at, uploadedBy: d.uploaded_by })));
+      setResidentDocs((docs || []).map(d => ({ id: d.id, name: d.name, type: d.type, size: d.size, uploadedAt: d.uploaded_at, uploadedBy: d.uploaded_by, storagePath: d.storage_path })));
     } catch (e) { setResidentDocs([]); }
     try {
       const { data: pays } = await supabase.from('rent_payments').select('*').eq('resident_id', selectedResUuid).order('payment_date', { ascending: false });
@@ -1961,7 +1965,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                     try {
                       const storagePath = await uploadLeaseFile(file, selectedResident.slug || selectedResident.id);
                       const url = storagePath ? getLeaseFileUrl(storagePath) : null;
-                      await insertLeaseDocument({ name: file.name, type: "other", size: file.size }, selectedResident._uuid);
+                      await insertLeaseDocument({ name: file.name, type: "other", size: file.size, storagePath: storagePath }, selectedResident._uuid);
                       showSuccess(`Uploaded ${file.name}`);
                       await loadResidentExtra(); // refresh docs locally
                     } catch (err) { showSuccess("Error: " + err.message); }
@@ -1984,7 +1988,15 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                           <td style={s.td}>{d.size ? `${Math.round(d.size / 1024)} KB` : "—"}</td>
                           <td style={s.td}>
                             <div style={{ display: "flex", gap: 4 }}>
-                              <button style={s.btn("ghost")}>View</button>
+                              <button style={s.btn("ghost")} onClick={async () => {
+                                if (d.storagePath) {
+                                  try {
+                                    const url = await getLeaseFileUrl(d.storagePath);
+                                    if (url) window.open(url, "_blank");
+                                    else showSuccess("File not found in storage");
+                                  } catch (err) { showSuccess("Error opening file"); }
+                                } else { showSuccess("No file stored — metadata only"); }
+                              }}>View</button>
                               <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11 }} onClick={async () => {
                                 try { await deleteLeaseDocument(d.id); showSuccess("Deleted"); await loadResidentExtra(); } catch (err) { showSuccess("Error: " + err.message); }
                               }}>Delete</button>
@@ -2631,7 +2643,9 @@ const AdminDocuments = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty }) =
             { key: "residentName", label: "Owner", filterOptions: [...new Set(combined.map(d => d.residentName))] },
             { key: "uploadedAt", label: "Date", render: v => new Date(v).toLocaleDateString(), sortValue: r => new Date(r.uploadedAt).getTime() },
             { key: "size", label: "Size", render: v => v ? formatFileSize(v) : "—", sortable: false, filterable: false },
-            { key: "_actions", label: "", sortable: false, filterable: false, render: () => <button style={s.btn("ghost")}>View</button> },
+            { key: "_actions", label: "", sortable: false, filterable: false, render: (_, row) => <button style={s.btn("ghost")} onClick={async () => {
+              if (row.storagePath) { try { const url = await getLeaseFileUrl(row.storagePath); if (url) window.open(url, "_blank"); } catch {} } else { alert("No file stored"); }
+            }}>View</button> },
           ]} data={combined} />
         </div>
       )}

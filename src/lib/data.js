@@ -179,6 +179,7 @@ export async function fetchLeaseDocsByResident() {
       size: d.size,
       uploadedAt: d.uploaded_at,
       uploadedBy: d.uploaded_by,
+      storagePath: d.storage_path,
     });
   }
   return result;
@@ -250,6 +251,7 @@ export async function insertLeaseDocument(doc, residentUuid) {
     type: doc.type,
     size: doc.size,
     uploaded_by: doc.uploadedBy || 'Admin',
+    storage_path: doc.storagePath || null,
   });
   if (error) throw error;
 }
