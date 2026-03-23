@@ -146,6 +146,75 @@ export async function insertLeaseDocument(doc, residentUuid) {
   if (error) throw error;
 }
 
+// ── VENDORS ──
+
+export async function fetchVendors() {
+  const { data, error } = await supabase.from('vendors').select('*').order('company');
+  if (error) throw error;
+  return (data || []).map(v => ({
+    id: v.id, company: v.company, contact: v.contact, phone: v.phone, email: v.email,
+    trade: v.trade, license: v.license, licenseExp: v.license_exp, insured: v.insured,
+    coiExp: v.coi_exp, active: v.active, notes: v.notes || '',
+  }));
+}
+
+export async function insertVendor(v) {
+  const { data, error } = await supabase.from('vendors').insert({
+    company: v.company, contact: v.contact, phone: v.phone, email: v.email,
+    trade: v.trade, license: v.license, license_exp: v.licenseExp,
+    insured: v.insured !== false, coi_exp: v.coiExp || null,
+    active: v.active !== false, notes: v.notes || '',
+  }).select().single();
+  if (error) throw error;
+  return { ...data, id: data.id, licenseExp: data.license_exp, coiExp: data.coi_exp };
+}
+
+// ── UNIT INSPECTIONS ──
+
+export async function fetchUnitInspections() {
+  const { data, error } = await supabase
+    .from('unit_inspections')
+    .select('*, properties(slug), units(number)')
+    .order('inspection_date', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(i => ({
+    id: i.code, _uuid: i.id, propertyId: i.properties?.slug || '', unit: i.units?.number || '',
+    category: i.category, date: i.inspection_date, inspector: i.inspector,
+    result: i.result, score: i.score, failedItems: i.failed_items || [], notes: i.notes || '',
+  }));
+}
+
+export async function insertUnitInspection(insp) {
+  const { data: prop } = await supabase.from('properties').select('id').eq('slug', insp.propertyId || 'wharf').single();
+  const { data: unitRow } = await supabase.from('units').select('id').eq('number', insp.unit).single();
+  const { count } = await supabase.from('unit_inspections').select('*', { count: 'exact', head: true });
+  const code = `UI-${110 + (count || 0)}`;
+  const { data, error } = await supabase.from('unit_inspections').insert({
+    code, property_id: prop?.id, unit_id: unitRow?.id || null,
+    category: insp.category, inspection_date: insp.date, inspector: insp.inspector || 'Mike R.',
+    result: insp.result || 'Pass', score: insp.score || null,
+    failed_items: JSON.stringify(insp.failedItems || []), notes: insp.notes || '',
+  }).select().single();
+  if (error) throw error;
+  return { ...insp, id: code, _uuid: data.id };
+}
+
+// ── REGULATORY INSPECTIONS ──
+
+export async function fetchRegInspections() {
+  const { data, error } = await supabase
+    .from('reg_inspections')
+    .select('*, properties(slug)')
+    .order('next_due');
+  if (error) throw error;
+  return (data || []).map(i => ({
+    id: i.code, _uuid: i.id, propertyId: i.properties?.slug || '',
+    type: i.type, authority: i.authority, date: i.inspection_date,
+    result: i.result, score: i.score, nextDue: i.next_due,
+    units: i.units_inspected, deficiencies: i.deficiencies,
+  }));
+}
+
 // ── MAINTENANCE REQUESTS ──
 
 export async function fetchMaintenanceRequests() {

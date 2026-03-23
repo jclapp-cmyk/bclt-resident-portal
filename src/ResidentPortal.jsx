@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 
 /* ═══════════════════════════════════════════════════════════
@@ -378,6 +378,7 @@ let LIVE_PROPERTIES = MOCK_PROPERTIES;
 let LIVE_RESIDENTS = MOCK_RESIDENTS;
 let LIVE_RESIDENTS_EXTENDED = MOCK_RESIDENTS_EXTENDED;
 let LIVE_RENT_LEDGER = MOCK_RENT_LEDGER;
+let LIVE_REG_INSPECTIONS = MOCK_REG_INSPECTIONS;
 
 // ── DESIGN TOKENS (Light Theme) ──────────────────────────────
 
@@ -965,7 +966,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc }) 
 
 // --- ADMIN DASHBOARD ---
 const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notifications, selectedProperty, onSelectProperty }) => {
-  const regInsp = filterByProperty(MOCK_REG_INSPECTIONS, selectedProperty);
+  const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
   const open = maintenance.filter(m => m.status !== "completed").length;
   const critical = maintenance.filter(m => m.priority === "critical" && m.status !== "completed").length;
   const upcomingInsp = regInsp.filter(i => new Date(i.nextDue) < new Date("2026-06-01")).length;
@@ -2248,7 +2249,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
 
   // Compliance aggregations
-  const regInsp = filterByProperty(MOCK_REG_INSPECTIONS, selectedProperty);
+  const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
   const uniqueUnitsInspected = [...new Set(unitInspections.map(i => i.unit))].length;
   const passRate = unitInspections.length ? Math.round(unitInspections.filter(i => i.result === "Pass").length / unitInspections.length * 100) : 0;
   const overdueInsp = regInsp.filter(i => new Date(i.nextDue) < new Date()).length;
@@ -2410,7 +2411,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
   const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "B-204")) : unitInspections;
   // Derive property filter from unitInspections — if all same property, filter reg inspections too
   const propIds = [...new Set(unitInspections.map(i => i.propertyId).filter(Boolean))];
-  const regInsp = propIds.length === 1 ? MOCK_REG_INSPECTIONS.filter(i => i.propertyId === propIds[0]) : MOCK_REG_INSPECTIONS;
+  const regInsp = propIds.length === 1 ? LIVE_REG_INSPECTIONS.filter(i => i.propertyId === propIds[0]) : LIVE_REG_INSPECTIONS;
   const regDueSoon = regInsp.filter(i => new Date(i.nextDue) < new Date("2026-09-01")).length;
   const catNames = [...new Set(MOCK_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => c.name))];
 
@@ -3299,7 +3300,7 @@ const buildCalendarEvents = (maintenance, vendors, unitInspections) => {
     if (date) events.push({ date: date.slice(0, 10), type, icon, color, label, description, sourcePage });
   };
   // Regulatory inspections
-  MOCK_REG_INSPECTIONS.forEach(i => add(i.nextDue, "inspection", "🔍", T.info, `${i.type} Inspection Due`, `${i.authority}`, "inspections"));
+  LIVE_REG_INSPECTIONS.forEach(i => add(i.nextDue, "inspection", "🔍", T.info, `${i.type} Inspection Due`, `${i.authority}`, "inspections"));
   // Unit inspections
   unitInspections.forEach(i => add(i.date, "inspection", "🔍", T.accent, `${i.category} — ${i.unit}`, `${i.result}${i.score ? ` (${i.score})` : ""} — ${i.inspector}`, "inspections"));
   // Maintenance
@@ -3468,7 +3469,7 @@ const ComplianceDashboard = ({ mobile, vendors, unitInspections, selectedPropert
   const [docFilter, setDocFilter] = useState("all");
 
   const compDocs = filterByProperty(MOCK_COMPLIANCE_DOCS, selectedProperty);
-  const regInsp = filterByProperty(MOCK_REG_INSPECTIONS, selectedProperty);
+  const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
   // Compute metrics
   const totalDocs = compDocs.length;
   const currentDocs = compDocs.filter(d => d.status === "current").length;
@@ -4195,13 +4196,16 @@ export default function App() {
     let cancelled = false;
     async function loadFromSupabase() {
       try {
-        const [props, res, resExt, docs, ledger, maint] = await Promise.all([
+        const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp] = await Promise.all([
           fetchProperties(),
           fetchResidents(),
           fetchResidentsExtended(),
           fetchLeaseDocsByResident(),
           fetchRentLedger(),
           fetchMaintenanceRequests(),
+          fetchVendors(),
+          fetchUnitInspections(),
+          fetchRegInspections(),
         ]);
         if (!cancelled) {
           // Update module-level live bindings so all components see Supabase data
@@ -4209,12 +4213,15 @@ export default function App() {
           LIVE_RESIDENTS = res;
           LIVE_RESIDENTS_EXTENDED = resExt;
           if (ledger && ledger.length) LIVE_RENT_LEDGER = ledger;
+          if (rInsp && rInsp.length) LIVE_REG_INSPECTIONS = rInsp;
           setSbProperties(props);
           setSbResidents(res);
           setSbResidentsExt(resExt);
           setSbRentLedger(ledger);
           setLeaseDocs(docs);
           if (maint && maint.length) setMaintenance(maint);
+          if (vend && vend.length) setVendors(vend);
+          if (uInsp && uInsp.length) setUnitInspections(uInsp);
           setDataReady(true);
         }
       } catch (err) {
@@ -4285,20 +4292,29 @@ export default function App() {
   const addThread = (t) => setThreads(prev => [t, ...prev]);
   const addMessage = (msg) => setMessages(prev => [...prev, msg]);
   const updateThread = (id, changes) => setThreads(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
-  const addVendor = (v) => setVendors(prev => [v, ...prev]);
-  const addInspection = (insp) => setUnitInspections(prev => [insp, ...prev]);
+  const addVendor = async (v) => {
+    setVendors(prev => [v, ...prev]);
+    try { await insertVendor(v); } catch (err) { console.warn('Supabase insert vendor failed:', err); }
+  };
+  const addInspection = async (insp) => {
+    setUnitInspections(prev => [insp, ...prev]);
+    try { await insertUnitInspection(insp); } catch (err) { console.warn('Supabase insert inspection failed:', err); }
+  };
   const updateEmergencyContacts = (residentId, contacts) => setEmergencyContacts(prev => ({ ...prev, [residentId]: contacts }));
   const addAdminNote = (residentId, note) => setAdminNotes(prev => ({ ...prev, [residentId]: [...(prev[residentId] || []), note] }));
   const resetAllState = async () => {
     // Re-fetch Supabase data for core tables
     try {
-      const [props, res, resExt, docs, ledger, maint] = await Promise.all([
-        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(), fetchRentLedger(), fetchMaintenanceRequests(),
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp] = await Promise.all([
+        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(), fetchRentLedger(), fetchMaintenanceRequests(), fetchVendors(), fetchUnitInspections(), fetchRegInspections(),
       ]);
       LIVE_PROPERTIES = props; LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt;
       if (ledger && ledger.length) LIVE_RENT_LEDGER = ledger;
+      if (rInsp && rInsp.length) LIVE_REG_INSPECTIONS = rInsp;
       setSbProperties(props); setSbResidents(res); setSbResidentsExt(resExt); setSbRentLedger(ledger); setLeaseDocs(docs);
       if (maint && maint.length) setMaintenance(maint);
+      if (vend && vend.length) setVendors(vend);
+      if (uInsp && uInsp.length) setUnitInspections(uInsp);
     } catch (err) {
       console.warn('Reset fetch failed:', err);
       setLeaseDocs(MOCK_LEASE_DOCS);
