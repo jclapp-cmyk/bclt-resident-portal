@@ -2161,6 +2161,12 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const [showEditProp, setShowEditProp] = useState(false);
   const [editPropForm, setEditPropForm] = useState({});
 
+  // Load units for selected property (must be before early return to satisfy hooks rules)
+  const p = !isAll ? getProperty(selectedProperty) : null;
+  useEffect(() => {
+    if (p?._uuid) fetchUnits(p._uuid).then(setUnitList).catch(() => {});
+  }, [p?._uuid]);
+
   if (isAll) {
     return (
       <div>
@@ -2207,14 +2213,8 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
     );
   }
 
-  const p = getProperty(selectedProperty);
   if (!p) return <EmptyState icon="🏘️" text="Property not found" />;
   const propResidents = LIVE_RESIDENTS.filter(r => r.propertyId === selectedProperty);
-
-  // Load units for this property
-  useEffect(() => {
-    if (p?._uuid) fetchUnits(p._uuid).then(setUnitList).catch(() => {});
-  }, [p?._uuid]);
 
   return (
     <div>
