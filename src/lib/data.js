@@ -629,3 +629,35 @@ export async function recordPayment({ residentSlug, amount, method, paymentDate,
   if (error) throw error;
   return data;
 }
+
+// ── HOUSEHOLD MEMBERS ──
+
+export async function fetchHouseholdMembers(residentUuid) {
+  const { data, error } = await supabase
+    .from('household_members')
+    .select('*')
+    .eq('resident_id', residentUuid)
+    .order('created_at');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function insertHouseholdMember(member) {
+  const { data, error } = await supabase.from('household_members').insert({
+    resident_id: member.residentId,
+    name: member.name,
+    relationship: member.relationship || 'Spouse',
+    phone: member.phone || null,
+    email: member.email || null,
+    date_of_birth: member.dob || null,
+    is_adult: member.isAdult !== false,
+    notes: member.notes || null,
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteHouseholdMember(id) {
+  const { error } = await supabase.from('household_members').delete().eq('id', id);
+  if (error) throw error;
+}

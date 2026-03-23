@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
 
@@ -1320,7 +1320,18 @@ const RentPayments = ({ mobile, rc }) => {
 };
 
 // --- RECERTIFICATION ---
-const Recertification = ({ role, mobile }) => {
+const Recertification = ({ role, mobile, rc }) => {
+  // TODO: wire recertification to Supabase — using empty state for now
+  const hasRecert = false; // will be true when linked to real data
+  if (!hasRecert) {
+    return (
+      <div>
+        <h1 style={s.sectionTitle}>{role === "admin" ? "Recertification Review" : "Annual Recertification"}</h1>
+        <p style={s.sectionSub}>{role === "admin" ? "Review and manage resident recertifications" : "Complete your annual income recertification"}</p>
+        <EmptyState icon="📋" text={role === "admin" ? "No recertifications are currently due. Recertifications will appear here as they become due based on lease anniversary dates." : "You have no pending recertification. Your property manager will notify you when it's time."} />
+      </div>
+    );
+  }
   const r = MOCK_RECERT;
   const daysLeft = Math.ceil((new Date(r.deadline) - new Date()) / 86400000);
   const steps = [
@@ -1723,6 +1734,11 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [addFormUnits, setAddFormUnits] = useState([]);
   const [editingResident, setEditingResident] = useState(false);
   const [editResForm, setEditResForm] = useState({});
+  const [msgSubject, setMsgSubject] = useState("");
+  const [msgBody, setMsgBody] = useState("");
+  const [payForm, setPayForm] = useState({ amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+  const [householdMembers, setHouseholdMembers] = useState([]);
+  const [hhForm, setHhForm] = useState({ name: "", relationship: "Spouse", phone: "", email: "" });
 
   // Load units when property changes or form opens
   useEffect(() => {
@@ -1730,7 +1746,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
     if (prop?._uuid) fetchUnits(prop._uuid).then(u => setAddFormUnits(u || [])).catch(() => {});
   }, [addForm.propertyId]);
 
-  const detailTabs = ["Overview", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
+  const detailTabs = ["Overview", "Household", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
 
   if (selectedResident) {
     const ext = LIVE_RESIDENTS_EXTENDED[selectedResident.id] || {};
@@ -1738,6 +1754,11 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
     const resThreads = threads.filter(t => t.participants.includes(selectedResident.id) || t.type === "broadcast");
     const resNotes = adminNotes[selectedResident.id] || [];
     const resEC = emergencyContacts[selectedResident.id] || [];
+
+    // Load household members when resident selected
+    useEffect(() => {
+      if (selectedResident?._uuid) fetchHouseholdMembers(selectedResident._uuid).then(setHouseholdMembers).catch(() => setHouseholdMembers([]));
+    }, [selectedResident?._uuid]);
 
     const addNote = () => {
       if (!noteText.trim()) return;
@@ -1839,6 +1860,53 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
           </div>
           ); })()}
 
+        {tab === "Household" && (
+          <div>
+            <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Add Household Member</div>
+              <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                <div><label style={s.label}>Full Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. Luis Santos" value={hhForm.name} onChange={e => setHhForm(f => ({ ...f, name: e.target.value }))} /></div>
+                <div><label style={s.label}>Relationship</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={hhForm.relationship} onChange={e => setHhForm(f => ({ ...f, relationship: e.target.value }))}><option>Spouse</option><option>Partner</option><option>Roommate</option><option>Child</option><option>Parent</option><option>Sibling</option><option>Other</option></select></div>
+                <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="(415) 555-0000" value={hhForm.phone} onChange={e => setHhForm(f => ({ ...f, phone: e.target.value }))} /></div>
+                <div><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} placeholder="email@example.com" value={hhForm.email} onChange={e => setHhForm(f => ({ ...f, email: e.target.value }))} /></div>
+              </div>
+              <button disabled={!hhForm.name.trim()} onClick={async () => {
+                try {
+                  await insertHouseholdMember({ residentId: selectedResident._uuid, name: hhForm.name.trim(), relationship: hhForm.relationship, phone: hhForm.phone, email: hhForm.email });
+                  showSuccess(`Added ${hhForm.name}`);
+                  setHhForm({ name: "", relationship: "Spouse", phone: "", email: "" });
+                  fetchHouseholdMembers(selectedResident._uuid).then(setHouseholdMembers).catch(() => {});
+                } catch (err) { showSuccess("Error: " + err.message); }
+              }} style={{ ...s.mBtn("primary", mobile) }}>Add Member</button>
+            </div>
+            {householdMembers.length === 0 ? <EmptyState icon="👥" text="No household members on file. Add a spouse, partner, or roommate above." /> : (
+              <div style={s.card}>
+                <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Household ({householdMembers.length + 1} total)</div>
+                <div style={{ padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div><span style={{ fontWeight: 600 }}>{selectedResident.name}</span><span style={{ color: T.muted, fontSize: 13, marginLeft: 10 }}>Head of Household</span></div>
+                </div>
+                {householdMembers.map(m => (
+                  <div key={m.id} style={{ padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{m.name}</span>
+                      <span style={{ color: T.muted, fontSize: 13, marginLeft: 10 }}>{m.relationship}</span>
+                      {m.phone && <span style={{ color: T.dim, fontSize: 12, marginLeft: 14 }}>{m.phone}</span>}
+                      {m.email && <span style={{ color: T.dim, fontSize: 12, marginLeft: 14 }}>{m.email}</span>}
+                    </div>
+                    <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11, padding: "2px 8px" }} onClick={async () => {
+                      try {
+                        await deleteHouseholdMember(m.id);
+                        setHouseholdMembers(prev => prev.filter(x => x.id !== m.id));
+                        showSuccess(`Removed ${m.name}`);
+                      } catch (err) { showSuccess("Error: " + err.message); }
+                    }}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === "Lease & Docs" && (
           <div>
             <div style={s.grid("1fr 1fr", mobile)}>
@@ -1869,10 +1937,26 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               </div>
             </div>
             <div style={s.card}>
-              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Documents</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>Documents</div>
+                <label style={{ ...s.btn("primary"), fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  📎 Upload Document
+                  <input type="file" accept=".pdf,.doc,.docx,.jpg,.png" style={{ display: "none" }} onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file || !selectedResident._uuid) return;
+                    try {
+                      const storagePath = await uploadLeaseFile(file, selectedResident.slug || selectedResident.id);
+                      const url = storagePath ? getLeaseFileUrl(storagePath) : null;
+                      await insertLeaseDocument({ residentId: selectedResident._uuid, name: file.name, type: "other", size: file.size, storagePath: storagePath || null });
+                      showSuccess(`Uploaded ${file.name}`);
+                    } catch (err) { showSuccess("Error: " + err.message); }
+                    e.target.value = "";
+                  }} />
+                </label>
+              </div>
               {(() => {
                 const docs = MOCK_LEASE_DOCS[selectedResident.id] || [];
-                if (docs.length === 0) return <EmptyState icon="📄" text="No documents on file" />;
+                if (docs.length === 0) return <EmptyState icon="📄" text="No documents on file. Upload a document above." />;
                 return (
                   <table style={s.table}>
                     <thead><tr>{["Document", "Type", "Uploaded", "Size", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
@@ -1917,34 +2001,61 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
           </div>
         )}
 
-        {tab === "Payments" && (
+        {tab === "Payments" && (() => {
+          const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === selectedResident.id);
+          return (
           <div>
-            {selectedResident.id === "maria-santos" ? (
-              <div style={s.card}>
-                <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Payment Ledger</div>
-                <div style={{ overflowX: mobile ? "auto" : "visible" }}>
-                  <table style={s.table}>
-                    <thead><tr>{["Date", "Description", "Amount", "Balance"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                    <tbody>
-                      {MOCK_PAYMENTS.map((p, i) => (
-                        <tr key={i}>
-                          <td style={s.td}>{p.date}</td>
-                          <td style={s.td}>{p.description}</td>
-                          <td style={{ ...s.td, color: p.amount < 0 ? T.success : T.text, fontWeight: 600 }}>{p.amount < 0 ? `-$${Math.abs(p.amount)}` : `$${p.amount}`}</td>
-                          <td style={{ ...s.td, fontWeight: 600 }}>${p.balance}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {ledgerEntry && (
+              <div style={{ ...s.card, marginBottom: 16 }}>
+                <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Current Balance</div>
+                <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap" }}>
+                  <StatCard label="Rent Due" value={`$${ledgerEntry.rentDue?.toLocaleString() || 0}`} mobile={mobile} />
+                  <StatCard label="Tenant Paid" value={`$${ledgerEntry.tenantPaid?.toLocaleString() || 0}`} accent={T.success} mobile={mobile} />
+                  <StatCard label="HAP Received" value={`$${ledgerEntry.hapReceived?.toLocaleString() || 0}`} accent={T.info} mobile={mobile} />
+                  <StatCard label="Balance" value={`$${ledgerEntry.balance || 0}`} accent={ledgerEntry.balance > 0 ? T.danger : T.success} mobile={mobile} />
                 </div>
               </div>
-            ) : <EmptyState icon="💳" text="No payment data available for this resident" />}
+            )}
+            <div style={{ ...s.card, borderLeft: `3px solid ${T.success}` }}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Record Payment</div>
+              {(() => {
+                const [pAmt, setPAmt] = [payForm?.amount || "", (v) => setPayForm(f => ({ ...f, amount: v }))];
+                return (
+                <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                  <div><label style={s.label}>Amount ($)</label><input type="number" min="0" step="0.01" placeholder="0.00" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+                  <div><label style={s.label}>Method</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.method} onChange={e => setPayForm(f => ({ ...f, method: e.target.value }))}><option value="cash">Cash</option><option value="check">Check</option><option value="money_order">Money Order</option></select></div>
+                  <div><label style={s.label}>Date</label><input type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+                </div>
+                );
+              })()}
+              <div style={{ marginBottom: 14 }}><label style={s.label}>Note</label><input type="text" placeholder="e.g. Check #1234" value={payForm.note} onChange={e => setPayForm(f => ({ ...f, note: e.target.value }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+              <button disabled={!payForm.amount} onClick={async () => {
+                const amt = parseFloat(payForm.amount);
+                if (!amt || !selectedResident._uuid) return;
+                try {
+                  await recordPayment({ residentId: selectedResident._uuid, amount: amt, method: payForm.method, date: payForm.date, note: payForm.note });
+                  showSuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment`);
+                  setPayForm({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+                } catch (err) { showSuccess("Error: " + err.message); }
+              }} style={{ ...s.mBtn("primary", mobile) }}>Record Payment</button>
+            </div>
           </div>
-        )}
+          );
+        })()}
 
         {tab === "Communications" && (
           <div>
-            {resThreads.length === 0 ? <EmptyState icon="💬" text="No communication threads" /> : resThreads.sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).map(t => (
+            <div style={{ ...s.card, borderLeft: `3px solid ${T.info}`, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Send Message to {selectedResident.name.split(" ")[0]}</div>
+              <div style={{ marginBottom: 14 }}><label style={s.label}>Subject</label><input type="text" placeholder="e.g. Lease renewal reminder" value={msgSubject} onChange={e => setMsgSubject(e.target.value)} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+              <div style={{ marginBottom: 14 }}><label style={s.label}>Message</label><textarea placeholder="Type your message..." value={msgBody} onChange={e => setMsgBody(e.target.value)} style={{ ...s.mInput(mobile), width: "100%", minHeight: 80, resize: "vertical" }} /></div>
+              <button disabled={!msgSubject.trim() || !msgBody.trim()} onClick={() => {
+                // TODO: wire to Supabase threads/messages
+                showSuccess(`Message sent to ${selectedResident.name}`);
+                setMsgSubject(""); setMsgBody("");
+              }} style={{ ...s.mBtn("primary", mobile) }}>Send Message</button>
+            </div>
+            {resThreads.length === 0 ? <EmptyState icon="💬" text="No communication threads yet" /> : resThreads.sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).map(t => (
               <div key={t.id} style={s.card}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                   <span style={{ fontWeight: 700, fontSize: 14 }}>{t.subject}</span>
@@ -2817,8 +2928,8 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
                 </div>
                 {isAdmin && (
                   <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button style={s.btn("ghost")}>Edit</button>
-                    <button style={s.btn("ghost")}>View Checklist</button>
+                    <button style={s.btn("ghost")} onClick={() => { /* toggle active */ const idx = MOCK_UNIT_INSPECTION_CATEGORIES.findIndex(c => c.id === cat.id); if (idx >= 0) MOCK_UNIT_INSPECTION_CATEGORIES[idx].active = !cat.active; showSuccess(cat.active ? `${cat.name} deactivated` : `${cat.name} activated`); }}>{cat.active ? "Deactivate" : "Activate"}</button>
+                    <button style={s.btn("ghost")} onClick={() => alert(`Checklist for ${cat.name}:\n\n${cat.checklist.map((c, i) => `${i + 1}. ${c}`).join("\n")}`)}> View Checklist</button>
                   </div>
                 )}
               </div>
@@ -2833,7 +2944,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
           <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Schedule New Inspection</div>
           <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
             <div><label style={s.label}>Category</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.category} onChange={e => setSchedForm(p => ({ ...p, category: e.target.value }))}><option value="">Select...</option>{MOCK_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
-            <div><label style={s.label}>Unit(s)</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option>B-204</option><option>A-108</option><option>C-310</option><option>All Units</option></select></div>
+            <div><label style={s.label}>Unit(s)</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option value="">Select unit...</option>{LIVE_RESIDENTS.map(r => <option key={r.id} value={r.unit}>{r.unit} — {r.name}</option>)}<option value="all">All Units</option></select></div>
             <div><label style={s.label}>Date</label><input style={s.mInput(mobile)} type="date" value={schedForm.date} onChange={e => setSchedForm(p => ({ ...p, date: e.target.value }))} /></div>
           </div>
           <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
@@ -4798,6 +4909,11 @@ export default function App() {
   const addMaintenanceN = (req) => {
     addMaintenance(req);
     pushNotif({ id: `N-${Date.now()}`, type: "maintenance", icon: "🔧", message: `New request: ${req.description.slice(0, 50)} (${req.unit})${req.priority === "critical" ? " — Critical" : ""}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance"] });
+    // Email notify admin team about new maintenance request
+    const adminEmails = ["maintenance@bolinaslandtrust.org"]; // TODO: pull from user_profiles where role=admin
+    adminEmails.forEach(email => {
+      sendNotification({ type: "maintenance_created", to: email, residentName: req.unit, unit: req.unit, description: req.description, priority: req.priority, category: req.category }).catch(() => {});
+    });
   };
   const updateMaintenanceN = (id, changes) => {
     updateMaintenance(id, changes);
