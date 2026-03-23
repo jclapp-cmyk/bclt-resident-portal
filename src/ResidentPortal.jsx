@@ -1722,7 +1722,7 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
 };
 
 // --- ADMIN RESIDENTS ---
-const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty, onResidentAdded, onDataChanged }) => {
+const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty, onResidentAdded, onDataChanged, leaseDocs: leaseDocsFromApp, sbRentLedger }) => {
   const [selectedResident, setSelectedResident] = useState(null);
   const [tab, setTab] = useState("Overview");
   const [noteText, setNoteText] = useState("");
@@ -1958,7 +1958,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 </label>
               </div>
               {(() => {
-                const docs = MOCK_LEASE_DOCS[selectedResident.id] || [];
+                const docs = (leaseDocsFromApp || {})[selectedResident.id] || [];
                 if (docs.length === 0) return <EmptyState icon="📄" text="No documents on file. Upload a document above." />;
                 return (
                   <table style={s.table}>
@@ -2005,7 +2005,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         )}
 
         {tab === "Payments" && (() => {
-          const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === selectedResident.id);
+          const ledgerEntry = (sbRentLedger || LIVE_RENT_LEDGER).find(l => l.residentId === selectedResident.id);
           return (
           <div>
             {ledgerEntry && (
@@ -5017,7 +5017,7 @@ export default function App() {
       const fInsp = filterByProperty(unitInspections, sp);
       switch (page) {
         case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} />;
-        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onDataChanged={reloadData} onResidentAdded={async () => {
+        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onDataChanged={reloadData} leaseDocs={leaseDocs} sbRentLedger={sbRentLedger} onResidentAdded={async () => {
           try { const [res, resExt] = await Promise.all([fetchResidents(), fetchResidentsExtended()]); LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt; setSbResidents(res); setSbResidentsExt(resExt); } catch(e) { console.warn(e); }
         }} />;
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
