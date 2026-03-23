@@ -206,6 +206,22 @@ export async function fetchCommTemplates() {
   }));
 }
 
+// ── AUDIT LOG ──
+
+export async function fetchAuditLog(limit = 50) {
+  const { data, error } = await supabase
+    .from('audit_log')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []).map(a => ({
+    id: a.id, table: a.table_name, recordId: a.record_id,
+    action: a.action, changedBy: a.changed_by_email || 'System',
+    oldData: a.old_data, newData: a.new_data, createdAt: a.created_at,
+  }));
+}
+
 // ── FILE STORAGE (Lease Documents) ──
 
 export async function uploadLeaseFile(file, residentSlug) {

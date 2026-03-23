@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 
 /* ═══════════════════════════════════════════════════════════
@@ -3134,7 +3134,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate }) => {
 
 // --- ADMIN SETTINGS ---
 const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset }) => {
-  const tabs = ["Users", "Property", "Notifications", "Rent & Lease", "Maintenance", "System"];
+  const tabs = ["Users", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [newCat, setNewCat] = useState("");
@@ -3143,6 +3143,15 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: "", role: "resident", residentId: "", displayName: "" });
   const [inviting, setInviting] = useState(false);
+  const [auditEntries, setAuditEntries] = useState([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+
+  useEffect(() => {
+    if (tab === "Audit Log") {
+      setLoadingAudit(true);
+      fetchAuditLog(100).then(data => { setAuditEntries(data); setLoadingAudit(false); }).catch(() => setLoadingAudit(false));
+    }
+  }, [tab]);
 
   useEffect(() => {
     if (tab === "Users") {
@@ -3336,6 +3345,36 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
             </div>
             <button style={s.btn()} onClick={() => showSuccess("Maintenance settings saved")}>Save Changes</button>
           </div>
+        </div>
+      )}
+
+      {tab === "Audit Log" && (
+        <div style={s.card}>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Recent Activity ({auditEntries.length})</div>
+          {loadingAudit ? (
+            <div style={{ color: T.muted, padding: 20, textAlign: "center" }}>Loading...</div>
+          ) : auditEntries.length === 0 ? (
+            <EmptyState icon="📋" text="No audit entries yet. Changes will appear here automatically." />
+          ) : (
+            <div style={{ maxHeight: 500, overflowY: "auto" }}>
+              {auditEntries.map(a => (
+                <div key={a.id} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, fontSize: 13 }}>
+                  <span style={{ fontSize: 16, width: 24, textAlign: "center", flexShrink: 0 }}>
+                    {a.action === "INSERT" ? "➕" : a.action === "UPDATE" ? "✏️" : "🗑️"}
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{a.changedBy}</span>
+                      <span style={{ color: T.muted }}> {a.action.toLowerCase()}d </span>
+                      <span style={s.badge(T.accentDim, T.accent)}>{a.table}</span>
+                      {a.recordId && <span style={{ color: T.muted }}> · {a.recordId}</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: T.dim, marginTop: 2 }}>{new Date(a.createdAt).toLocaleString()}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
