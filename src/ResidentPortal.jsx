@@ -1717,8 +1717,16 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [noteText, setNoteText] = useState("");
   const [success, showSuccess] = useSuccess();
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ name: "", unit: "", phone: "", email: "", propertyId: selectedProperty === "all" ? "wharf" : selectedProperty, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "" });
+  const defaultPropId = selectedProperty === "all" ? (LIVE_PROPERTIES[0]?.id || "") : selectedProperty;
+  const [addForm, setAddForm] = useState({ name: "", unit: "", unitId: "", phone: "", email: "", propertyId: defaultPropId, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "" });
   const [adding, setAdding] = useState(false);
+  const [addFormUnits, setAddFormUnits] = useState([]);
+
+  // Load units when property changes or form opens
+  useEffect(() => {
+    const prop = LIVE_PROPERTIES.find(p => p.id === addForm.propertyId);
+    if (prop?._uuid) fetchUnits(prop._uuid).then(u => setAddFormUnits(u || [])).catch(() => {});
+  }, [addForm.propertyId]);
 
   const detailTabs = ["Overview", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
 
@@ -1951,10 +1959,15 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>New Resident</div>
           <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
             <div><label style={s.label}>Full Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} placeholder="First Last" /></div>
-            <div><label style={s.label}>Unit *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.unit} onChange={e => setAddForm(p => ({ ...p, unit: e.target.value }))} placeholder="e.g. B-204" /></div>
-            <div><label style={s.label}>Property</label>
-              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.propertyId} onChange={e => setAddForm(p => ({ ...p, propertyId: e.target.value }))}>
+            <div><label style={s.label}>Property *</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.propertyId} onChange={e => { setAddForm(p => ({ ...p, propertyId: e.target.value, unitId: "" })); const pr = LIVE_PROPERTIES.find(x => x.id === e.target.value); if (pr?._uuid) fetchUnits(pr._uuid).then(u => setAddFormUnits(u || [])).catch(() => {}); }}>
                 {LIVE_PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div><label style={s.label}>Unit *</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.unitId || ""} onChange={e => setAddForm(p => ({ ...p, unitId: e.target.value, unit: addFormUnits.find(u => u.id === e.target.value)?.number || "" }))}>
+                <option value="">Select unit...</option>
+                {addFormUnits.map(u => <option key={u.id} value={u.id}>{u.number} ({u.bedrooms}BR)</option>)}
               </select>
             </div>
             <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.phone} onChange={e => setAddForm(p => ({ ...p, phone: e.target.value }))} placeholder="(415) 555-0000" /></div>
@@ -1973,23 +1986,24 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             setAdding(true);
             try {
               const prop = LIVE_PROPERTIES.find(p => p.id === addForm.propertyId);
+              if (!prop?._uuid) throw new Error("Select a property");
+              if (!addForm.unitId) throw new Error("Select a unit");
               const resData = await insertResident({
                 name: addForm.name, phone: addForm.phone, email: addForm.email,
                 preferredChannel: "email", status: "active", moveInDate: addForm.leaseStart || null,
-                slug: addForm.name.toLowerCase().replace(/\s+/g, '-'),
-              }, prop?._uuid, null);
-              // Create unit if needed, then lease
+              }, prop._uuid, addForm.unitId);
+              // Create lease
               if (addForm.rentAmount && addForm.leaseStart) {
                 await insertLease({
                   startDate: addForm.leaseStart, endDate: addForm.leaseEnd,
                   rentAmount: parseFloat(addForm.rentAmount) || 0,
                   tenantPortion: parseFloat(addForm.tenantPortion) || 0,
                   hapPayment: parseFloat(addForm.hapPayment) || 0,
-                }, resData.id, null);
+                }, resData.id, addForm.unitId);
               }
               showSuccess(`Added ${addForm.name}`);
               setShowAddForm(false);
-              setAddForm({ name: "", unit: "", phone: "", email: "", propertyId: selectedProperty === "all" ? "wharf" : selectedProperty, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "" });
+              setAddForm({ name: "", unit: "", unitId: "", phone: "", email: "", propertyId: defaultPropId, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "" });
               if (onResidentAdded) onResidentAdded();
             } catch (err) {
               showSuccess("Error: " + (err.message || "Failed to add resident"));
