@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
 
@@ -2142,6 +2142,10 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const [unitForm, setUnitForm] = useState({ number: "", bedrooms: "1", bathrooms: "1", sqft: "" });
   const [unitSuccess, showUnitSuccess] = useSuccess();
   const [unitList, setUnitList] = useState([]);
+  const [editingUnit, setEditingUnit] = useState(null);
+  const [editUnitForm, setEditUnitForm] = useState({});
+  const [showEditProp, setShowEditProp] = useState(false);
+  const [editPropForm, setEditPropForm] = useState({});
 
   if (isAll) {
     return (
@@ -2236,22 +2240,99 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
       {unitList.length > 0 && (
         <div style={{ ...s.card, marginBottom: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Units ({unitList.length})</div>
+          <SuccessMessage message={unitSuccess} />
           <table style={s.table}>
-            <thead><tr>{["Unit", "BR", "BA", "Sqft"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Unit", "BR", "BA", "Sqft", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
             <tbody>
-              {unitList.map(u => (
-                <tr key={u._uuid || u.id}>
-                  <td style={s.td}><span style={{ fontWeight: 600 }}>{u.number}</span></td>
-                  <td style={s.td}>{u.bedrooms}</td>
-                  <td style={s.td}>{u.bathrooms}</td>
-                  <td style={s.td}>{u.sqft || "—"}</td>
-                </tr>
-              ))}
+              {unitList.map(u => {
+                const uid = u._uuid || u.id;
+                if (editingUnit === uid) {
+                  return (
+                    <tr key={uid}>
+                      <td style={s.td}><input style={{ ...s.input, width: 80, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.number || ""} onChange={e => setEditUnitForm(f => ({ ...f, number: e.target.value }))} /></td>
+                      <td style={s.td}><input type="number" style={{ ...s.input, width: 50, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.bedrooms || ""} onChange={e => setEditUnitForm(f => ({ ...f, bedrooms: e.target.value }))} /></td>
+                      <td style={s.td}><input type="number" style={{ ...s.input, width: 50, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.bathrooms || ""} onChange={e => setEditUnitForm(f => ({ ...f, bathrooms: e.target.value }))} /></td>
+                      <td style={s.td}><input type="number" style={{ ...s.input, width: 70, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.sqft || ""} onChange={e => setEditUnitForm(f => ({ ...f, sqft: e.target.value }))} /></td>
+                      <td style={s.td}>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button style={{ ...s.btn("primary"), fontSize: 11, padding: "4px 8px" }} onClick={async () => {
+                            try {
+                              await updateUnit(uid, { number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0 });
+                              setUnitList(prev => prev.map(x => (x._uuid || x.id) === uid ? { ...x, number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0 } : x));
+                              setEditingUnit(null);
+                              showUnitSuccess("Unit updated");
+                            } catch (err) { showUnitSuccess("Error: " + err.message); }
+                          }}>Save</button>
+                          <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingUnit(null)}>Cancel</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                return (
+                  <tr key={uid}>
+                    <td style={s.td}><span style={{ fontWeight: 600 }}>{u.number}</span></td>
+                    <td style={s.td}>{u.bedrooms}</td>
+                    <td style={s.td}>{u.bathrooms}</td>
+                    <td style={s.td}>{u.sqft || "—"}</td>
+                    <td style={s.td}>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || "") }); }}>Edit</button>
+                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px", color: T.danger }} onClick={async () => {
+                          if (!confirm(`Delete unit ${u.number}?`)) return;
+                          try { await deleteUnit(uid); setUnitList(prev => prev.filter(x => (x._uuid || x.id) !== uid)); showUnitSuccess(`Unit ${u.number} deleted`); } catch (err) { showUnitSuccess("Error: " + err.message); }
+                        }}>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
-      <PropertySingleView p={p} mobile={mobile} />
+      {/* Edit Property */}
+      <div style={{ ...s.card, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Property Details</div>
+          <button style={s.btn("ghost")} onClick={() => { setShowEditProp(v => !v); if (!showEditProp) setEditPropForm({ name: p.name, address: p.address, type: p.type, totalUnits: String(p.totalUnits || ""), totalSF: String(p.totalSF || ""), lotSize: p.lotSize || "", yearBuilt: String(p.yearBuilt || ""), adaUnits: String(p.adaUnits || "") }); }}>
+            {showEditProp ? "Cancel" : "✏️ Edit"}
+          </button>
+        </div>
+        {showEditProp ? (
+          <div>
+            <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+              <div><label style={s.label}>Name</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.name || ""} onChange={e => setEditPropForm(f => ({ ...f, name: e.target.value }))} /></div>
+              <div><label style={s.label}>Address</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.address || ""} onChange={e => setEditPropForm(f => ({ ...f, address: e.target.value }))} /></div>
+              <div><label style={s.label}>Type</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.type || ""} onChange={e => setEditPropForm(f => ({ ...f, type: e.target.value }))} /></div>
+              <div><label style={s.label}>Total Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.totalUnits || ""} onChange={e => setEditPropForm(f => ({ ...f, totalUnits: e.target.value }))} /></div>
+              <div><label style={s.label}>Total SF</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.totalSF || ""} onChange={e => setEditPropForm(f => ({ ...f, totalSF: e.target.value }))} /></div>
+              <div><label style={s.label}>Year Built</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.yearBuilt || ""} onChange={e => setEditPropForm(f => ({ ...f, yearBuilt: e.target.value }))} /></div>
+              <div><label style={s.label}>Lot Size</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.lotSize || ""} onChange={e => setEditPropForm(f => ({ ...f, lotSize: e.target.value }))} /></div>
+              <div><label style={s.label}>ADA Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.adaUnits || ""} onChange={e => setEditPropForm(f => ({ ...f, adaUnits: e.target.value }))} /></div>
+            </div>
+            <button style={{ ...s.mBtn("primary", mobile) }} onClick={async () => {
+              try {
+                await updateProperty(p._uuid, { ...editPropForm, totalUnits: parseInt(editPropForm.totalUnits) || 0, totalSF: parseInt(editPropForm.totalSF) || 0, yearBuilt: parseInt(editPropForm.yearBuilt) || null, adaUnits: parseInt(editPropForm.adaUnits) || 0 });
+                showUnitSuccess("Property updated!");
+                setShowEditProp(false);
+                if (onDataRefresh) onDataRefresh();
+              } catch (err) { showUnitSuccess("Error: " + err.message); }
+            }}>Save Changes</button>
+          </div>
+        ) : (
+          <div style={{ ...s.grid("1fr 1fr", mobile), gap: 8 }}>
+            <DetailRow label="Name" value={p.name} />
+            <DetailRow label="Address" value={p.address} />
+            <DetailRow label="Type" value={p.type} />
+            <DetailRow label="Total Units" value={p.totalUnits} />
+            <DetailRow label="Total SF" value={p.totalSF?.toLocaleString()} />
+            <DetailRow label="Year Built" value={p.yearBuilt} />
+            <DetailRow label="Lot Size" value={p.lotSize} />
+            <DetailRow label="ADA Units" value={p.adaUnits} />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -67,6 +67,40 @@ export async function insertUnit(unit, propertyUuid) {
   return { _uuid: data.id, number: data.number, bedrooms: data.bedrooms, bathrooms: data.bathrooms, sqft: data.sqft };
 }
 
+export async function updateProperty(propUuid, changes) {
+  const mapped = {};
+  if (changes.name !== undefined) mapped.name = changes.name;
+  if (changes.address !== undefined) mapped.address = changes.address;
+  if (changes.type !== undefined) mapped.type = changes.type;
+  if (changes.totalUnits !== undefined) mapped.total_units = changes.totalUnits;
+  if (changes.totalSF !== undefined) mapped.total_sf = changes.totalSF;
+  if (changes.manager !== undefined) mapped.manager = changes.manager;
+  if (changes.managerPhone !== undefined) mapped.manager_phone = changes.managerPhone;
+  if (changes.managerEmail !== undefined) mapped.manager_email = changes.managerEmail;
+  if (changes.officeHours !== undefined) mapped.office_hours = changes.officeHours;
+  if (changes.lotSize !== undefined) mapped.lot_size = changes.lotSize;
+  if (changes.adaUnits !== undefined) mapped.ada_units = changes.adaUnits;
+  if (changes.yearBuilt !== undefined) mapped.year_built = changes.yearBuilt;
+  const { error } = await supabase.from('properties').update(mapped).eq('id', propUuid);
+  if (error) throw error;
+}
+
+export async function updateUnit(unitUuid, changes) {
+  const mapped = {};
+  if (changes.number !== undefined) mapped.number = changes.number;
+  if (changes.bedrooms !== undefined) mapped.bedrooms = changes.bedrooms;
+  if (changes.bathrooms !== undefined) mapped.bathrooms = changes.bathrooms;
+  if (changes.sqft !== undefined) mapped.sqft = changes.sqft;
+  if (changes.floorPlan !== undefined) mapped.floor_plan = changes.floorPlan;
+  const { error } = await supabase.from('units').update(mapped).eq('id', unitUuid);
+  if (error) throw error;
+}
+
+export async function deleteUnit(unitUuid) {
+  const { error } = await supabase.from('units').delete().eq('id', unitUuid);
+  if (error) throw error;
+}
+
 export async function fetchUnits(propertyUuid) {
   const { data, error } = await supabase
     .from('units')
