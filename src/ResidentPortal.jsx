@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -3522,7 +3522,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
 };
 
 // ── ADMIN MAINTENANCE (with assignment) ────────────────────
-const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd }) => {
+const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers = [] }) => {
+  const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin"));
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ status: "", assignedTo: "", notes: "" });
   const [success, showSuccess] = useSuccess();
@@ -3635,7 +3636,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd }) => {
               <label style={s.label}>Assign To</label>
               <select style={{ ...s.mSelect(mobile), width: "100%" }} value={editData.assignedTo} onChange={e => setEditData(p => ({ ...p, assignedTo: e.target.value }))}>
                 <option value="">Unassigned</option>
-                <option value="Mike R.">Mike R.</option>
+                {maintStaff.map(s => <option key={s.id} value={s.name}>{s.name}{s.role === "property_manager" ? " (PM)" : ""}</option>)}
                 <option value="External Vendor">External Vendor</option>
               </select>
             </div>
@@ -3656,7 +3657,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd }) => {
 
 // --- ADMIN SETTINGS ---
 const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset }) => {
-  const tabs = ["Users", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
+  const tabs = ["Users", "Staff", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [newCat, setNewCat] = useState("");
@@ -3667,6 +3668,11 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
   const [inviting, setInviting] = useState(false);
   const [auditEntries, setAuditEntries] = useState([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
+  const [staffList, setStaffList] = useState([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [staffForm, setStaffForm] = useState({ name: "", role: "maintenance", email: "", phone: "", propertyId: "" });
+  const [editingStaff, setEditingStaff] = useState(null);
+  const [editStaffForm, setEditStaffForm] = useState({});
 
   useEffect(() => {
     if (tab === "Audit Log") {
@@ -3679,6 +3685,10 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
     if (tab === "Users") {
       setLoadingUsers(true);
       fetchUserProfiles().then(data => { setUserProfiles(data || []); setLoadingUsers(false); }).catch(() => setLoadingUsers(false));
+    }
+    if (tab === "Staff") {
+      setLoadingStaff(true);
+      fetchStaffMembers().then(data => { setStaffList(data || []); setLoadingStaff(false); }).catch(() => setLoadingStaff(false));
     }
   }, [tab]);
 
@@ -3794,6 +3804,55 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "Staff" && (
+        <div>
+          <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Add Staff Member</div>
+            <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+              <div><label style={s.label}>Full Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. Mike Rodriguez" value={staffForm.name} onChange={e => setStaffForm(f => ({ ...f, name: e.target.value }))} /></div>
+              <div><label style={s.label}>Role</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={staffForm.role} onChange={e => setStaffForm(f => ({ ...f, role: e.target.value }))}><option value="maintenance">Maintenance Staff</option><option value="property_manager">Property Manager</option><option value="admin">Admin</option></select></div>
+              <div><label style={s.label}>Property</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={staffForm.propertyId} onChange={e => setStaffForm(f => ({ ...f, propertyId: e.target.value }))}><option value="">All Properties</option>{LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}</select></div>
+              <div><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} placeholder="email@example.com" value={staffForm.email} onChange={e => setStaffForm(f => ({ ...f, email: e.target.value }))} /></div>
+              <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="(415) 555-0000" value={staffForm.phone} onChange={e => setStaffForm(f => ({ ...f, phone: e.target.value }))} /></div>
+            </div>
+            <button disabled={!staffForm.name.trim()} onClick={async () => {
+              try {
+                await insertStaffMember(staffForm);
+                showSuccess(`${staffForm.name} added as ${staffForm.role.replace("_", " ")}`);
+                setStaffForm({ name: "", role: "maintenance", email: "", phone: "", propertyId: "" });
+                fetchStaffMembers().then(setStaffList).catch(() => {});
+              } catch (err) { showSuccess("Error: " + err.message); }
+            }} style={{ ...s.mBtn("primary", mobile) }}>Add Staff Member</button>
+          </div>
+          {loadingStaff ? <div style={{ padding: 20, textAlign: "center", color: T.muted }}>Loading...</div> : staffList.length === 0 ? <EmptyState icon="👷" text="No staff members yet. Add property managers and maintenance staff above." /> : (
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Staff Directory ({staffList.length})</div>
+              <table style={s.table}>
+                <thead><tr>{["Name", "Role", "Property", "Phone", "Email", "Status", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {staffList.map(st => (
+                    <tr key={st.id}>
+                      <td style={s.td}><span style={{ fontWeight: 600 }}>{st.name}</span></td>
+                      <td style={s.td}><span style={s.badge(st.role === "property_manager" ? T.infoDim : st.role === "admin" ? T.warnDim : T.accentDim, st.role === "property_manager" ? T.info : st.role === "admin" ? T.warn : T.accent)}>{st.role === "property_manager" ? "Property Manager" : st.role === "admin" ? "Admin" : "Maintenance"}</span></td>
+                      <td style={s.td}>{st.propertyName || "All"}</td>
+                      <td style={s.td}>{st.phone || "—"}</td>
+                      <td style={s.td}>{st.email || "—"}</td>
+                      <td style={s.td}><span style={s.badge(st.active ? T.successDim : T.dangerDim, st.active ? T.success : T.danger)}>{st.active ? "Active" : "Inactive"}</span></td>
+                      <td style={s.td}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button style={s.btn("ghost")} onClick={() => { updateStaffMember(st.id, { active: !st.active }).then(() => fetchStaffMembers().then(setStaffList)).catch(() => {}); showSuccess(st.active ? `${st.name} deactivated` : `${st.name} reactivated`); }}>{st.active ? "Deactivate" : "Activate"}</button>
+                          <button style={{ ...s.btn("ghost"), color: T.danger }} onClick={async () => { try { await deleteStaffMember(st.id); setStaffList(prev => prev.filter(x => x.id !== st.id)); showSuccess(`${st.name} removed`); } catch (err) { showSuccess("Error: " + err.message); } }}>Remove</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -4850,6 +4909,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [unitInspections, setUnitInspections] = useState([]);
+  const [staffMembers, setStaffMembers] = useState([]);
   const [emergencyContacts, setEmergencyContacts] = useState({});
   const [adminNotes, setAdminNotes] = useState({});
   const [notifications, setNotifications] = useState([]);
@@ -4872,11 +4932,11 @@ export default function App() {
   // Reusable data reload function
   const reloadData = useCallback(async () => {
     try {
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard] = await Promise.all([
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff] = await Promise.all([
         fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(),
         fetchRentLedger(), fetchMaintenanceRequests(), fetchVendors(),
         fetchUnitInspections(), fetchRegInspections(), fetchThreads(), fetchMessages(),
-        fetchComplianceDocs(), fetchOnboardingWorkflows(),
+        fetchComplianceDocs(), fetchOnboardingWorkflows(), fetchStaffMembers(),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
@@ -4887,6 +4947,7 @@ export default function App() {
       setMaintenance(maint || []);
       setVendors(vend || []);
       setUnitInspections(uInsp || []);
+      setStaffMembers(staff || []);
       setThreads(thr || []);
       setMessages(msgs || []);
       setOnboardingData(onboard || []);
@@ -5126,7 +5187,7 @@ export default function App() {
         }} />;
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
-        case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} />;
+        case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
         case "recert": return <Recertification role="admin" mobile={mobile} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} />;

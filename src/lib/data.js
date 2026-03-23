@@ -670,3 +670,53 @@ export async function deleteHouseholdMember(id) {
   const { error } = await supabase.from('household_members').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ── STAFF MEMBERS ──
+
+export async function fetchStaffMembers() {
+  const { data, error } = await supabase
+    .from('staff_members')
+    .select('*, properties(name)')
+    .order('name');
+  if (error) throw error;
+  return (data || []).map(s => ({
+    id: s.id,
+    name: s.name,
+    role: s.role,
+    email: s.email,
+    phone: s.phone,
+    propertyId: s.property_id,
+    propertyName: s.properties?.name || null,
+    active: s.active,
+  }));
+}
+
+export async function insertStaffMember(staff) {
+  const { data, error } = await supabase.from('staff_members').insert({
+    name: staff.name,
+    role: staff.role || 'maintenance',
+    email: staff.email || null,
+    phone: staff.phone || null,
+    property_id: staff.propertyId || null,
+    active: true,
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateStaffMember(id, changes) {
+  const mapped = {};
+  if (changes.name !== undefined) mapped.name = changes.name;
+  if (changes.role !== undefined) mapped.role = changes.role;
+  if (changes.email !== undefined) mapped.email = changes.email;
+  if (changes.phone !== undefined) mapped.phone = changes.phone;
+  if (changes.propertyId !== undefined) mapped.property_id = changes.propertyId;
+  if (changes.active !== undefined) mapped.active = changes.active;
+  const { error } = await supabase.from('staff_members').update(mapped).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteStaffMember(id) {
+  const { error } = await supabase.from('staff_members').delete().eq('id', id);
+  if (error) throw error;
+}
