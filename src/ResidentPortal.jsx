@@ -4319,11 +4319,8 @@ export default function App() {
       if (profile?.role === "resident" && profile.residentSlug) {
         return { id: profile.residentSlug, name: profile.residentName, firstName: profile.residentName?.split(" ")[0], unit: profile.unit, propertyId: profile.propertySlug };
       }
-      // Admin impersonating a resident — use roleOverride with a selected resident
-      // Falls back to first resident
-      const r = LIVE_RESIDENTS[0];
-      const ext = LIVE_RESIDENTS_EXTENDED[r?.id] || {};
-      return { id: r?.id || "maria-santos", name: r?.name || "Maria Santos", firstName: (r?.name || "Maria").split(" ")[0], unit: r?.unit || "B-204", propertyId: r?.propertyId || "wharf" };
+      // Resident not linked to a resident record — show minimal context
+      return { id: "", name: profile?.displayName || "Resident", firstName: profile?.displayName?.split(" ")[0] || "Resident", unit: "—", propertyId: "" };
     }
     return null;
   })();
@@ -4475,15 +4472,17 @@ export default function App() {
   const renderPage = () => {
     if (role === "resident") {
       const rc = residentCtx;
+      const myMaint = rc?.unit ? maintenance.filter(m => m.unit === rc.unit) : maintenance;
+      const myThreads = rc?.id ? threads.filter(t => t.type === "broadcast" || t.participants.includes(rc.id)) : threads;
       switch (page) {
-        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} rc={rc} />;
-        case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={maintenance} onSubmit={addMaintenanceN} rc={rc} />;
+        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} notifications={roleNotifs} rc={rc} />;
+        case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={myMaint} onSubmit={addMaintenanceN} rc={rc} />;
         case "rent": return <RentPayments mobile={mobile} rc={rc} />;
         case "recert": return <Recertification role="resident" mobile={mobile} />;
         case "unit": return <UnitDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} rc={rc} />;
         case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} rc={rc} />;
         case "profile": return <ResidentProfile mobile={mobile} commPrefs={commPrefs} setCommPrefs={setCommPrefs} emergencyContacts={emergencyContacts} onUpdateEmergencyContacts={updateEmergencyContacts} rc={rc} />;
-        case "messages": return <Communications role="resident" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} rc={rc} />;
+        case "messages": return <Communications role="resident" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={myThreads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} rc={rc} />;
         default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} rc={rc} />;
       }
     }
