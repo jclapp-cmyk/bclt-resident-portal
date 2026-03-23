@@ -1,6 +1,17 @@
 import { supabase } from './supabase';
 
 export async function signInWithMagicLink(email) {
+  // Check if email exists in user_profiles before sending magic link
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('id')
+    .eq('email', email)
+    .single();
+
+  if (!profile) {
+    throw new Error("No account found for this email address. Contact your property manager.");
+  }
+
   const redirectTo = window.location.origin;
   const { error } = await supabase.auth.signInWithOtp({
     email,

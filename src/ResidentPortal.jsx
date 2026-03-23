@@ -3496,6 +3496,9 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const tabs = ["Overview", "Rent Roll", "Payments"];
   const [tab, setTab] = useState(tabs[0]);
   const [dateRange, setDateRange] = useState({ preset: "all", from: null, to: null });
+  const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const [payForm, setPayForm] = useState({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+  const [paySuccess, showPaySuccess] = useSuccess();
 
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
   const ledger = filterByProperty(MOCK_RENT_LEDGER, selectedProperty);
@@ -3630,9 +3633,65 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
 
       {tab === "Payments" && (
         <div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <SuccessMessage message={paySuccess} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+            <button onClick={() => setShowRecordPayment(v => !v)} style={{ ...s.btn(showRecordPayment ? "ghost" : "primary"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
+              {showRecordPayment ? "Cancel" : "💵 Record Payment"}
+            </button>
             <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Resident", key: "name" }, { label: "Unit", key: "unit" }, { label: "Rent Due", key: "rentDue" }, { label: "Tenant Paid", key: "tenantPaid" }, { label: "HAP Received", key: "hapReceived" }, { label: "Balance", key: "balance" }, { label: "Status", key: "status" }], ledger, "payment_status")} />
           </div>
+          {showRecordPayment && (
+            <div style={{ ...s.card, borderLeft: `3px solid ${T.success}`, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Record Manual Payment</div>
+              <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={s.label}>Resident</label>
+                  <select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.residentId} onChange={e => setPayForm(p => ({ ...p, residentId: e.target.value }))}>
+                    <option value="">Select resident...</option>
+                    {filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={s.label}>Amount ($)</label>
+                  <input type="number" min="0" step="0.01" placeholder="0.00" value={payForm.amount} onChange={e => setPayForm(p => ({ ...p, amount: e.target.value }))}
+                    style={{ ...s.mInput(mobile), width: "100%" }} />
+                </div>
+                <div>
+                  <label style={s.label}>Method</label>
+                  <select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.method} onChange={e => setPayForm(p => ({ ...p, method: e.target.value }))}>
+                    <option value="cash">Cash</option>
+                    <option value="check">Check</option>
+                    <option value="money_order">Money Order</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={s.label}>Date</label>
+                  <input type="date" value={payForm.date} onChange={e => setPayForm(p => ({ ...p, date: e.target.value }))}
+                    style={{ ...s.mInput(mobile), width: "100%" }} />
+                </div>
+              </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>Note (optional)</label>
+                <input type="text" placeholder="e.g. Check #1234" value={payForm.note} onChange={e => setPayForm(p => ({ ...p, note: e.target.value }))}
+                  style={{ ...s.mInput(mobile), width: "100%" }} />
+              </div>
+              <button disabled={!payForm.residentId || !payForm.amount} onClick={() => {
+                if (!payForm.residentId || !payForm.amount) return;
+                const res = LIVE_RESIDENTS.find(r => r.id === payForm.residentId);
+                const amt = parseFloat(payForm.amount);
+                // Update ledger entry
+                const entry = ledger.find(l => l.residentId === payForm.residentId);
+                if (entry) {
+                  entry.tenantPaid = (entry.tenantPaid || 0) + amt;
+                  entry.balance = Math.max(0, entry.rentDue - entry.tenantPaid - entry.hapReceived);
+                  entry.status = entry.balance === 0 ? "paid" : entry.balance < entry.rentDue ? "partial" : "outstanding";
+                }
+                showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment from ${res?.name || "resident"}`);
+                setPayForm({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+                setShowRecordPayment(false);
+              }} style={{ ...s.mBtn("primary", mobile) }}>Record Payment</button>
+            </div>
+          )}
           <SortableTable mobile={mobile} columns={[
             { key: "name", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
             { key: "unit", label: "Unit" },
@@ -4259,19 +4318,7 @@ export default function App() {
           {mobile && <button onClick={() => setSidebarOpen(false)} style={{ background: "none", border: "none", fontSize: 22, color: T.muted, cursor: "pointer", padding: 4 }}>✕</button>}
         </div>
       </div>
-      {profile?.role === "admin" && (
-        <div style={{ padding: "12px 12px 0" }}>
-          <div style={{ fontSize: 10, fontWeight: 600, color: T.dim, textTransform: "uppercase", letterSpacing: "1px", padding: "0 6px", marginBottom: 6 }}>View As</div>
-          {["resident", "admin", "maintenance"].map(r => (
-            <button key={r} onClick={() => handleRoleChange(r)} style={{
-              display: "block", width: "100%", textAlign: "left", padding: mobile ? "10px 12px" : "7px 12px", marginBottom: 2, borderRadius: 6,
-              background: role === r ? T.accentDim : "transparent", color: role === r ? T.accent : T.muted,
-              border: "none", cursor: "pointer", fontSize: 13, fontWeight: role === r ? 700 : 500, textTransform: "capitalize",
-              minHeight: mobile ? 44 : undefined,
-            }}>{r === "maintenance" ? "Maint. Staff" : r}</button>
-          ))}
-        </div>
-      )}
+      {/* Role is set by auth — no View As switcher needed */}
       {role === "admin" && (
         <div style={{ padding: "10px 12px 0" }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: T.dim, textTransform: "uppercase", letterSpacing: "1px", padding: "0 6px", marginBottom: 6 }}>Property</div>
