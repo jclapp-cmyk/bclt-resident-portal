@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 
 /* ═══════════════════════════════════════════════════════════
@@ -377,6 +377,7 @@ const DEFAULT_SETTINGS = {
 let LIVE_PROPERTIES = MOCK_PROPERTIES;
 let LIVE_RESIDENTS = MOCK_RESIDENTS;
 let LIVE_RESIDENTS_EXTENDED = MOCK_RESIDENTS_EXTENDED;
+let LIVE_RENT_LEDGER = MOCK_RENT_LEDGER;
 
 // ── DESIGN TOKENS (Light Theme) ──────────────────────────────
 
@@ -992,7 +993,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
               const pOpen = pMaint.filter(m => m.status !== "completed").length;
               const pCrit = pMaint.filter(m => m.priority === "critical" && m.status !== "completed").length;
               const pRes = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
-              const pLedger = MOCK_RENT_LEDGER.filter(r => r.propertyId === p.id);
+              const pLedger = LIVE_RENT_LEDGER.filter(r => r.propertyId === p.id);
               const pRent = pLedger.reduce((s, r) => s + r.rentDue, 0);
               const pColl = pLedger.reduce((s, r) => s + r.tenantPaid + r.hapReceived, 0);
               const pRate = pRent ? Math.round((pColl / pRent) * 100) : 0;
@@ -1946,7 +1947,7 @@ const PropertyCard = ({ p, mobile, onSelect }) => {
   const residents = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
   const maint = MOCK_MAINTENANCE.filter(m => m.propertyId === p.id);
   const openMaint = maint.filter(m => m.status !== "completed").length;
-  const ledger = MOCK_RENT_LEDGER.filter(r => r.propertyId === p.id);
+  const ledger = LIVE_RENT_LEDGER.filter(r => r.propertyId === p.id);
   const rentRoll = ledger.reduce((s, r) => s + r.rentDue, 0);
   const collected = ledger.reduce((s, r) => s + r.tenantPaid + r.hapReceived, 0);
   const collRate = rentRoll ? Math.round((collected / rentRoll) * 100) : 0;
@@ -3598,7 +3599,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const [paySuccess, showPaySuccess] = useSuccess();
 
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
-  const ledger = filterByProperty(MOCK_RENT_LEDGER, selectedProperty);
+  const ledger = filterByProperty(LIVE_RENT_LEDGER, selectedProperty);
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
@@ -3637,7 +3638,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                 <tbody>
                   {LIVE_PROPERTIES.map(p => {
                     const pRes = LIVE_RESIDENTS.filter(r => r.propertyId === p.id).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
-                    const pLedger = MOCK_RENT_LEDGER.filter(r => r.propertyId === p.id);
+                    const pLedger = LIVE_RENT_LEDGER.filter(r => r.propertyId === p.id);
                     const pRent = pRes.reduce((s, r) => s + (r.rentAmount || 0), 0);
                     const pHap = pRes.reduce((s, r) => s + (r.hapPayment || 0), 0);
                     const pTen = pRes.reduce((s, r) => s + (r.tenantPortion || 0), 0);
@@ -3772,18 +3773,33 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                 <input type="text" placeholder="e.g. Check #1234" value={payForm.note} onChange={e => setPayForm(p => ({ ...p, note: e.target.value }))}
                   style={{ ...s.mInput(mobile), width: "100%" }} />
               </div>
-              <button disabled={!payForm.residentId || !payForm.amount} onClick={() => {
+              <button disabled={!payForm.residentId || !payForm.amount} onClick={async () => {
                 if (!payForm.residentId || !payForm.amount) return;
                 const res = LIVE_RESIDENTS.find(r => r.id === payForm.residentId);
                 const amt = parseFloat(payForm.amount);
-                // Update ledger entry
-                const entry = ledger.find(l => l.residentId === payForm.residentId);
-                if (entry) {
-                  entry.tenantPaid = (entry.tenantPaid || 0) + amt;
-                  entry.balance = Math.max(0, entry.rentDue - entry.tenantPaid - entry.hapReceived);
-                  entry.status = entry.balance === 0 ? "paid" : entry.balance < entry.rentDue ? "partial" : "outstanding";
+                try {
+                  await recordPayment({
+                    residentSlug: payForm.residentId,
+                    amount: amt,
+                    method: payForm.method,
+                    paymentDate: payForm.date,
+                    month: payForm.date?.slice(0, 7),
+                    note: payForm.note,
+                  });
+                  // Refresh ledger from Supabase
+                  const fresh = await fetchRentLedger();
+                  if (fresh && fresh.length) LIVE_RENT_LEDGER = fresh;
+                  showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment from ${res?.name || "resident"}`);
+                } catch (err) {
+                  // Fallback: update in-memory
+                  const entry = ledger.find(l => l.residentId === payForm.residentId);
+                  if (entry) {
+                    entry.tenantPaid = (entry.tenantPaid || 0) + amt;
+                    entry.balance = Math.max(0, entry.rentDue - entry.tenantPaid - entry.hapReceived);
+                    entry.status = entry.balance === 0 ? "paid" : entry.balance < entry.rentDue ? "partial" : "outstanding";
+                  }
+                  showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} (offline — will sync later)`);
                 }
-                showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment from ${res?.name || "resident"}`);
                 setPayForm({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
                 setShowRecordPayment(false);
               }} style={{ ...s.mBtn("primary", mobile) }}>Record Payment</button>
@@ -4170,6 +4186,7 @@ export default function App() {
   const [sbProperties, setSbProperties] = useState(null);
   const [sbResidents, setSbResidents] = useState(null);
   const [sbResidentsExt, setSbResidentsExt] = useState(null);
+  const [sbRentLedger, setSbRentLedger] = useState(null);
   const [dataReady, setDataReady] = useState(false);
   const mobile = useIsMobile();
 
@@ -4178,20 +4195,23 @@ export default function App() {
     let cancelled = false;
     async function loadFromSupabase() {
       try {
-        const [props, res, resExt, docs] = await Promise.all([
+        const [props, res, resExt, docs, ledger] = await Promise.all([
           fetchProperties(),
           fetchResidents(),
           fetchResidentsExtended(),
           fetchLeaseDocsByResident(),
+          fetchRentLedger(),
         ]);
         if (!cancelled) {
           // Update module-level live bindings so all components see Supabase data
           LIVE_PROPERTIES = props;
           LIVE_RESIDENTS = res;
           LIVE_RESIDENTS_EXTENDED = resExt;
+          if (ledger && ledger.length) LIVE_RENT_LEDGER = ledger;
           setSbProperties(props);
           setSbResidents(res);
           setSbResidentsExt(resExt);
+          setSbRentLedger(ledger);
           setLeaseDocs(docs);
           setDataReady(true);
         }
@@ -4260,11 +4280,12 @@ export default function App() {
   const resetAllState = async () => {
     // Re-fetch Supabase data for core tables
     try {
-      const [props, res, resExt, docs] = await Promise.all([
-        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(),
+      const [props, res, resExt, docs, ledger] = await Promise.all([
+        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(), fetchRentLedger(),
       ]);
       LIVE_PROPERTIES = props; LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt;
-      setSbProperties(props); setSbResidents(res); setSbResidentsExt(resExt); setLeaseDocs(docs);
+      if (ledger && ledger.length) LIVE_RENT_LEDGER = ledger;
+      setSbProperties(props); setSbResidents(res); setSbResidentsExt(resExt); setSbRentLedger(ledger); setLeaseDocs(docs);
     } catch (err) {
       console.warn('Reset fetch failed:', err);
       setLeaseDocs(MOCK_LEASE_DOCS);

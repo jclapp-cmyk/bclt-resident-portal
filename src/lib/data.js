@@ -145,3 +145,75 @@ export async function insertLeaseDocument(doc, residentUuid) {
   });
   if (error) throw error;
 }
+
+// ── RENT LEDGER (computed view) ──
+
+export async function fetchRentLedger() {
+  const { data, error } = await supabase
+    .from('rent_ledger')
+    .select('*');
+  if (error) throw error;
+  return (data || []).map(r => ({
+    propertyId: r.property_id,
+    residentId: r.resident_id,
+    unit: r.unit,
+    name: r.name,
+    rentDue: Number(r.rent_due),
+    tenantPortion: Number(r.tenant_portion),
+    hapPayment: Number(r.hap_payment),
+    tenantPaid: Number(r.tenant_paid),
+    hapReceived: Number(r.hap_received),
+    balance: Number(r.balance),
+    status: r.status,
+    month: r.month || new Date().toISOString().slice(0, 7),
+  }));
+}
+
+// ── RENT PAYMENTS ──
+
+export async function fetchRentPayments(month) {
+  let query = supabase
+    .from('rent_payments')
+    .select('*, residents(slug, name, units(number)), properties(slug)')
+    .order('payment_date', { ascending: false });
+  if (month) query = query.eq('month', month);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(p => ({
+    id: p.id,
+    residentId: p.residents?.slug,
+    residentName: p.residents?.name,
+    unit: p.residents?.units?.number,
+    propertyId: p.properties?.slug,
+    amount: Number(p.amount),
+    method: p.method,
+    paymentDate: p.payment_date,
+    month: p.month,
+    note: p.note,
+    recordedBy: p.recorded_by,
+    createdAt: p.created_at,
+  }));
+}
+
+export async function recordPayment({ residentSlug, amount, method, paymentDate, month, note }) {
+  // Look up resident UUID from slug
+  const { data: resident } = await supabase
+    .from('residents')
+    .select('id, property_id')
+    .eq('slug', residentSlug)
+    .single();
+  if (!resident) throw new Error('Resident not found');
+
+  const { data, error } = await supabase.from('rent_payments').insert({
+    resident_id: resident.id,
+    property_id: resident.property_id,
+    amount,
+    method,
+    payment_date: paymentDate,
+    month: month || paymentDate?.slice(0, 7) || new Date().toISOString().slice(0, 7),
+    note: note || null,
+    recorded_by: 'Admin',
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
