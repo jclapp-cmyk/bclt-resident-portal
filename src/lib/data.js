@@ -254,6 +254,11 @@ export async function insertLeaseDocument(doc, residentUuid) {
   if (error) throw error;
 }
 
+export async function deleteLeaseDocument(docId) {
+  const { error } = await supabase.from('lease_documents').delete().eq('id', docId);
+  if (error) throw error;
+}
+
 // ── MESSAGE THREADS ──
 
 export async function fetchThreads() {
