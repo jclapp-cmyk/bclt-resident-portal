@@ -1722,7 +1722,7 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
 };
 
 // --- ADMIN RESIDENTS ---
-const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty, onResidentAdded }) => {
+const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty, onResidentAdded, onDataChanged }) => {
   const [selectedResident, setSelectedResident] = useState(null);
   const [tab, setTab] = useState("Overview");
   const [noteText, setNoteText] = useState("");
@@ -1951,6 +1951,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                       const url = storagePath ? getLeaseFileUrl(storagePath) : null;
                       await insertLeaseDocument({ name: file.name, type: "other", size: file.size }, selectedResident._uuid);
                       showSuccess(`Uploaded ${file.name}`);
+                      if (onDataChanged) onDataChanged();
                     } catch (err) { showSuccess("Error: " + err.message); }
                     e.target.value = "";
                   }} />
@@ -2038,6 +2039,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   await recordPayment({ residentSlug: selectedResident.id, amount: amt, method: payForm.method, paymentDate: payForm.date, note: payForm.note });
                   showSuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment`);
                   setPayForm({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+                  if (onDataChanged) onDataChanged();
                 } catch (err) { showSuccess("Error: " + err.message); }
               }} style={{ ...s.mBtn("primary", mobile) }}>Record Payment</button>
             </div>
@@ -5015,7 +5017,7 @@ export default function App() {
       const fInsp = filterByProperty(unitInspections, sp);
       switch (page) {
         case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} />;
-        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onResidentAdded={async () => {
+        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onDataChanged={reloadData} onResidentAdded={async () => {
           try { const [res, resExt] = await Promise.all([fetchResidents(), fetchResidentsExtended()]); LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt; setSbResidents(res); setSbResidentsExt(resExt); } catch(e) { console.warn(e); }
         }} />;
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
