@@ -375,12 +375,12 @@ const DEFAULT_SETTINGS = {
 };
 
 // Live data bindings — start as mock, updated by Supabase fetch in App
-let LIVE_PROPERTIES = MOCK_PROPERTIES;
-let LIVE_RESIDENTS = MOCK_RESIDENTS;
-let LIVE_RESIDENTS_EXTENDED = MOCK_RESIDENTS_EXTENDED;
-let LIVE_RENT_LEDGER = MOCK_RENT_LEDGER;
-let LIVE_REG_INSPECTIONS = MOCK_REG_INSPECTIONS;
-let LIVE_COMPLIANCE_DOCS = MOCK_COMPLIANCE_DOCS;
+let LIVE_PROPERTIES = [];
+let LIVE_RESIDENTS = [];
+let LIVE_RESIDENTS_EXTENDED = {};
+let LIVE_RENT_LEDGER = [];
+let LIVE_REG_INSPECTIONS = [];
+let LIVE_COMPLIANCE_DOCS = [];
 
 // ── DESIGN TOKENS (Light Theme) ──────────────────────────────
 
@@ -4303,20 +4303,14 @@ export default function App() {
   const [commPrefs, setCommPrefs] = useState(MOCK_COMM_PREFS);
   const [leaseDocs, setLeaseDocs] = useState(MOCK_LEASE_DOCS);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [maintenance, setMaintenance] = useState(MOCK_MAINTENANCE);
-  const [threads, setThreads] = useState(MOCK_THREADS);
-  const [messages, setMessages] = useState(MOCK_MESSAGES);
-  const [vendors, setVendors] = useState(MOCK_VENDORS);
-  const [unitInspections, setUnitInspections] = useState(MOCK_UNIT_INSPECTIONS);
-  const [emergencyContacts, setEmergencyContacts] = useState(MOCK_EMERGENCY_CONTACTS);
-  const [adminNotes, setAdminNotes] = useState(MOCK_ADMIN_NOTES);
-  const [notifications, setNotifications] = useState([
-    { id: "N-5", type: "maintenance", icon: "🔧", message: "New critical request: Sparking outlet in bedroom (A-108)", timestamp: "2026-03-18T09:15:00", roles: ["admin", "maintenance"] },
-    { id: "N-4", type: "vendor", icon: "⚠️", message: "Summit Roofing license expired — vendor deactivated", timestamp: "2026-03-15T08:00:00", roles: ["admin"] },
-    { id: "N-3", type: "message", icon: "💬", message: "James Whitfield replied to Lease Renewal thread", timestamp: "2026-03-14T11:00:00", roles: ["admin"] },
-    { id: "N-2", type: "maintenance", icon: "🔧", message: "MR-2401 update: Parts ordered for kitchen faucet", timestamp: "2026-03-12T10:00:00", roles: ["resident"] },
-    { id: "N-1", type: "inspection", icon: "🔍", message: "Seasonal inspection completed — Unit B-204 passed", timestamp: "2026-03-01T14:00:00", roles: ["resident", "admin"] },
-  ]);
+  const [maintenance, setMaintenance] = useState([]);
+  const [threads, setThreads] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [vendors, setVendors] = useState([]);
+  const [unitInspections, setUnitInspections] = useState([]);
+  const [emergencyContacts, setEmergencyContacts] = useState({});
+  const [adminNotes, setAdminNotes] = useState({});
+  const [notifications, setNotifications] = useState([]);
   const [notifReadAt, setNotifReadAt] = useState({ resident: "2026-03-10T00:00:00", admin: "2026-03-12T00:00:00", maintenance: "2026-03-12T00:00:00" });
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
@@ -4345,18 +4339,18 @@ export default function App() {
           fetchComplianceDocs(), fetchOnboardingWorkflows(),
         ]);
         if (!cancelled) {
-          LIVE_PROPERTIES = props; LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt;
-          if (ledger && ledger.length) LIVE_RENT_LEDGER = ledger;
-          if (rInsp && rInsp.length) LIVE_REG_INSPECTIONS = rInsp;
-          if (compDocs && compDocs.length) LIVE_COMPLIANCE_DOCS = compDocs;
-          setSbProperties(props); setSbResidents(res); setSbResidentsExt(resExt);
-          setSbRentLedger(ledger); setLeaseDocs(docs);
-          if (maint && maint.length) setMaintenance(maint);
-          if (vend && vend.length) setVendors(vend);
-          if (uInsp && uInsp.length) setUnitInspections(uInsp);
-          if (thr && thr.length) setThreads(thr);
-          if (msgs && msgs.length) setMessages(msgs);
-          if (onboard && onboard.length) setOnboardingData(onboard);
+          LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
+          LIVE_RENT_LEDGER = ledger || [];
+          LIVE_REG_INSPECTIONS = rInsp || [];
+          LIVE_COMPLIANCE_DOCS = compDocs || [];
+          setSbProperties(props || []); setSbResidents(res || []); setSbResidentsExt(resExt || {});
+          setSbRentLedger(ledger || []); setLeaseDocs(docs || {});
+          setMaintenance(maint || []);
+          setVendors(vend || []);
+          setUnitInspections(uInsp || []);
+          setThreads(thr || []);
+          setMessages(msgs || []);
+          setOnboardingData(onboard || []);
           setDataReady(true);
         }
       } catch (err) {
@@ -4467,9 +4461,9 @@ export default function App() {
       setLeaseDocs(MOCK_LEASE_DOCS);
     }
     // Reset non-Supabase state to mocks
-    setMaintenance(MOCK_MAINTENANCE); setThreads(MOCK_THREADS); setMessages(MOCK_MESSAGES);
-    setVendors(MOCK_VENDORS); setUnitInspections(MOCK_UNIT_INSPECTIONS);
-    setEmergencyContacts(MOCK_EMERGENCY_CONTACTS); setAdminNotes(MOCK_ADMIN_NOTES);
+    setMaintenance([]); setThreads([]); setMessages([]);
+    setVendors([]); setUnitInspections([]);
+    setEmergencyContacts({}); setAdminNotes({});
     setCommPrefs(MOCK_COMM_PREFS); setSettings(DEFAULT_SETTINGS); setPage("dashboard");
   };
 
