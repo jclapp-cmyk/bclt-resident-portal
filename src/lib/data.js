@@ -188,7 +188,7 @@ export async function fetchLeaseDocsByResident() {
 
 export async function insertResident(resident, propertyUuid, unitUuid) {
   const { data, error } = await supabase.from('residents').insert({
-    slug: resident.slug || resident.name.toLowerCase().replace(/\s+/g, '-'),
+    slug: resident.slug || (resident.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '') + '-' + Math.random().toString(36).slice(2, 6)),
     property_id: propertyUuid,
     unit_id: unitUuid,
     name: resident.name,
