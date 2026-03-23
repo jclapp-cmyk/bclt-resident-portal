@@ -1748,17 +1748,19 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
 
   const detailTabs = ["Overview", "Household", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
 
+  // Load household members when resident selected (hook must be before any conditional returns)
+  const selectedResUuid = selectedResident?._uuid || null;
+  useEffect(() => {
+    if (selectedResUuid) fetchHouseholdMembers(selectedResUuid).then(setHouseholdMembers).catch(() => setHouseholdMembers([]));
+    else setHouseholdMembers([]);
+  }, [selectedResUuid]);
+
   if (selectedResident) {
     const ext = LIVE_RESIDENTS_EXTENDED[selectedResident.id] || {};
     const resMaintenance = maintenance.filter(m => m.unit === selectedResident.unit);
     const resThreads = threads.filter(t => t.participants.includes(selectedResident.id) || t.type === "broadcast");
     const resNotes = adminNotes[selectedResident.id] || [];
     const resEC = emergencyContacts[selectedResident.id] || [];
-
-    // Load household members when resident selected
-    useEffect(() => {
-      if (selectedResident?._uuid) fetchHouseholdMembers(selectedResident._uuid).then(setHouseholdMembers).catch(() => setHouseholdMembers([]));
-    }, [selectedResident?._uuid]);
 
     const addNote = () => {
       if (!noteText.trim()) return;
