@@ -3045,11 +3045,39 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate }) => {
 
 // --- ADMIN SETTINGS ---
 const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset }) => {
-  const tabs = ["Property", "Notifications", "Rent & Lease", "Maintenance", "System"];
+  const tabs = ["Users", "Property", "Notifications", "Rent & Lease", "Maintenance", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [newCat, setNewCat] = useState("");
   const [confirmReset, setConfirmReset] = useState(false);
+  const [userProfiles, setUserProfiles] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: "", role: "resident", residentId: "", displayName: "" });
+  const [inviting, setInviting] = useState(false);
+
+  useEffect(() => {
+    if (tab === "Users") {
+      setLoadingUsers(true);
+      fetchUserProfiles().then(data => { setUserProfiles(data || []); setLoadingUsers(false); }).catch(() => setLoadingUsers(false));
+    }
+  }, [tab]);
+
+  const handleInvite = async () => {
+    if (!inviteForm.email) return;
+    setInviting(true);
+    try {
+      await inviteUser(inviteForm.email, inviteForm.role, inviteForm.residentId || null, inviteForm.displayName || null);
+      showSuccess(`Invited ${inviteForm.email} as ${inviteForm.role}`);
+      setInviteForm({ email: "", role: "resident", residentId: "", displayName: "" });
+      // Refresh user list
+      const data = await fetchUserProfiles();
+      setUserProfiles(data || []);
+    } catch (err) {
+      showSuccess("Error: " + (err.message || "Failed to invite user"));
+    } finally {
+      setInviting(false);
+    }
+  };
   const upd = (section, key, val) => setSettings(p => ({ ...p, [section]: { ...p[section], [key]: val } }));
 
   return (
@@ -3058,6 +3086,75 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
       <p style={s.sectionSub}>Manage property, notifications, and system preferences</p>
       <SuccessMessage message={success} />
       <TabBar tabs={tabs} active={tab} onChange={setTab} mobile={mobile} />
+
+      {tab === "Users" && (
+        <div>
+          <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Invite New User</div>
+            <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+              <div>
+                <label style={s.label}>Email Address</label>
+                <input type="email" placeholder="user@example.com" value={inviteForm.email} onChange={e => setInviteForm(p => ({ ...p, email: e.target.value }))}
+                  style={{ ...s.mInput(mobile), width: "100%" }} />
+              </div>
+              <div>
+                <label style={s.label}>Display Name</label>
+                <input type="text" placeholder="First Last" value={inviteForm.displayName} onChange={e => setInviteForm(p => ({ ...p, displayName: e.target.value }))}
+                  style={{ ...s.mInput(mobile), width: "100%" }} />
+              </div>
+              <div>
+                <label style={s.label}>Role</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={inviteForm.role} onChange={e => setInviteForm(p => ({ ...p, role: e.target.value }))}>
+                  <option value="resident">Resident</option>
+                  <option value="admin">Admin</option>
+                  <option value="maintenance">Maintenance Staff</option>
+                </select>
+              </div>
+              {inviteForm.role === "resident" && (
+                <div>
+                  <label style={s.label}>Link to Resident</label>
+                  <select style={{ ...s.mSelect(mobile), width: "100%" }} value={inviteForm.residentId} onChange={e => setInviteForm(p => ({ ...p, residentId: e.target.value }))}>
+                    <option value="">Select resident (optional)...</option>
+                    {LIVE_RESIDENTS.map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+            <button disabled={!inviteForm.email || inviting} onClick={handleInvite}
+              style={{ ...s.mBtn("primary", mobile) }}>
+              {inviting ? "Inviting..." : "Create User Account"}
+            </button>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 8 }}>The user will sign in with a magic link sent to their email address.</div>
+          </div>
+
+          <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>All Users ({userProfiles.length})</div>
+            {loadingUsers ? (
+              <div style={{ color: T.muted, padding: 20, textAlign: "center" }}>Loading...</div>
+            ) : userProfiles.length === 0 ? (
+              <EmptyState icon="👥" text="No users yet. Invite your first user above." />
+            ) : (
+              <table style={s.table}>
+                <thead><tr>{["Name", "Email", "Role", "Linked Resident", "Created"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {userProfiles.map(u => (
+                    <tr key={u.id}>
+                      <td style={s.td}><span style={{ fontWeight: 600 }}>{u.display_name || "—"}</span></td>
+                      <td style={s.td}>{u.email}</td>
+                      <td style={s.td}><span style={s.badge(
+                        u.role === "admin" ? T.accentDim : u.role === "maintenance" ? T.warnDim : T.successDim,
+                        u.role === "admin" ? T.accent : u.role === "maintenance" ? T.warn : T.success
+                      )}>{u.role}</span></td>
+                      <td style={s.td}>{u.residents?.name || <span style={{ color: T.dim }}>—</span>}</td>
+                      <td style={s.td}><span style={{ fontSize: 12, color: T.muted }}>{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
 
       {tab === "Property" && (
         <div>
