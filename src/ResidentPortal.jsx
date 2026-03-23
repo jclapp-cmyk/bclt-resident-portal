@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 
 /* ═══════════════════════════════════════════════════════════
@@ -1382,17 +1382,39 @@ const formatFileSize = (bytes) => {
   return (bytes / 1048576).toFixed(1) + " MB";
 };
 
-const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDelete = false }) => {
+const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDelete = false, residentSlug }) => {
   const [showUpload, setShowUpload] = useState(false);
-  const [docName, setDocName] = useState("");
   const [docType, setDocType] = useState("lease");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
-  const handleUpload = () => {
-    if (!docName.trim()) return;
-    onUpload({ id: `LD-${Date.now()}`, name: docName.endsWith(".pdf") ? docName : `${docName}.pdf`, type: docType, size: Math.floor(Math.random() * 500000) + 100000, uploadedAt: new Date().toISOString(), uploadedBy: canDelete ? "Admin" : "Resident" });
-    setDocName("");
-    setDocType("lease");
-    setShowUpload(false);
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    setUploading(true);
+    try {
+      let storagePath = null;
+      if (residentSlug) {
+        storagePath = await uploadLeaseFile(selectedFile, residentSlug);
+      }
+      onUpload({
+        id: `LD-${Date.now()}`, name: selectedFile.name, type: docType,
+        size: selectedFile.size, uploadedAt: new Date().toISOString(),
+        uploadedBy: canDelete ? "Admin" : "Resident", storagePath,
+      });
+    } catch (err) {
+      console.warn("File upload failed:", err);
+      // Still add the record even if storage fails
+      onUpload({
+        id: `LD-${Date.now()}`, name: selectedFile.name, type: docType,
+        size: selectedFile.size, uploadedAt: new Date().toISOString(),
+        uploadedBy: canDelete ? "Admin" : "Resident",
+      });
+    } finally {
+      setSelectedFile(null);
+      setDocType("lease");
+      setShowUpload(false);
+      setUploading(false);
+    }
   };
 
   const sorted = [...docs].sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
@@ -1406,10 +1428,15 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
       {showUpload && (
         <div style={{ padding: 14, background: T.bg, borderRadius: T.radiusSm, marginBottom: 14 }}>
           <div style={{ ...s.grid("2fr 1fr", false), gap: 10, marginBottom: 10 }}>
-            <div><label style={s.label}>Document Name</label><input style={s.input} value={docName} onChange={e => setDocName(e.target.value)} placeholder="e.g. Lease_Agreement.pdf" /></div>
+            <div>
+              <label style={s.label}>Choose File</label>
+              <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setSelectedFile(e.target.files?.[0] || null)}
+                style={{ fontSize: 13, color: T.text }} />
+              {selectedFile && <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>{selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)</div>}
+            </div>
             <div><label style={s.label}>Type</label><select style={{ ...s.select, width: "100%" }} value={docType} onChange={e => setDocType(e.target.value)}>{Object.entries(LEASE_DOC_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           </div>
-          <button style={s.btn()} onClick={handleUpload}>Upload Document</button>
+          <button style={s.btn()} disabled={!selectedFile || uploading} onClick={handleUpload}>{uploading ? "Uploading..." : "Upload Document"}</button>
         </div>
       )}
       {sorted.length === 0 ? (
@@ -1489,7 +1516,7 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
         <DetailRow label="Email" value={MOCK_PROPERTY.managerEmail} />
         <DetailRow label="Office Hours" value={MOCK_PROPERTY.officeHours} />
       </div>
-      <LeaseDocumentsPanel docs={residentDocs} onUpload={handleUpload} canUpload={true} canDelete={false} />
+      <LeaseDocumentsPanel docs={residentDocs} onUpload={handleUpload} canUpload={true} canDelete={false} residentSlug={rc?.id} />
     </div>
   );
 };
@@ -2228,7 +2255,7 @@ const AdminDocuments = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty }) =
               {filteredResidents.map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
             </select>
           </div>
-          <LeaseDocumentsPanel docs={leaseDocs[selectedResident] || []} onUpload={handleUpload} onDelete={handleDelete} canUpload={true} canDelete={true} />
+          <LeaseDocumentsPanel docs={leaseDocs[selectedResident] || []} onUpload={handleUpload} onDelete={handleDelete} canUpload={true} canDelete={true} residentSlug={selectedResident} />
         </div>
       )}
 

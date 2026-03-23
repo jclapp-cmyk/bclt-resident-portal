@@ -206,6 +206,25 @@ export async function fetchCommTemplates() {
   }));
 }
 
+// ── FILE STORAGE (Lease Documents) ──
+
+export async function uploadLeaseFile(file, residentSlug) {
+  const path = `${residentSlug}/${Date.now()}_${file.name}`;
+  const { error } = await supabase.storage.from('lease-documents').upload(path, file);
+  if (error) throw error;
+  return path;
+}
+
+export async function getLeaseFileUrl(path) {
+  const { data } = await supabase.storage.from('lease-documents').createSignedUrl(path, 3600); // 1hr
+  return data?.signedUrl || null;
+}
+
+export async function deleteLeaseFile(path) {
+  const { error } = await supabase.storage.from('lease-documents').remove([path]);
+  if (error) throw error;
+}
+
 // ── VENDORS ──
 
 export async function fetchVendors() {
