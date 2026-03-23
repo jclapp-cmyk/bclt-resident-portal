@@ -2136,7 +2136,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const totalResidents = LIVE_RESIDENTS.length;
   const totalSF = LIVE_PROPERTIES.reduce((s, p) => s + p.totalSF, 0);
   const [showAddProp, setShowAddProp] = useState(false);
-  const [propForm, setPropForm] = useState({ name: "", address: "", type: "", totalUnits: "", totalSF: "", manager: "", managerEmail: "", managerPhone: "", officeHours: "" });
+  const [propForm, setPropForm] = useState({ name: "", address: "", type: "", totalUnits: "", totalSF: "" });
   const [propSuccess, showPropSuccess] = useSuccess();
   const [showAddUnit, setShowAddUnit] = useState(false);
   const [unitForm, setUnitForm] = useState({ number: "", bedrooms: "1", bathrooms: "1", sqft: "" });
@@ -2165,15 +2165,12 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               <div><label style={s.label}>Type</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.type} onChange={e => setPropForm(p => ({ ...p, type: e.target.value }))} placeholder="e.g. Garden-Style Apartments" /></div>
               <div><label style={s.label}>Total Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.totalUnits} onChange={e => setPropForm(p => ({ ...p, totalUnits: e.target.value }))} /></div>
               <div><label style={s.label}>Total SF</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.totalSF} onChange={e => setPropForm(p => ({ ...p, totalSF: e.target.value }))} /></div>
-              <div><label style={s.label}>Manager</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.manager} onChange={e => setPropForm(p => ({ ...p, manager: e.target.value }))} /></div>
-              <div><label style={s.label}>Manager Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.managerEmail} onChange={e => setPropForm(p => ({ ...p, managerEmail: e.target.value }))} /></div>
-              <div><label style={s.label}>Manager Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.managerPhone} onChange={e => setPropForm(p => ({ ...p, managerPhone: e.target.value }))} /></div>
             </div>
             <button disabled={!propForm.name.trim()} onClick={async () => {
               try {
                 await insertProperty({ ...propForm, totalUnits: parseInt(propForm.totalUnits) || 0, totalSF: parseInt(propForm.totalSF) || 0 });
                 showPropSuccess(`Property "${propForm.name}" created!`);
-                setPropForm({ name: "", address: "", type: "", totalUnits: "", totalSF: "", manager: "", managerEmail: "", managerPhone: "", officeHours: "" });
+                setPropForm({ name: "", address: "", type: "", totalUnits: "", totalSF: "" });
                 if (onDataRefresh) onDataRefresh();
                 setTimeout(() => setShowAddProp(false), 1500);
               } catch (err) { showPropSuccess("Error: " + err.message); }
