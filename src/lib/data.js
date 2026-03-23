@@ -372,6 +372,23 @@ export async function insertVendor(v) {
   return { ...data, id: data.id, licenseExp: data.license_exp, coiExp: data.coi_exp };
 }
 
+export async function updateVendor(vendorUuid, changes) {
+  const mapped = {};
+  if (changes.company !== undefined) mapped.company = changes.company;
+  if (changes.contact !== undefined) mapped.contact = changes.contact;
+  if (changes.trade !== undefined) mapped.trade = changes.trade;
+  if (changes.phone !== undefined) mapped.phone = changes.phone;
+  if (changes.email !== undefined) mapped.email = changes.email;
+  if (changes.license !== undefined) mapped.license = changes.license;
+  if (changes.licenseExp !== undefined) mapped.license_exp = changes.licenseExp;
+  if (changes.insured !== undefined) mapped.insured = changes.insured;
+  if (changes.coiExp !== undefined) mapped.coi_exp = changes.coiExp;
+  if (changes.active !== undefined) mapped.active = changes.active;
+  if (changes.notes !== undefined) mapped.notes = changes.notes;
+  const { error } = await supabase.from('vendors').update(mapped).eq('id', vendorUuid);
+  if (error) throw error;
+}
+
 // ── UNIT INSPECTIONS ──
 
 export async function fetchUnitInspections() {

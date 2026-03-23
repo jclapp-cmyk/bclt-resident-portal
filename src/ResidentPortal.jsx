@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
 
@@ -2856,11 +2856,13 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
 };
 
 // --- VENDORS (Admin & Maintenance) ---
-const Vendors = ({ role, mobile, vendors: vendorData, onAddVendor }) => {
+const Vendors = ({ role, mobile, vendors: vendorData, onAddVendor, onUpdateVendor }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [filter, setFilter] = useState("active");
   const [success, showSuccess] = useSuccess();
   const [vForm, setVForm] = useState({ company: "", contact: "", trade: "Plumbing", phone: "", email: "", license: "", licenseExp: "", insured: "Yes", coiExp: "", notes: "" });
+  const [editingVendor, setEditingVendor] = useState(null);
+  const [evForm, setEvForm] = useState({});
   const vendors = filter === "active" ? vendorData.filter(v => v.active) : filter === "inactive" ? vendorData.filter(v => !v.active) : vendorData;
   return (
     <div>
@@ -2934,12 +2936,39 @@ const Vendors = ({ role, mobile, vendors: vendorData, onAddVendor }) => {
             { key: "licenseExp", label: "Lic. Exp", render: (v) => `${v}${new Date(v) < new Date("2026-06-01") ? " ⚠" : ""}`, tdStyle: row => ({ color: new Date(row.licenseExp) < new Date("2026-06-01") ? T.danger : T.text, fontWeight: new Date(row.licenseExp) < new Date("2026-06-01") ? 600 : 400 }), filterable: false },
             { key: "insured", label: "Insured", render: (_, row) => <span style={s.badge(row.insured ? T.successDim : T.dangerDim, row.insured ? T.success : T.danger)}>{row.insured ? "Yes" : "No"}</span>, filterOptions: ["Yes", "No"], filterValue: row => row.insured ? "Yes" : "No" },
             { key: "coiExp", label: "COI Exp", render: (v) => `${v}${new Date(v) < new Date("2026-06-01") ? " ⚠" : ""}`, tdStyle: row => ({ color: new Date(row.coiExp) < new Date("2026-06-01") ? T.danger : T.text, fontWeight: new Date(row.coiExp) < new Date("2026-06-01") ? 600 : 400 }), filterable: false },
-            ...(role === "admin" ? [{ key: "_actions", label: "", sortable: false, filterable: false, render: () => <button style={s.btn("ghost")}>Edit</button> }] : []),
+            ...(role === "admin" ? [{ key: "_actions", label: "", sortable: false, filterable: false, render: (_, row) => <button style={s.btn("ghost")} onClick={() => { setEditingVendor(row); setEvForm({ company: row.company, contact: row.contact, trade: row.trade, phone: row.phone, email: row.email, license: row.license, licenseExp: row.licenseExp, insured: row.insured ? "Yes" : "No", coiExp: row.coiExp, notes: row.notes || "", active: row.active }); }}>Edit</button> }] : []),
           ]}
           data={vendors}
           rowStyle={row => ({ opacity: row.active ? 1 : 0.55 })}
         />
       </div>
+      {editingVendor && (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.info}`, marginTop: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Edit Vendor: {editingVendor.company}</div>
+            <button style={s.btn("ghost")} onClick={() => setEditingVendor(null)}>Cancel</button>
+          </div>
+          <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div><label style={s.label}>Company</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={evForm.company || ""} onChange={e => setEvForm(f => ({ ...f, company: e.target.value }))} /></div>
+            <div><label style={s.label}>Contact</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={evForm.contact || ""} onChange={e => setEvForm(f => ({ ...f, contact: e.target.value }))} /></div>
+            <div><label style={s.label}>Trade</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={evForm.trade} onChange={e => setEvForm(f => ({ ...f, trade: e.target.value }))}><option>Plumbing</option><option>HVAC</option><option>Electrical</option><option>Pest Control</option><option>Roofing</option><option>General Contractor</option><option>Other</option></select></div>
+            <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={evForm.phone || ""} onChange={e => setEvForm(f => ({ ...f, phone: e.target.value }))} /></div>
+            <div><label style={s.label}>Email</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={evForm.email || ""} onChange={e => setEvForm(f => ({ ...f, email: e.target.value }))} /></div>
+            <div><label style={s.label}>License</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={evForm.license || ""} onChange={e => setEvForm(f => ({ ...f, license: e.target.value }))} /></div>
+            <div><label style={s.label}>License Exp</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={evForm.licenseExp || ""} onChange={e => setEvForm(f => ({ ...f, licenseExp: e.target.value }))} /></div>
+            <div><label style={s.label}>Insured</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={evForm.insured} onChange={e => setEvForm(f => ({ ...f, insured: e.target.value }))}><option>Yes</option><option>No</option></select></div>
+            <div><label style={s.label}>COI Exp</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={evForm.coiExp || ""} onChange={e => setEvForm(f => ({ ...f, coiExp: e.target.value }))} /></div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Toggle label="Active" checked={evForm.active !== false} onChange={() => setEvForm(f => ({ ...f, active: !f.active }))} />
+          </div>
+          <button style={{ ...s.mBtn("primary", mobile), marginTop: 14 }} onClick={() => {
+            if (onUpdateVendor) onUpdateVendor(editingVendor.id, { ...evForm, insured: evForm.insured === "Yes" });
+            setEditingVendor(null);
+            showSuccess("Vendor updated!");
+          }}>Save Changes</button>
+        </div>
+      )}
       {vendorData.some(v => !v.active || new Date(v.licenseExp) < new Date("2026-06-01")) && (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.danger}`, background: T.dangerDim }}>
           <div style={{ fontWeight: 700, marginBottom: 8, color: T.danger }}>Vendor Alerts</div>
@@ -3262,10 +3291,12 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
 };
 
 // ── ADMIN MAINTENANCE (with assignment) ────────────────────
-const AdminMaintenance = ({ mobile, maintenance, onUpdate }) => {
+const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd }) => {
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ status: "", assignedTo: "", notes: "" });
   const [success, showSuccess] = useSuccess();
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ unit: "", category: "Plumbing", priority: "routine", description: "" });
 
   const startEdit = (row) => {
     setEditingId(row.id);
@@ -3286,9 +3317,55 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate }) => {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div><h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Maintenance Management</h1><p style={s.sectionSub}>Manage all work orders across the property</p></div>
-        <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "ID", key: "id" }, { label: "Unit", key: "unit" }, { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" }, { label: "Submitted", key: "submitted" }, { label: "Assigned To", key: "assignedTo", exportValue: r => r.assignedTo || "Unassigned" }, { label: "Description", key: "description" }], maintenance, "maintenance_orders")} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShowCreate(v => !v)} style={{ ...s.btn(showCreate ? "ghost" : "primary"), fontSize: 13 }}>{showCreate ? "Cancel" : "➕ New Work Order"}</button>
+          <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "ID", key: "id" }, { label: "Unit", key: "unit" }, { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" }, { label: "Submitted", key: "submitted" }, { label: "Assigned To", key: "assignedTo", exportValue: r => r.assignedTo || "Unassigned" }, { label: "Description", key: "description" }], maintenance, "maintenance_orders")} />
+        </div>
       </div>
       <SuccessMessage message={success} />
+      {showCreate && (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.warn}`, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Create Work Order</div>
+          <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div><label style={s.label}>Unit *</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.unit} onChange={e => setCreateForm(f => ({ ...f, unit: e.target.value }))}>
+                <option value="">Select unit...</option>
+                {LIVE_RESIDENTS.map(r => <option key={r.id} value={r.unit}>{r.unit} — {r.name}</option>)}
+              </select>
+            </div>
+            <div><label style={s.label}>Category</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.category} onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}>
+                {["Plumbing", "Electrical", "HVAC", "Appliance", "Structural", "Pest", "Other"].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div><label style={s.label}>Priority</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.priority} onChange={e => setCreateForm(f => ({ ...f, priority: e.target.value }))}>
+                {["routine", "urgent", "critical"].map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 14 }}><label style={s.label}>Description *</label><textarea style={{ ...s.mInput(mobile), width: "100%", minHeight: 60, resize: "vertical" }} value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the issue..." /></div>
+          <button disabled={!createForm.unit || !createForm.description.trim()} onClick={() => {
+            const res = LIVE_RESIDENTS.find(r => r.unit === createForm.unit);
+            const req = {
+              id: `MR-${Date.now().toString().slice(-4)}`,
+              propertyId: res?.propertyId || "",
+              unit: createForm.unit,
+              category: createForm.category,
+              priority: createForm.priority,
+              status: "submitted",
+              description: createForm.description.trim(),
+              submitted: new Date().toISOString().slice(0, 10),
+              assignedTo: null,
+              notes: [],
+            };
+            if (onAdd) onAdd(req);
+            showSuccess(`Work order created for unit ${createForm.unit}`);
+            setCreateForm({ unit: "", category: "Plumbing", priority: "routine", description: "" });
+            setShowCreate(false);
+          }} style={{ ...s.mBtn("primary", mobile) }}>Create Work Order</button>
+        </div>
+      )}
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
         <StatCard label="Open" value={maintenance.filter(m => m.status !== "completed").length} accent={T.warn} mobile={mobile} />
         <StatCard label="Unassigned" value={maintenance.filter(m => !m.assignedTo).length} accent={T.danger} mobile={mobile} />
@@ -4792,11 +4869,11 @@ export default function App() {
         }} />;
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
-        case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} />;
+        case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} />;
         case "recert": return <Recertification role="admin" mobile={mobile} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} />;
-        case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} />;
+        case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "compliance": return <ComplianceDashboard mobile={mobile} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
