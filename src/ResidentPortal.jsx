@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 
 /* ═══════════════════════════════════════════════════════════
@@ -1683,11 +1683,14 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
 };
 
 // --- ADMIN RESIDENTS ---
-const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty }) => {
+const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty, onResidentAdded }) => {
   const [selectedResident, setSelectedResident] = useState(null);
   const [tab, setTab] = useState("Overview");
   const [noteText, setNoteText] = useState("");
   const [success, showSuccess] = useSuccess();
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({ name: "", unit: "", phone: "", email: "", propertyId: selectedProperty === "all" ? "wharf" : selectedProperty, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "" });
+  const [adding, setAdding] = useState(false);
 
   const detailTabs = ["Overview", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
 
@@ -1903,13 +1906,69 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
         <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22, marginBottom: 0 }}>Residents</h1>
-        <ExportButton mobile={mobile} onClick={() => generateCSV(
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShowAddForm(v => !v)} style={{ ...s.btn(showAddForm ? "ghost" : "primary"), fontSize: 13 }}>
+            {showAddForm ? "Cancel" : "➕ Add Resident"}
+          </button>
+          <ExportButton mobile={mobile} onClick={() => generateCSV(
           [{ label: "Name", key: "name" }, { label: "Unit", key: "unit" }, { label: "BR", key: "bedrooms" }, { label: "Rent", key: "rentAmount" }, { label: "Lease Start", key: "leaseStart" }, { label: "Lease End", key: "leaseEnd" }, { label: "Phone", key: "phone" }, { label: "Email", key: "email" }],
           filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) })), "residents"
         )} />
+        </div>
       </div>
+      {showAddForm && (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>New Resident</div>
+          <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div><label style={s.label}>Full Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} placeholder="First Last" /></div>
+            <div><label style={s.label}>Unit *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.unit} onChange={e => setAddForm(p => ({ ...p, unit: e.target.value }))} placeholder="e.g. B-204" /></div>
+            <div><label style={s.label}>Property</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.propertyId} onChange={e => setAddForm(p => ({ ...p, propertyId: e.target.value }))}>
+                {LIVE_PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.phone} onChange={e => setAddForm(p => ({ ...p, phone: e.target.value }))} placeholder="(415) 555-0000" /></div>
+            <div><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))} placeholder="name@email.com" /></div>
+            <div><label style={s.label}>Bedrooms</label><input type="number" min="0" max="5" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.bedrooms} onChange={e => setAddForm(p => ({ ...p, bedrooms: e.target.value }))} /></div>
+          </div>
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: T.muted }}>Lease Details</div>
+          <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div><label style={s.label}>Monthly Rent</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.rentAmount} onChange={e => setAddForm(p => ({ ...p, rentAmount: e.target.value }))} placeholder="0.00" /></div>
+            <div><label style={s.label}>Tenant Portion</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.tenantPortion} onChange={e => setAddForm(p => ({ ...p, tenantPortion: e.target.value }))} placeholder="0.00" /></div>
+            <div><label style={s.label}>HAP Payment</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.hapPayment} onChange={e => setAddForm(p => ({ ...p, hapPayment: e.target.value }))} placeholder="0.00" /></div>
+            <div><label style={s.label}>Lease Start</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.leaseStart} onChange={e => setAddForm(p => ({ ...p, leaseStart: e.target.value }))} /></div>
+            <div><label style={s.label}>Lease End</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.leaseEnd} onChange={e => setAddForm(p => ({ ...p, leaseEnd: e.target.value }))} /></div>
+          </div>
+          <button disabled={!addForm.name || !addForm.unit || adding} onClick={async () => {
+            setAdding(true);
+            try {
+              const prop = LIVE_PROPERTIES.find(p => p.id === addForm.propertyId);
+              const resData = await insertResident({
+                name: addForm.name, phone: addForm.phone, email: addForm.email,
+                preferredChannel: "email", status: "active", moveInDate: addForm.leaseStart || null,
+                slug: addForm.name.toLowerCase().replace(/\s+/g, '-'),
+              }, prop?._uuid, null);
+              // Create unit if needed, then lease
+              if (addForm.rentAmount && addForm.leaseStart) {
+                await insertLease({
+                  startDate: addForm.leaseStart, endDate: addForm.leaseEnd,
+                  rentAmount: parseFloat(addForm.rentAmount) || 0,
+                  tenantPortion: parseFloat(addForm.tenantPortion) || 0,
+                  hapPayment: parseFloat(addForm.hapPayment) || 0,
+                }, resData.id, null);
+              }
+              showSuccess(`Added ${addForm.name}`);
+              setShowAddForm(false);
+              setAddForm({ name: "", unit: "", phone: "", email: "", propertyId: selectedProperty === "all" ? "wharf" : selectedProperty, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "" });
+              if (onResidentAdded) onResidentAdded();
+            } catch (err) {
+              showSuccess("Error: " + (err.message || "Failed to add resident"));
+            } finally { setAdding(false); }
+          }} style={{ ...s.mBtn("primary", mobile) }}>{adding ? "Adding..." : "Add Resident"}</button>
+        </div>
+      )}
       {(() => {
         const fr = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
         const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
@@ -3975,23 +4034,27 @@ const OnboardingChecklist = ({ mobile, selectedProperty, initialRecords }) => {
       const vals = Object.values(steps);
       const done = vals.filter(Boolean).length;
       const status = done === 0 ? "not-started" : done === vals.length ? "completed" : "in-progress";
+      // Persist to Supabase
+      updateOnboardingWorkflow(id, { steps, status }).catch(err => console.warn('Supabase onboarding update failed:', err));
       return { ...r, steps, status };
     }));
   };
 
-  const addOnboarding = () => {
+  const addOnboarding = async () => {
     if (!newResident) return;
     const steps = newType === "move-in"
       ? { appReview: false, bgCheck: false, leaseSigning: false, keyHandoff: false, unitWalkthrough: false, utilitySetup: false, welcomePacket: false }
       : { noticeReceived: false, inspectionScheduled: false, finalWalkthrough: false, depositReview: false, keyReturn: false, unitTurnover: false };
     const resProp = LIVE_RESIDENTS.find(r => r.id === newResident)?.propertyId || "wharf";
-    setRecords(prev => [...prev, {
+    const newRec = {
       id: `OB-${Date.now()}`, propertyId: resProp, residentId: newResident, type: newType, status: "not-started",
       startDate: new Date().toISOString().slice(0, 10), targetDate: "", steps,
-    }]);
+    };
+    setRecords(prev => [...prev, newRec]);
     setNewResident("");
     setTab("Active");
     showSuccess("Onboarding workflow created!");
+    try { await insertOnboardingWorkflow(newRec); } catch (err) { console.warn('Supabase onboarding insert failed:', err); }
   };
 
   return (
@@ -4430,7 +4493,9 @@ export default function App() {
       const fInsp = filterByProperty(unitInspections, sp);
       switch (page) {
         case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} />;
-        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} />;
+        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onResidentAdded={async () => {
+          try { const [res, resExt] = await Promise.all([fetchResidents(), fetchResidentsExtended()]); LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt; setSbResidents(res); setSbResidentsExt(resExt); } catch(e) { console.warn(e); }
+        }} />;
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} />;
