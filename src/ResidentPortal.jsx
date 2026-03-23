@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
 
@@ -1721,6 +1721,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [addForm, setAddForm] = useState({ name: "", unit: "", unitId: "", phone: "", email: "", propertyId: defaultPropId, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "" });
   const [adding, setAdding] = useState(false);
   const [addFormUnits, setAddFormUnits] = useState([]);
+  const [editingResident, setEditingResident] = useState(false);
+  const [editResForm, setEditResForm] = useState({});
 
   // Load units when property changes or form opens
   useEffect(() => {
@@ -1759,24 +1761,59 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         <SuccessMessage message={success} />
         <TabBar tabs={detailTabs} active={tab} onChange={setTab} mobile={mobile} />
 
-        {tab === "Overview" && (
+        {tab === "Overview" && (() => {
+          const [editing, setEditing] = [editingResident, setEditingResident];
+          const ef = editResForm;
+          return (
           <div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              <button style={s.btn(editing ? "ghost" : "primary")} onClick={() => {
+                if (!editing) {
+                  setEditResForm({ name: selectedResident.name, phone: selectedResident.phone || "", email: selectedResident.email || "", rentAmount: String(ext.rentAmount || ""), tenantPortion: String(ext.tenantPortion || ""), hapPayment: String(ext.hapPayment || ""), leaseStart: ext.leaseStart || "", leaseEnd: ext.leaseEnd || "" });
+                }
+                setEditing(!editing);
+              }}>{editing ? "Cancel" : "✏️ Edit Resident"}</button>
+            </div>
             <div style={s.grid("1fr 1fr", mobile)}>
               <div style={s.card}>
                 <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Contact Information</div>
-                <DetailRow label="Phone" value={selectedResident.phone} />
-                <DetailRow label="Email" value={selectedResident.email} />
-                <DetailRow label="Preferred Channel" value={selectedResident.preferredChannel.toUpperCase()} accent={T.accent} />
+                {editing ? (<>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>Name</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.name || ""} onChange={e => setEditResForm(f => ({ ...f, name: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.phone || ""} onChange={e => setEditResForm(f => ({ ...f, phone: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.email || ""} onChange={e => setEditResForm(f => ({ ...f, email: e.target.value }))} /></div>
+                </>) : (<>
+                  <DetailRow label="Phone" value={selectedResident.phone} />
+                  <DetailRow label="Email" value={selectedResident.email} />
+                  <DetailRow label="Preferred Channel" value={(selectedResident.preferredChannel || "email").toUpperCase()} accent={T.accent} />
+                </>)}
               </div>
               <div style={s.card}>
                 <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Lease Details</div>
-                <DetailRow label="Unit" value={ext.unit || selectedResident.unit} />
-                <DetailRow label="Bedrooms" value={ext.bedrooms || "—"} />
-                <DetailRow label="Lease Start" value={ext.leaseStart || "—"} />
-                <DetailRow label="Lease End" value={ext.leaseEnd || "—"} />
-                <DetailRow label="Rent" value={ext.rentAmount ? `$${ext.rentAmount}` : "—"} />
-                <DetailRow label="Tenant Portion" value={ext.tenantPortion ? `$${ext.tenantPortion}` : "—"} accent={T.accent} />
-                <DetailRow label="HAP" value={ext.hapPayment ? `$${ext.hapPayment}` : "—"} accent={T.success} />
+                {editing ? (<>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>Monthly Rent</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.rentAmount || ""} onChange={e => setEditResForm(f => ({ ...f, rentAmount: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>Tenant Portion</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.tenantPortion || ""} onChange={e => setEditResForm(f => ({ ...f, tenantPortion: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>HAP Payment</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.hapPayment || ""} onChange={e => setEditResForm(f => ({ ...f, hapPayment: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>Lease Start</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.leaseStart || ""} onChange={e => setEditResForm(f => ({ ...f, leaseStart: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>Lease End</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.leaseEnd || ""} onChange={e => setEditResForm(f => ({ ...f, leaseEnd: e.target.value }))} /></div>
+                  <button style={{ ...s.mBtn("primary", mobile), marginTop: 8 }} onClick={async () => {
+                    try {
+                      await updateResident(selectedResident._uuid, { name: ef.name, phone: ef.phone, email: ef.email });
+                      const lease = await fetchResidentLease(selectedResident._uuid);
+                      if (lease) await updateLease(lease.id, { rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart, endDate: ef.leaseEnd });
+                      showSuccess("Resident updated!");
+                      setEditing(false);
+                      if (onResidentAdded) onResidentAdded();
+                    } catch (err) { showSuccess("Error: " + err.message); }
+                  }}>Save Changes</button>
+                </>) : (<>
+                  <DetailRow label="Unit" value={ext.unit || selectedResident.unit} />
+                  <DetailRow label="Bedrooms" value={ext.bedrooms || "—"} />
+                  <DetailRow label="Lease Start" value={ext.leaseStart || "—"} />
+                  <DetailRow label="Lease End" value={ext.leaseEnd || "—"} />
+                  <DetailRow label="Rent" value={ext.rentAmount ? `$${ext.rentAmount}` : "—"} />
+                  <DetailRow label="Tenant Portion" value={ext.tenantPortion ? `$${ext.tenantPortion}` : "—"} accent={T.accent} />
+                  <DetailRow label="HAP" value={ext.hapPayment ? `$${ext.hapPayment}` : "—"} accent={T.success} />
+                </>)}
               </div>
             </div>
             {resEC.length > 0 && (
@@ -1794,7 +1831,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               </div>
             )}
           </div>
-        )}
+          ); })()}
 
         {tab === "Lease & Docs" && (
           <div>

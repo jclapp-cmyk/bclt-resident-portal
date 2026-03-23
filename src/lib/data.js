@@ -202,6 +202,33 @@ export async function insertResident(resident, propertyUuid, unitUuid) {
   return data;
 }
 
+export async function updateResident(residentUuid, changes) {
+  const mapped = {};
+  if (changes.name !== undefined) mapped.name = changes.name;
+  if (changes.phone !== undefined) mapped.phone = changes.phone;
+  if (changes.email !== undefined) mapped.email = changes.email;
+  if (changes.preferredChannel !== undefined) mapped.preferred_channel = changes.preferredChannel;
+  if (changes.status !== undefined) mapped.status = changes.status;
+  const { error } = await supabase.from('residents').update(mapped).eq('id', residentUuid);
+  if (error) throw error;
+}
+
+export async function updateLease(leaseUuid, changes) {
+  const mapped = {};
+  if (changes.startDate !== undefined) mapped.start_date = changes.startDate;
+  if (changes.endDate !== undefined) mapped.end_date = changes.endDate;
+  if (changes.rentAmount !== undefined) mapped.rent_amount = changes.rentAmount;
+  if (changes.tenantPortion !== undefined) mapped.tenant_portion = changes.tenantPortion;
+  if (changes.hapPayment !== undefined) mapped.hap_payment = changes.hapPayment;
+  const { error } = await supabase.from('leases').update(mapped).eq('id', leaseUuid);
+  if (error) throw error;
+}
+
+export async function fetchResidentLease(residentUuid) {
+  const { data } = await supabase.from('leases').select('*').eq('resident_id', residentUuid).eq('status', 'active').single();
+  return data;
+}
+
 export async function insertLease(lease, residentUuid, unitUuid) {
   const { data, error } = await supabase.from('leases').insert({
     resident_id: residentUuid,
