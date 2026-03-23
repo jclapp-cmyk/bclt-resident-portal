@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
+import { sendNotification } from "./lib/notify";
 
 /* ═══════════════════════════════════════════════════════════
    BCLT RESIDENT PORTAL — Affordable Housing / Section 8
@@ -3917,6 +3918,15 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                   const fresh = await fetchRentLedger();
                   if (fresh && fresh.length) LIVE_RENT_LEDGER = fresh;
                   showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment from ${res?.name || "resident"}`);
+                  // Email receipt to resident
+                  if (res?.email) {
+                    const entry = fresh?.find(l => l.residentId === payForm.residentId);
+                    sendNotification('payment_receipt', {
+                      residentEmail: res.email, residentName: res.name,
+                      amount: amt, method: payForm.method, date: payForm.date,
+                      balance: entry?.balance ?? 0,
+                    });
+                  }
                 } catch (err) {
                   // Fallback: update in-memory
                   const entry = ledger.find(l => l.residentId === payForm.residentId);
@@ -4479,6 +4489,19 @@ export default function App() {
     if (changes.status) parts.push(`Status → ${changes.status}`);
     if (changes.assignedTo) parts.push(`Assigned to ${changes.assignedTo}`);
     pushNotif({ id: `N-${Date.now()}`, type: "maintenance", icon: "🔧", message: `${id} updated: ${parts.join(", ") || "notes added"}`, timestamp: new Date().toISOString(), roles: ["resident", "admin", "maintenance"].filter(r => r !== role) });
+    // Email notification to resident
+    const req = maintenance.find(m => m.id === id);
+    if (req) {
+      const resident = LIVE_RESIDENTS.find(r => r.unit === req.unit);
+      if (resident?.email) {
+        sendNotification('maintenance_update', {
+          residentEmail: resident.email, residentName: resident.name,
+          requestId: id, description: req.description,
+          status: changes.status || req.status, assignedTo: changes.assignedTo || req.assignedTo,
+          note: changes.notes?.length ? changes.notes[changes.notes.length - 1]?.text : null,
+        });
+      }
+    }
   };
   const addThreadN = (t) => {
     addThread(t);
