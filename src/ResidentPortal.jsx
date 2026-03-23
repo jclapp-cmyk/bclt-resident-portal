@@ -674,7 +674,7 @@ const ProgressRing = ({ value, max = 100, color = T.accent, size = 90, strokeWid
 
 // ── SORTABLE TABLE ────────────────────────────────────────
 
-const SortableTable = ({ columns, data, keyField = "id", rowStyle, mobile }) => {
+const SortableTable = ({ columns, data, keyField = "id", rowStyle, mobile, onRowClick }) => {
   const [sortKey, setSortKey] = useState(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [filters, setFilters] = useState({});
@@ -742,7 +742,7 @@ const SortableTable = ({ columns, data, keyField = "id", rowStyle, mobile }) => 
         {rows.length === 0 ? (
           <tr><td colSpan={columns.length} style={{ ...tdStyle, textAlign: "center", color: T.dim, padding: 24 }}>No matching records</td></tr>
         ) : rows.map((row, idx) => (
-          <tr key={row[keyField] ?? idx} style={rowStyle ? rowStyle(row) : undefined}>
+          <tr key={row[keyField] ?? idx} style={{ ...(rowStyle ? rowStyle(row) : {}), ...(onRowClick ? { cursor: "pointer" } : {}) }} onClick={() => onRowClick && onRowClick(row)}>
             {columns.map(col => (
               <td key={col.key} style={{ ...tdStyle, ...(col.tdStyle ? col.tdStyle(row) : {}) }}>
                 {col.render ? col.render(row[col.key], row) : (row[col.key] ?? "—")}
@@ -861,17 +861,14 @@ const NAV = {
   ],
   admin: [
     { id: "dashboard", label: "Dashboard", icon: "◉" },
+    { id: "property", label: "Properties", icon: "🏢" },
     { id: "residents", label: "Residents", icon: "👥" },
-    { id: "onboarding", label: "Onboarding", icon: "✨" },
-    { id: "documents", label: "Documents", icon: "📁" },
-    { id: "maintenance", label: "Maintenance", icon: "🔧" },
-    { id: "recert", label: "Recertifications", icon: "📋" },
+    { id: "maintenance", label: "Maintenance Requests", icon: "🔧" },
+    { id: "financial", label: "Finance", icon: "💰" },
+    { id: "recert", label: "Income Certification", icon: "📋" },
     { id: "inspections", label: "Inspections", icon: "🔍" },
-    { id: "property", label: "Property Details", icon: "🏢" },
-    { id: "vendors", label: "Vendors", icon: "📇" },
     { id: "communications", label: "Communications", icon: "💬" },
     { id: "compliance", label: "Compliance", icon: "✅" },
-    { id: "financial", label: "Financial", icon: "💰" },
     { id: "reports", label: "Reports", icon: "📊" },
     { id: "calendar", label: "Calendar", icon: "📅" },
     { id: "settings", label: "Settings", icon: "⚙️" },
@@ -1839,7 +1836,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Tenant Portion</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.tenantPortion || ""} onChange={e => setEditResForm(f => ({ ...f, tenantPortion: e.target.value }))} /></div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>HAP Payment</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.hapPayment || ""} onChange={e => setEditResForm(f => ({ ...f, hapPayment: e.target.value }))} /></div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Lease Start</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.leaseStart || ""} onChange={e => setEditResForm(f => ({ ...f, leaseStart: e.target.value }))} /></div>
-                  <div style={{ marginBottom: 10 }}><label style={s.label}>Lease End</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.leaseEnd || ""} onChange={e => setEditResForm(f => ({ ...f, leaseEnd: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>Lease Type</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={ef.leaseType || "fixed"} onChange={e => setEditResForm(f => ({ ...f, leaseType: e.target.value }))}><option value="fixed">Fixed Term</option><option value="month-to-month">Month-to-Month</option></select></div>
+                  {(ef.leaseType || "fixed") === "fixed" && <div style={{ marginBottom: 10 }}><label style={s.label}>Lease End</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.leaseEnd || ""} onChange={e => setEditResForm(f => ({ ...f, leaseEnd: e.target.value }))} /></div>}
                   <button style={{ ...s.mBtn("primary", mobile), marginTop: 8 }} onClick={async () => {
                     try {
                       await updateResident(selectedResident._uuid, { name: ef.name, phone: ef.phone, email: ef.email });
@@ -1853,14 +1851,33 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 </>) : (<>
                   <DetailRow label="Unit" value={ext.unit || selectedResident.unit} />
                   <DetailRow label="Bedrooms" value={ext.bedrooms || "—"} />
+                  <DetailRow label="Lease Type" value={ext.leaseType === "month-to-month" ? "Month-to-Month" : "Fixed Term"} />
                   <DetailRow label="Lease Start" value={ext.leaseStart || "—"} />
-                  <DetailRow label="Lease End" value={ext.leaseEnd || "—"} />
+                  {ext.leaseType !== "month-to-month" && <DetailRow label="Lease End" value={ext.leaseEnd || "—"} />}
                   <DetailRow label="Rent" value={ext.rentAmount ? `$${ext.rentAmount}` : "—"} />
                   <DetailRow label="Tenant Portion" value={ext.tenantPortion ? `$${ext.tenantPortion}` : "—"} accent={T.accent} />
                   <DetailRow label="HAP" value={ext.hapPayment ? `$${ext.hapPayment}` : "—"} accent={T.success} />
                 </>)}
               </div>
             </div>
+            {(() => {
+              const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === selectedResident.id);
+              return ledgerEntry ? (
+                <div style={s.card}>
+                  <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Payment Status</div>
+                  <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 10 }}>
+                    <StatCard label="Rent Due" value={`$${ledgerEntry.rentDue?.toLocaleString() || 0}`} mobile={mobile} />
+                    <StatCard label="Tenant Paid" value={`$${ledgerEntry.tenantPaid?.toLocaleString() || 0}`} accent={T.success} mobile={mobile} />
+                    <StatCard label="HAP Received" value={`$${ledgerEntry.hapReceived?.toLocaleString() || 0}`} accent={T.info} mobile={mobile} />
+                    <StatCard label="Balance" value={`$${ledgerEntry.balance || 0}`} accent={ledgerEntry.balance > 0 ? T.danger : T.success} mobile={mobile} />
+                  </div>
+                  <span style={s.badge(
+                    ledgerEntry.status === "paid" ? T.successDim : ledgerEntry.status === "partial" ? T.warnDim : T.dangerDim,
+                    ledgerEntry.status === "paid" ? T.success : ledgerEntry.status === "partial" ? T.warn : T.danger
+                  )}>{ledgerEntry.status === "paid" ? "Paid" : ledgerEntry.status === "partial" ? "Partial" : "Outstanding"}</span>
+                </div>
+              ) : null;
+            })()}
             {resEC.length > 0 && (
               <div style={s.card}>
                 <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Emergency Contacts</div>
@@ -2189,7 +2206,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             <div><label style={s.label}>Tenant Portion</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.tenantPortion} onChange={e => setAddForm(p => ({ ...p, tenantPortion: e.target.value }))} placeholder="0.00" /></div>
             <div><label style={s.label}>HAP Payment</label><input type="number" step="0.01" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.hapPayment} onChange={e => setAddForm(p => ({ ...p, hapPayment: e.target.value }))} placeholder="0.00" /></div>
             <div><label style={s.label}>Lease Start</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.leaseStart} onChange={e => setAddForm(p => ({ ...p, leaseStart: e.target.value }))} /></div>
-            <div><label style={s.label}>Lease End</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.leaseEnd} onChange={e => setAddForm(p => ({ ...p, leaseEnd: e.target.value }))} /></div>
+            <div><label style={s.label}>Lease Type</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.leaseType || "fixed"} onChange={e => setAddForm(p => ({ ...p, leaseType: e.target.value }))}><option value="fixed">Fixed Term</option><option value="month-to-month">Month-to-Month</option></select></div>
+            {(addForm.leaseType || "fixed") === "fixed" && <div><label style={s.label}>Lease End</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.leaseEnd} onChange={e => setAddForm(p => ({ ...p, leaseEnd: e.target.value }))} /></div>}
           </div>
           <button disabled={!addForm.name || !addForm.unit || adding} onClick={async () => {
             setAdding(true);
@@ -2244,10 +2262,10 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             const s2 = row.status || "active";
             return <span style={s.badge(s2 === "active" ? T.successDim : T.dimLight, s2 === "active" ? T.success : T.muted)}>{s2.charAt(0).toUpperCase() + s2.slice(1)}</span>;
           }},
-          { key: "_actions", label: "", sortable: false, filterable: false, render: (_, row) => <button style={s.btn("ghost")} onClick={() => { setSelectedResident(row); setTab("Overview"); }}>View</button> },
         ]}
         data={fr}
         keyField="id"
+        onRowClick={(row) => { setSelectedResident(row); setTab("Overview"); }}
       />
       </>); })()}
     </div>
