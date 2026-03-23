@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 
 /* ═══════════════════════════════════════════════════════════
@@ -379,6 +379,7 @@ let LIVE_RESIDENTS = MOCK_RESIDENTS;
 let LIVE_RESIDENTS_EXTENDED = MOCK_RESIDENTS_EXTENDED;
 let LIVE_RENT_LEDGER = MOCK_RENT_LEDGER;
 let LIVE_REG_INSPECTIONS = MOCK_REG_INSPECTIONS;
+let LIVE_COMPLIANCE_DOCS = MOCK_COMPLIANCE_DOCS;
 
 // ── DESIGN TOKENS (Light Theme) ──────────────────────────────
 
@@ -2125,7 +2126,7 @@ const AdminDocuments = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty }) =
     showSuccess("Document removed");
   };
 
-  const compDocsF = filterByProperty(MOCK_COMPLIANCE_DOCS, selectedProperty);
+  const compDocsF = filterByProperty(LIVE_COMPLIANCE_DOCS, selectedProperty);
   const compCurrent = compDocsF.filter(d => d.status === "current").length;
   const compExpired = compDocsF.filter(d => d.status === "expired").length;
   const compMissing = compDocsF.filter(d => d.status === "missing").length;
@@ -3468,7 +3469,7 @@ const ComplianceDashboard = ({ mobile, vendors, unitInspections, selectedPropert
   const [tab, setTab] = useState(tabs[0]);
   const [docFilter, setDocFilter] = useState("all");
 
-  const compDocs = filterByProperty(MOCK_COMPLIANCE_DOCS, selectedProperty);
+  const compDocs = filterByProperty(LIVE_COMPLIANCE_DOCS, selectedProperty);
   const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
   // Compute metrics
   const totalDocs = compDocs.length;
@@ -3952,8 +3953,8 @@ const PrintButton = ({ mobile }) => (
   }}>{"🖨️"} Print</button>
 );
 
-const OnboardingChecklist = ({ mobile, selectedProperty }) => {
-  const [records, setRecords] = useState(MOCK_ONBOARDING);
+const OnboardingChecklist = ({ mobile, selectedProperty, initialRecords }) => {
+  const [records, setRecords] = useState(initialRecords || MOCK_ONBOARDING);
   const tabs = ["Active", "Completed", "New"];
   const [tab, setTab] = useState(tabs[0]);
   const [newResident, setNewResident] = useState("");
@@ -4191,37 +4192,32 @@ export default function App() {
   const [dataReady, setDataReady] = useState(false);
   const mobile = useIsMobile();
 
+  const [onboardingData, setOnboardingData] = useState(null);
+
   // Load core data from Supabase on mount
   useEffect(() => {
     let cancelled = false;
     async function loadFromSupabase() {
       try {
-        const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp] = await Promise.all([
-          fetchProperties(),
-          fetchResidents(),
-          fetchResidentsExtended(),
-          fetchLeaseDocsByResident(),
-          fetchRentLedger(),
-          fetchMaintenanceRequests(),
-          fetchVendors(),
-          fetchUnitInspections(),
-          fetchRegInspections(),
+        const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard] = await Promise.all([
+          fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(),
+          fetchRentLedger(), fetchMaintenanceRequests(), fetchVendors(),
+          fetchUnitInspections(), fetchRegInspections(), fetchThreads(), fetchMessages(),
+          fetchComplianceDocs(), fetchOnboardingWorkflows(),
         ]);
         if (!cancelled) {
-          // Update module-level live bindings so all components see Supabase data
-          LIVE_PROPERTIES = props;
-          LIVE_RESIDENTS = res;
-          LIVE_RESIDENTS_EXTENDED = resExt;
+          LIVE_PROPERTIES = props; LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt;
           if (ledger && ledger.length) LIVE_RENT_LEDGER = ledger;
           if (rInsp && rInsp.length) LIVE_REG_INSPECTIONS = rInsp;
-          setSbProperties(props);
-          setSbResidents(res);
-          setSbResidentsExt(resExt);
-          setSbRentLedger(ledger);
-          setLeaseDocs(docs);
+          if (compDocs && compDocs.length) LIVE_COMPLIANCE_DOCS = compDocs;
+          setSbProperties(props); setSbResidents(res); setSbResidentsExt(resExt);
+          setSbRentLedger(ledger); setLeaseDocs(docs);
           if (maint && maint.length) setMaintenance(maint);
           if (vend && vend.length) setVendors(vend);
           if (uInsp && uInsp.length) setUnitInspections(uInsp);
+          if (thr && thr.length) setThreads(thr);
+          if (msgs && msgs.length) setMessages(msgs);
+          if (onboard && onboard.length) setOnboardingData(onboard);
           setDataReady(true);
         }
       } catch (err) {
@@ -4289,9 +4285,18 @@ export default function App() {
       await updateMaintenanceRequest(id, changes);
     } catch (err) { console.warn('Supabase update maintenance failed:', err); }
   };
-  const addThread = (t) => setThreads(prev => [t, ...prev]);
-  const addMessage = (msg) => setMessages(prev => [...prev, msg]);
-  const updateThread = (id, changes) => setThreads(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
+  const addThread = async (t) => {
+    setThreads(prev => [t, ...prev]);
+    try { await insertThread(t); } catch (err) { console.warn('Supabase insert thread failed:', err); }
+  };
+  const addMessage = async (msg) => {
+    setMessages(prev => [...prev, msg]);
+    try { await insertMessage(msg); } catch (err) { console.warn('Supabase insert message failed:', err); }
+  };
+  const updateThread = async (id, changes) => {
+    setThreads(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
+    try { await updateThreadDb(id, changes); } catch (err) { console.warn('Supabase update thread failed:', err); }
+  };
   const addVendor = async (v) => {
     setVendors(prev => [v, ...prev]);
     try { await insertVendor(v); } catch (err) { console.warn('Supabase insert vendor failed:', err); }
@@ -4305,16 +4310,22 @@ export default function App() {
   const resetAllState = async () => {
     // Re-fetch Supabase data for core tables
     try {
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp] = await Promise.all([
-        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(), fetchRentLedger(), fetchMaintenanceRequests(), fetchVendors(), fetchUnitInspections(), fetchRegInspections(),
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard] = await Promise.all([
+        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(), fetchRentLedger(),
+        fetchMaintenanceRequests(), fetchVendors(), fetchUnitInspections(), fetchRegInspections(), fetchThreads(), fetchMessages(),
+        fetchComplianceDocs(), fetchOnboardingWorkflows(),
       ]);
       LIVE_PROPERTIES = props; LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt;
       if (ledger && ledger.length) LIVE_RENT_LEDGER = ledger;
       if (rInsp && rInsp.length) LIVE_REG_INSPECTIONS = rInsp;
+      if (compDocs && compDocs.length) LIVE_COMPLIANCE_DOCS = compDocs;
       setSbProperties(props); setSbResidents(res); setSbResidentsExt(resExt); setSbRentLedger(ledger); setLeaseDocs(docs);
       if (maint && maint.length) setMaintenance(maint);
       if (vend && vend.length) setVendors(vend);
       if (uInsp && uInsp.length) setUnitInspections(uInsp);
+      if (thr && thr.length) setThreads(thr);
+      if (msgs && msgs.length) setMessages(msgs);
+      if (onboard && onboard.length) setOnboardingData(onboard);
     } catch (err) {
       console.warn('Reset fetch failed:', err);
       setLeaseDocs(MOCK_LEASE_DOCS);
@@ -4420,7 +4431,7 @@ export default function App() {
       switch (page) {
         case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} />;
         case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} />;
-        case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} />;
+        case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} />;
         case "recert": return <Recertification role="admin" mobile={mobile} />;

@@ -146,6 +146,66 @@ export async function insertLeaseDocument(doc, residentUuid) {
   if (error) throw error;
 }
 
+// ── MESSAGE THREADS ──
+
+export async function fetchThreads() {
+  const { data, error } = await supabase.from('message_threads').select('*').order('last_date', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(t => ({
+    id: t.code, _uuid: t.id, participants: t.participants || [],
+    subject: t.subject, lastMessage: t.last_message, lastDate: t.last_date,
+    unread: t.unread, channel: t.channel, type: t.type, priority: t.priority,
+  }));
+}
+
+export async function fetchMessages() {
+  const { data, error } = await supabase.from('messages').select('*, message_threads(code)').order('sent_at');
+  if (error) throw error;
+  return (data || []).map(m => ({
+    id: m.code, _uuid: m.id, threadId: m.message_threads?.code || '',
+    from: m.sender, body: m.body, date: m.sent_at, status: m.status,
+  }));
+}
+
+export async function insertThread(t) {
+  const { data, error } = await supabase.from('message_threads').insert({
+    code: t.id || `THR-${Date.now()}`, participants: JSON.stringify(t.participants || []),
+    subject: t.subject, last_message: t.lastMessage || '', last_date: t.lastDate || new Date().toISOString(),
+    unread: t.unread || 0, channel: t.channel || 'email', type: t.type || 'direct', priority: t.priority || null,
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function insertMessage(msg) {
+  const { data: thread } = await supabase.from('message_threads').select('id').eq('code', msg.threadId).single();
+  const { data, error } = await supabase.from('messages').insert({
+    code: msg.id || `MSG-${Date.now()}`, thread_id: thread?.id,
+    sender: msg.from, body: msg.body, sent_at: msg.date || new Date().toISOString(), status: msg.status || 'delivered',
+  }).select().single();
+  if (error) throw error;
+  // Update thread's last message
+  await supabase.from('message_threads').update({ last_message: msg.body, last_date: msg.date || new Date().toISOString() }).eq('code', msg.threadId);
+  return data;
+}
+
+export async function updateThread(code, changes) {
+  const updateData = {};
+  if (changes.unread !== undefined) updateData.unread = changes.unread;
+  if (changes.lastMessage !== undefined) updateData.last_message = changes.lastMessage;
+  if (changes.lastDate !== undefined) updateData.last_date = changes.lastDate;
+  const { error } = await supabase.from('message_threads').update(updateData).eq('code', code);
+  if (error) throw error;
+}
+
+export async function fetchCommTemplates() {
+  const { data, error } = await supabase.from('comm_templates').select('*').order('name');
+  if (error) throw error;
+  return (data || []).map(t => ({
+    id: t.code, name: t.name, channel: t.channel, subject: t.subject || undefined, body: t.body,
+  }));
+}
+
 // ── VENDORS ──
 
 export async function fetchVendors() {
@@ -282,6 +342,59 @@ export async function updateMaintenanceRequest(code, changes) {
     .from('maintenance_requests')
     .update(updateData)
     .eq('code', code);
+  if (error) throw error;
+}
+
+// ── COMPLIANCE DOCS ──
+
+export async function fetchComplianceDocs() {
+  const { data, error } = await supabase
+    .from('compliance_docs')
+    .select('*, properties(slug), residents(slug)')
+    .order('created_at');
+  if (error) throw error;
+  return (data || []).map(d => ({
+    propertyId: d.properties?.slug || '', residentId: d.residents?.slug || '',
+    unit: d.unit, docType: d.doc_type, status: d.status,
+    expires: d.expires, lastUploaded: d.last_uploaded,
+  }));
+}
+
+// ── ONBOARDING WORKFLOWS ──
+
+export async function fetchOnboardingWorkflows() {
+  const { data, error } = await supabase
+    .from('onboarding_workflows')
+    .select('*, properties(slug), residents(slug)')
+    .order('created_at');
+  if (error) throw error;
+  return (data || []).map(o => ({
+    id: o.code, _uuid: o.id, propertyId: o.properties?.slug || '',
+    residentId: o.residents?.slug || '', type: o.type, status: o.status,
+    startDate: o.start_date, targetDate: o.target_date, steps: o.steps || {},
+  }));
+}
+
+export async function insertOnboardingWorkflow(w) {
+  const { data: prop } = await supabase.from('properties').select('id').eq('slug', w.propertyId || 'wharf').single();
+  const { data: resident } = await supabase.from('residents').select('id').eq('slug', w.residentId).single();
+  const { count } = await supabase.from('onboarding_workflows').select('*', { count: 'exact', head: true });
+  const code = `OB-${7 + (count || 0)}`;
+  const { data, error } = await supabase.from('onboarding_workflows').insert({
+    code, property_id: prop?.id, resident_id: resident?.id,
+    type: w.type, status: w.status || 'not-started',
+    start_date: w.startDate, target_date: w.targetDate || null,
+    steps: JSON.stringify(w.steps),
+  }).select().single();
+  if (error) throw error;
+  return { ...w, id: code, _uuid: data.id };
+}
+
+export async function updateOnboardingWorkflow(code, changes) {
+  const updateData = { updated_at: new Date().toISOString() };
+  if (changes.status !== undefined) updateData.status = changes.status;
+  if (changes.steps !== undefined) updateData.steps = JSON.stringify(changes.steps);
+  const { error } = await supabase.from('onboarding_workflows').update(updateData).eq('code', code);
   if (error) throw error;
 }
 
