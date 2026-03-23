@@ -2445,6 +2445,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
 
   return (
     <div>
+      {onSelectProperty && <button onClick={() => onSelectProperty("all", "property")} style={{ ...s.btn("ghost"), marginBottom: 12, fontSize: 13 }}>← All Properties</button>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
         <div>
           <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>{p.name}</h1>
@@ -2455,9 +2456,32 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
             <button style={s.btn()} onClick={() => onSelectProperty(selectedProperty, "residents")}>👥 Residents ({propResidents.length})</button>
             <button style={s.btn("ghost")} onClick={() => onSelectProperty(selectedProperty, "financial")}>💰 Financials</button>
             <button style={s.btn("ghost")} onClick={() => setShowAddUnit(v => !v)}>{showAddUnit ? "Cancel" : "🏠 Add Unit"}</button>
+            <button style={s.btn("ghost")} onClick={() => { setShowAddProp(v => !v); }}>{showAddProp ? "Cancel" : "➕ Add Property"}</button>
           </div>
         )}
       </div>
+      {showAddProp && (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>New Property</div>
+          <SuccessMessage message={propSuccess} />
+          <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div><label style={s.label}>Property Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.name} onChange={e => setPropForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mesa Road Townhomes" /></div>
+            <div><label style={s.label}>Address</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.address} onChange={e => setPropForm(f => ({ ...f, address: e.target.value }))} placeholder="456 Mesa Rd, Bolinas, CA" /></div>
+            <div><label style={s.label}>Type</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.type} onChange={e => setPropForm(f => ({ ...f, type: e.target.value }))} placeholder="e.g. Townhomes" /></div>
+            <div><label style={s.label}>Total Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.totalUnits} onChange={e => setPropForm(f => ({ ...f, totalUnits: e.target.value }))} /></div>
+            <div><label style={s.label}>Total SF</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.totalSF} onChange={e => setPropForm(f => ({ ...f, totalSF: e.target.value }))} /></div>
+          </div>
+          <button disabled={!propForm.name.trim()} onClick={async () => {
+            try {
+              await insertProperty({ ...propForm, totalUnits: parseInt(propForm.totalUnits) || 0, totalSF: parseInt(propForm.totalSF) || 0 });
+              showPropSuccess(`Property "${propForm.name}" created!`);
+              setPropForm({ name: "", address: "", type: "", totalUnits: "", totalSF: "" });
+              setShowAddProp(false);
+              if (onDataRefresh) onDataRefresh();
+            } catch (err) { showPropSuccess("Error: " + err.message); }
+          }} style={{ ...s.mBtn("primary", mobile) }}>Create Property</button>
+        </div>
+      )}
       {showAddUnit && (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.info}`, marginBottom: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Add Unit to {p.name}</div>
