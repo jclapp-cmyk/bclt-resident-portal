@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
 
@@ -2130,31 +2130,77 @@ const PropertySingleView = ({ p, mobile }) => (
   </>
 );
 
-const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty }) => {
+const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty, onDataRefresh }) => {
   const isAll = !selectedProperty || selectedProperty === "all";
   const totalUnits = LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0);
   const totalResidents = LIVE_RESIDENTS.length;
   const totalSF = LIVE_PROPERTIES.reduce((s, p) => s + p.totalSF, 0);
+  const [showAddProp, setShowAddProp] = useState(false);
+  const [propForm, setPropForm] = useState({ name: "", address: "", type: "", totalUnits: "", totalSF: "", manager: "", managerEmail: "", managerPhone: "", officeHours: "" });
+  const [propSuccess, showPropSuccess] = useSuccess();
+  const [showAddUnit, setShowAddUnit] = useState(false);
+  const [unitForm, setUnitForm] = useState({ number: "", bedrooms: "1", bathrooms: "1", sqft: "" });
+  const [unitSuccess, showUnitSuccess] = useSuccess();
+  const [unitList, setUnitList] = useState([]);
 
   if (isAll) {
     return (
       <div>
-        <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Property Portfolio</h1>
-        <p style={s.sectionSub}>BCLT — {LIVE_PROPERTIES.length} Properties · {totalUnits} Units · {totalSF.toLocaleString()} SF</p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+          <div>
+            <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Property Portfolio</h1>
+            <p style={s.sectionSub}>BCLT — {LIVE_PROPERTIES.length} Properties · {totalUnits} Units · {totalSF.toLocaleString()} SF</p>
+          </div>
+          <button onClick={() => setShowAddProp(v => !v)} style={{ ...s.btn(showAddProp ? "ghost" : "primary"), fontSize: 13 }}>
+            {showAddProp ? "Cancel" : "➕ Add Property"}
+          </button>
+        </div>
+        {showAddProp && (
+          <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>New Property</div>
+            <SuccessMessage message={propSuccess} />
+            <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+              <div><label style={s.label}>Property Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.name} onChange={e => setPropForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Wharf Road Apartments" /></div>
+              <div><label style={s.label}>Address</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.address} onChange={e => setPropForm(p => ({ ...p, address: e.target.value }))} placeholder="123 Main St, City, ST 00000" /></div>
+              <div><label style={s.label}>Type</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.type} onChange={e => setPropForm(p => ({ ...p, type: e.target.value }))} placeholder="e.g. Garden-Style Apartments" /></div>
+              <div><label style={s.label}>Total Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.totalUnits} onChange={e => setPropForm(p => ({ ...p, totalUnits: e.target.value }))} /></div>
+              <div><label style={s.label}>Total SF</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.totalSF} onChange={e => setPropForm(p => ({ ...p, totalSF: e.target.value }))} /></div>
+              <div><label style={s.label}>Manager</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.manager} onChange={e => setPropForm(p => ({ ...p, manager: e.target.value }))} /></div>
+              <div><label style={s.label}>Manager Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.managerEmail} onChange={e => setPropForm(p => ({ ...p, managerEmail: e.target.value }))} /></div>
+              <div><label style={s.label}>Manager Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.managerPhone} onChange={e => setPropForm(p => ({ ...p, managerPhone: e.target.value }))} /></div>
+            </div>
+            <button disabled={!propForm.name.trim()} onClick={async () => {
+              try {
+                await insertProperty({ ...propForm, totalUnits: parseInt(propForm.totalUnits) || 0, totalSF: parseInt(propForm.totalSF) || 0 });
+                showPropSuccess(`Property "${propForm.name}" created!`);
+                setPropForm({ name: "", address: "", type: "", totalUnits: "", totalSF: "", manager: "", managerEmail: "", managerPhone: "", officeHours: "" });
+                if (onDataRefresh) onDataRefresh();
+                setTimeout(() => setShowAddProp(false), 1500);
+              } catch (err) { showPropSuccess("Error: " + err.message); }
+            }} style={{ ...s.mBtn("primary", mobile) }}>Create Property</button>
+          </div>
+        )}
         <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 20 }}>
           <StatCard label="Properties" value={LIVE_PROPERTIES.length} mobile={mobile} />
           <StatCard label="Total Units" value={totalUnits} accent={T.accent} mobile={mobile} />
           <StatCard label="Total Residents" value={totalResidents} accent={T.info} mobile={mobile} />
           <StatCard label="Total SF" value={totalSF.toLocaleString()} accent={T.success} mobile={mobile} />
         </div>
+        {LIVE_PROPERTIES.length === 0 && <EmptyState icon="🏘️" text="No properties yet. Click Add Property above to get started." />}
         {LIVE_PROPERTIES.map(p => <PropertyCard key={p.id} p={p} mobile={mobile} onSelect={() => onSelectProperty?.(p.id, "property")} />)}
       </div>
     );
   }
 
   const p = getProperty(selectedProperty);
+  if (!p) return <EmptyState icon="🏘️" text="Property not found" />;
   const propResidents = LIVE_RESIDENTS.filter(r => r.propertyId === selectedProperty);
-  const propMaint = MOCK_MAINTENANCE.filter(m => m.propertyId === selectedProperty);
+
+  // Load units for this property
+  useEffect(() => {
+    if (p?._uuid) fetchUnits(p._uuid).then(setUnitList).catch(() => {});
+  }, [p?._uuid]);
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
@@ -2166,10 +2212,48 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button style={s.btn()} onClick={() => onSelectProperty(selectedProperty, "residents")}>👥 Residents ({propResidents.length})</button>
             <button style={s.btn("ghost")} onClick={() => onSelectProperty(selectedProperty, "financial")}>💰 Financials</button>
-            <button style={s.btn("ghost")} onClick={() => onSelectProperty(selectedProperty, "maintenance")}>🔧 Work Orders ({propMaint.filter(m => m.status !== "completed").length})</button>
+            <button style={s.btn("ghost")} onClick={() => setShowAddUnit(v => !v)}>{showAddUnit ? "Cancel" : "🏠 Add Unit"}</button>
           </div>
         )}
       </div>
+      {showAddUnit && (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.info}`, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Add Unit to {p.name}</div>
+          <SuccessMessage message={unitSuccess} />
+          <div style={{ ...s.grid("1fr 1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div><label style={s.label}>Unit Number *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={unitForm.number} onChange={e => setUnitForm(u => ({ ...u, number: e.target.value }))} placeholder="e.g. A-101" /></div>
+            <div><label style={s.label}>Bedrooms</label><input type="number" min="0" style={{ ...s.mInput(mobile), width: "100%" }} value={unitForm.bedrooms} onChange={e => setUnitForm(u => ({ ...u, bedrooms: e.target.value }))} /></div>
+            <div><label style={s.label}>Bathrooms</label><input type="number" min="0" style={{ ...s.mInput(mobile), width: "100%" }} value={unitForm.bathrooms} onChange={e => setUnitForm(u => ({ ...u, bathrooms: e.target.value }))} /></div>
+            <div><label style={s.label}>Sqft</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={unitForm.sqft} onChange={e => setUnitForm(u => ({ ...u, sqft: e.target.value }))} /></div>
+          </div>
+          <button disabled={!unitForm.number.trim()} onClick={async () => {
+            try {
+              const newUnit = await insertUnit({ ...unitForm, bedrooms: parseInt(unitForm.bedrooms) || 1, bathrooms: parseInt(unitForm.bathrooms) || 1, sqft: parseInt(unitForm.sqft) || 0 }, p._uuid);
+              showUnitSuccess(`Unit ${unitForm.number} added!`);
+              setUnitList(prev => [...prev, newUnit]);
+              setUnitForm({ number: "", bedrooms: "1", bathrooms: "1", sqft: "" });
+            } catch (err) { showUnitSuccess("Error: " + err.message); }
+          }} style={{ ...s.mBtn("primary", mobile) }}>Add Unit</button>
+        </div>
+      )}
+      {unitList.length > 0 && (
+        <div style={{ ...s.card, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Units ({unitList.length})</div>
+          <table style={s.table}>
+            <thead><tr>{["Unit", "BR", "BA", "Sqft"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {unitList.map(u => (
+                <tr key={u._uuid || u.id}>
+                  <td style={s.td}><span style={{ fontWeight: 600 }}>{u.number}</span></td>
+                  <td style={s.td}>{u.bedrooms}</td>
+                  <td style={s.td}>{u.bathrooms}</td>
+                  <td style={s.td}>{u.sqft || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <PropertySingleView p={p} mobile={mobile} />
     </div>
   );
@@ -4327,39 +4411,38 @@ export default function App() {
 
   const [onboardingData, setOnboardingData] = useState(null);
 
+  // Reusable data reload function
+  const reloadData = useCallback(async () => {
+    try {
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard] = await Promise.all([
+        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(),
+        fetchRentLedger(), fetchMaintenanceRequests(), fetchVendors(),
+        fetchUnitInspections(), fetchRegInspections(), fetchThreads(), fetchMessages(),
+        fetchComplianceDocs(), fetchOnboardingWorkflows(),
+      ]);
+      LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
+      LIVE_RENT_LEDGER = ledger || [];
+      LIVE_REG_INSPECTIONS = rInsp || [];
+      LIVE_COMPLIANCE_DOCS = compDocs || [];
+      setSbProperties(props || []); setSbResidents(res || []); setSbResidentsExt(resExt || {});
+      setSbRentLedger(ledger || []); setLeaseDocs(docs || {});
+      setMaintenance(maint || []);
+      setVendors(vend || []);
+      setUnitInspections(uInsp || []);
+      setThreads(thr || []);
+      setMessages(msgs || []);
+      setOnboardingData(onboard || []);
+      setDataReady(true);
+    } catch (err) {
+      console.warn('Supabase load failed:', err);
+      setDataReady(true);
+    }
+  }, []);
+
   // Load core data from Supabase on mount
   useEffect(() => {
-    let cancelled = false;
-    async function loadFromSupabase() {
-      try {
-        const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard] = await Promise.all([
-          fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(),
-          fetchRentLedger(), fetchMaintenanceRequests(), fetchVendors(),
-          fetchUnitInspections(), fetchRegInspections(), fetchThreads(), fetchMessages(),
-          fetchComplianceDocs(), fetchOnboardingWorkflows(),
-        ]);
-        if (!cancelled) {
-          LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
-          LIVE_RENT_LEDGER = ledger || [];
-          LIVE_REG_INSPECTIONS = rInsp || [];
-          LIVE_COMPLIANCE_DOCS = compDocs || [];
-          setSbProperties(props || []); setSbResidents(res || []); setSbResidentsExt(resExt || {});
-          setSbRentLedger(ledger || []); setLeaseDocs(docs || {});
-          setMaintenance(maint || []);
-          setVendors(vend || []);
-          setUnitInspections(uInsp || []);
-          setThreads(thr || []);
-          setMessages(msgs || []);
-          setOnboardingData(onboard || []);
-          setDataReady(true);
-        }
-      } catch (err) {
-        console.warn('Supabase load failed, using mock data:', err);
-        if (!cancelled) setDataReady(true);
-      }
-    }
-    loadFromSupabase();
-    return () => { cancelled = true; };
+    reloadData();
+    return () => {};
   }, []);
 
   // Auth: check session on mount, listen for changes
@@ -4583,7 +4666,7 @@ export default function App() {
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} />;
         case "recert": return <Recertification role="admin" mobile={mobile} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} />;
-        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
+        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "compliance": return <ComplianceDashboard mobile={mobile} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;

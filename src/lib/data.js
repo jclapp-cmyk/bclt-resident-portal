@@ -30,6 +30,53 @@ export async function fetchProperties() {
   }));
 }
 
+export async function insertProperty(prop) {
+  const slug = prop.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+  const { data, error } = await supabase.from('properties').insert({
+    slug,
+    name: prop.name,
+    address: prop.address || '',
+    type: prop.type || '',
+    year_built: prop.yearBuilt || null,
+    total_units: prop.totalUnits || 0,
+    unit_breakdown: prop.unitBreakdown || {},
+    total_sf: prop.totalSF || 0,
+    common_area_sf: prop.commonAreaSF || 0,
+    lot_size: prop.lotSize || '',
+    ada_units: prop.adaUnits || 0,
+    manager: prop.manager || '',
+    manager_phone: prop.managerPhone || '',
+    manager_email: prop.managerEmail || '',
+    office_hours: prop.officeHours || '',
+    documents: [],
+  }).select().single();
+  if (error) throw error;
+  return { id: data.slug, _uuid: data.id, ...prop, documents: [] };
+}
+
+export async function insertUnit(unit, propertyUuid) {
+  const { data, error } = await supabase.from('units').insert({
+    property_id: propertyUuid,
+    number: unit.number,
+    bedrooms: unit.bedrooms || 1,
+    bathrooms: unit.bathrooms || 1,
+    sqft: unit.sqft || 0,
+    floor_plan: unit.floorPlan || '',
+  }).select().single();
+  if (error) throw error;
+  return { _uuid: data.id, number: data.number, bedrooms: data.bedrooms, bathrooms: data.bathrooms, sqft: data.sqft };
+}
+
+export async function fetchUnits(propertyUuid) {
+  const { data, error } = await supabase
+    .from('units')
+    .select('*')
+    .eq('property_id', propertyUuid)
+    .order('number');
+  if (error) throw error;
+  return data;
+}
+
 // ── RESIDENTS (with property slug + unit number) ──
 
 export async function fetchResidents() {
