@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
+import { supabase } from "./lib/supabase";
 
 /* ═══════════════════════════════════════════════════════════
    BCLT RESIDENT PORTAL — Affordable Housing / Section 8
@@ -1739,6 +1740,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [payForm, setPayForm] = useState({ amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
   const [householdMembers, setHouseholdMembers] = useState([]);
   const [hhForm, setHhForm] = useState({ name: "", relationship: "Spouse", phone: "", email: "" });
+  const [residentDocs, setResidentDocs] = useState([]);
+  const [residentPayments, setResidentPayments] = useState([]);
 
   // Load units when property changes or form opens
   useEffect(() => {
@@ -1748,12 +1751,21 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
 
   const detailTabs = ["Overview", "Household", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
 
-  // Load household members when resident selected (hook must be before any conditional returns)
+  // Load household members, docs, and payments when resident selected (hooks before conditional returns)
   const selectedResUuid = selectedResident?._uuid || null;
-  useEffect(() => {
-    if (selectedResUuid) fetchHouseholdMembers(selectedResUuid).then(setHouseholdMembers).catch(() => setHouseholdMembers([]));
-    else setHouseholdMembers([]);
+  const loadResidentExtra = useCallback(async () => {
+    if (!selectedResUuid) { setHouseholdMembers([]); setResidentDocs([]); setResidentPayments([]); return; }
+    fetchHouseholdMembers(selectedResUuid).then(setHouseholdMembers).catch(() => setHouseholdMembers([]));
+    try {
+      const { data: docs } = await supabase.from('lease_documents').select('*').eq('resident_id', selectedResUuid).order('uploaded_at', { ascending: false });
+      setResidentDocs((docs || []).map(d => ({ id: d.id, name: d.name, type: d.type, size: d.size, uploadedAt: d.uploaded_at, uploadedBy: d.uploaded_by })));
+    } catch (e) { setResidentDocs([]); }
+    try {
+      const { data: pays } = await supabase.from('rent_payments').select('*').eq('resident_id', selectedResUuid).order('payment_date', { ascending: false });
+      setResidentPayments(pays || []);
+    } catch (e) { setResidentPayments([]); }
   }, [selectedResUuid]);
+  useEffect(() => { loadResidentExtra(); }, [loadResidentExtra]);
 
   if (selectedResident) {
     const ext = LIVE_RESIDENTS_EXTENDED[selectedResident.id] || {};
@@ -1951,6 +1963,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                       const url = storagePath ? getLeaseFileUrl(storagePath) : null;
                       await insertLeaseDocument({ name: file.name, type: "other", size: file.size }, selectedResident._uuid);
                       showSuccess(`Uploaded ${file.name}`);
+                      loadResidentExtra(); // refresh docs locally
                       if (onDataChanged) onDataChanged();
                     } catch (err) { showSuccess("Error: " + err.message); }
                     e.target.value = "";
@@ -1958,7 +1971,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 </label>
               </div>
               {(() => {
-                const docs = (leaseDocsFromApp || {})[selectedResident.id] || [];
+                const docs = residentDocs;
                 if (docs.length === 0) return <EmptyState icon="📄" text="No documents on file. Upload a document above." />;
                 return (
                   <table style={s.table}>
@@ -2039,10 +2052,24 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   await recordPayment({ residentSlug: selectedResident.id, amount: amt, method: payForm.method, paymentDate: payForm.date, note: payForm.note });
                   showSuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment`);
                   setPayForm({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+                  loadResidentExtra(); // refresh payments locally
                   if (onDataChanged) onDataChanged();
                 } catch (err) { showSuccess("Error: " + err.message); }
               }} style={{ ...s.mBtn("primary", mobile) }}>Record Payment</button>
             </div>
+            {residentPayments.length > 0 && (
+              <div style={s.card}>
+                <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Payment History ({residentPayments.length})</div>
+                <SortableTable mobile={mobile} keyField="id" columns={[
+                  { key: "payment_date", label: "Date", render: v => v || "—" },
+                  { key: "amount", label: "Amount", render: v => <span style={{ fontWeight: 600, color: T.success }}>${parseFloat(v).toFixed(2)}</span>, sortValue: r => parseFloat(r.amount) },
+                  { key: "method", label: "Method", render: v => <span style={s.badge(T.accentDim, T.accent)}>{(v || "").replace("_", " ")}</span>, filterOptions: ["cash", "check", "money_order", "hap"] },
+                  { key: "month", label: "Period", render: v => v || "—" },
+                  { key: "note", label: "Note", render: v => v || "—", filterable: false },
+                  { key: "recorded_by", label: "Recorded By", filterable: false },
+                ]} data={residentPayments} />
+              </div>
+            )}
           </div>
           );
         })()}
