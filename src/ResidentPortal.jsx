@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease } from "./lib/data";
-import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
+import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
 
 /* ═══════════════════════════════════════════════════════════
@@ -1766,13 +1766,19 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
           const ef = editResForm;
           return (
           <div>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
               <button style={s.btn(editing ? "ghost" : "primary")} onClick={() => {
                 if (!editing) {
                   setEditResForm({ name: selectedResident.name, phone: selectedResident.phone || "", email: selectedResident.email || "", rentAmount: String(ext.rentAmount || ""), tenantPortion: String(ext.tenantPortion || ""), hapPayment: String(ext.hapPayment || ""), leaseStart: ext.leaseStart || "", leaseEnd: ext.leaseEnd || "" });
                 }
                 setEditing(!editing);
               }}>{editing ? "Cancel" : "✏️ Edit Resident"}</button>
+              <button style={{ ...s.btn("ghost"), color: ext.status === "active" ? T.danger : T.success }} onClick={() => {
+                const newStatus = ext.status === "active" ? "inactive" : "active";
+                updateResident(selectedResident._uuid, { status: newStatus }).then(() => reloadData()).catch(err => console.warn(err));
+                ext.status = newStatus;
+                showSuccess(`Resident ${newStatus === "active" ? "reactivated" : "deactivated"}`);
+              }}>{ext.status === "active" ? "🚫 Deactivate" : "✅ Reactivate"}</button>
             </div>
             <div style={s.grid("1fr 1fr", mobile)}>
               <div style={s.card}>
@@ -1966,7 +1972,13 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               <div key={n.id} style={s.card}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <span style={{ fontWeight: 600, fontSize: 14 }}>{n.by}</span>
-                  <span style={{ color: T.dim, fontSize: 12 }}>{n.date}</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ color: T.dim, fontSize: 12 }}>{n.date}</span>
+                    <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "2px 8px", color: T.danger }} onClick={() => {
+                      onAddAdminNote(selectedResident.id, resNotes.filter(x => x.id !== n.id), true);
+                      showSuccess("Note deleted");
+                    }}>Delete</button>
+                  </div>
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.5 }}>{n.text}</div>
               </div>
@@ -3524,18 +3536,39 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               <EmptyState icon="👥" text="No users yet. Invite your first user above." />
             ) : (
               <table style={s.table}>
-                <thead><tr>{["Name", "Email", "Role", "Linked Resident", "Created"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Name", "Email", "Role", "Linked Resident", "Created", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {userProfiles.map(u => (
                     <tr key={u.id}>
                       <td style={s.td}><span style={{ fontWeight: 600 }}>{u.display_name || "—"}</span></td>
                       <td style={s.td}>{u.email}</td>
-                      <td style={s.td}><span style={s.badge(
-                        u.role === "admin" ? T.accentDim : u.role === "maintenance" ? T.warnDim : T.successDim,
-                        u.role === "admin" ? T.accent : u.role === "maintenance" ? T.warn : T.success
-                      )}>{u.role}</span></td>
+                      <td style={s.td}>
+                        <select value={u.role} style={{ ...s.select, fontSize: 12, padding: "2px 6px", background: u.role === "admin" ? T.accentDim : u.role === "maintenance" ? T.warnDim : T.successDim, color: u.role === "admin" ? T.accent : u.role === "maintenance" ? T.warn : T.success, fontWeight: 600, border: "none", borderRadius: 4 }}
+                          onChange={async (e) => {
+                            const newRole = e.target.value;
+                            try {
+                              await updateUserProfile(u.id, { role: newRole });
+                              setUserProfiles(prev => prev.map(p => p.id === u.id ? { ...p, role: newRole } : p));
+                              showSuccess(`${u.display_name || u.email} role changed to ${newRole}`);
+                            } catch (err) { showSuccess("Error: " + err.message); }
+                          }}>
+                          <option value="resident">resident</option>
+                          <option value="admin">admin</option>
+                          <option value="maintenance">maintenance</option>
+                        </select>
+                      </td>
                       <td style={s.td}>{u.residents?.name || <span style={{ color: T.dim }}>—</span>}</td>
                       <td style={s.td}><span style={{ fontSize: 12, color: T.muted }}>{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</span></td>
+                      <td style={s.td}>
+                        <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 12, padding: "2px 8px" }} onClick={async () => {
+                          if (!confirm(`Remove ${u.email}? They will no longer be able to sign in.`)) return;
+                          try {
+                            await deleteUserProfile(u.id);
+                            setUserProfiles(prev => prev.filter(p => p.id !== u.id));
+                            showSuccess(`${u.email} removed`);
+                          } catch (err) { showSuccess("Error: " + err.message); }
+                        }}>Remove</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -4725,7 +4758,7 @@ export default function App() {
     try { await insertUnitInspection(insp); } catch (err) { console.warn('Supabase insert inspection failed:', err); }
   };
   const updateEmergencyContacts = (residentId, contacts) => setEmergencyContacts(prev => ({ ...prev, [residentId]: contacts }));
-  const addAdminNote = (residentId, note) => setAdminNotes(prev => ({ ...prev, [residentId]: [...(prev[residentId] || []), note] }));
+  const addAdminNote = (residentId, note, replace = false) => setAdminNotes(prev => ({ ...prev, [residentId]: replace ? (Array.isArray(note) ? note : []) : [...(prev[residentId] || []), note] }));
   const resetAllState = async () => {
     // Re-fetch Supabase data for core tables
     try {

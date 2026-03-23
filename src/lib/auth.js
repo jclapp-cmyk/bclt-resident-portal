@@ -75,6 +75,16 @@ export async function fetchProfile(userId, userEmail) {
   };
 }
 
+export async function updateUserProfile(profileId, changes) {
+  const { error } = await supabase.from('user_profiles').update(changes).eq('id', profileId);
+  if (error) throw error;
+}
+
+export async function deleteUserProfile(profileId) {
+  const { error } = await supabase.from('user_profiles').delete().eq('id', profileId);
+  if (error) throw error;
+}
+
 export async function fetchUserProfiles() {
   const { data, error } = await supabase
     .from('user_profiles')
