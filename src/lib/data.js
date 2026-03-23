@@ -146,6 +146,76 @@ export async function insertLeaseDocument(doc, residentUuid) {
   if (error) throw error;
 }
 
+// ── MAINTENANCE REQUESTS ──
+
+export async function fetchMaintenanceRequests() {
+  const { data, error } = await supabase
+    .from('maintenance_requests')
+    .select('*, residents(slug), properties(slug), units(number)')
+    .order('submitted_date', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(m => ({
+    id: m.code,
+    _uuid: m.id,
+    propertyId: m.properties?.slug || '',
+    unit: m.units?.number || '',
+    category: m.category,
+    priority: m.priority,
+    status: m.status,
+    description: m.description,
+    submitted: m.submitted_date,
+    assignedTo: m.assigned_to,
+    queuePos: m.queue_pos,
+    projectedComplete: m.projected_complete,
+    completedDate: m.completed_date,
+    notes: m.notes || [],
+  }));
+}
+
+export async function insertMaintenanceRequest({ unit, category, priority, description, propertySlug }) {
+  // Look up property and unit UUIDs
+  const { data: prop } = await supabase.from('properties').select('id').eq('slug', propertySlug || 'wharf').single();
+  const { data: unitRow } = await supabase.from('units').select('id').eq('number', unit).single();
+  // Look up resident by unit
+  const { data: resident } = await supabase.from('residents').select('id').eq('unit_id', unitRow?.id).single();
+
+  // Generate code
+  const { count } = await supabase.from('maintenance_requests').select('*', { count: 'exact', head: true });
+  const code = `MR-${2406 + (count || 0)}`;
+
+  const { data, error } = await supabase.from('maintenance_requests').insert({
+    code,
+    resident_id: resident?.id || null,
+    property_id: prop?.id,
+    unit_id: unitRow?.id || null,
+    category,
+    priority,
+    status: 'submitted',
+    description,
+    assigned_to: null,
+    queue_pos: (count || 0) + 1,
+  }).select().single();
+  if (error) throw error;
+  return { ...data, id: data.code };
+}
+
+export async function updateMaintenanceRequest(code, changes) {
+  const updateData = {};
+  if (changes.status !== undefined) updateData.status = changes.status;
+  if (changes.assignedTo !== undefined) updateData.assigned_to = changes.assignedTo || null;
+  if (changes.completedDate !== undefined) updateData.completed_date = changes.completedDate;
+  if (changes.projectedComplete !== undefined) updateData.projected_complete = changes.projectedComplete;
+  if (changes.queuePos !== undefined) updateData.queue_pos = changes.queuePos;
+  if (changes.notes !== undefined) updateData.notes = JSON.stringify(changes.notes);
+  updateData.updated_at = new Date().toISOString();
+
+  const { error } = await supabase
+    .from('maintenance_requests')
+    .update(updateData)
+    .eq('code', code);
+  if (error) throw error;
+}
+
 // ── RENT LEDGER (computed view) ──
 
 export async function fetchRentLedger() {

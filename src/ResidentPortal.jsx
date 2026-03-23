@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser } from "./lib/auth";
 
 /* ═══════════════════════════════════════════════════════════
@@ -4195,12 +4195,13 @@ export default function App() {
     let cancelled = false;
     async function loadFromSupabase() {
       try {
-        const [props, res, resExt, docs, ledger] = await Promise.all([
+        const [props, res, resExt, docs, ledger, maint] = await Promise.all([
           fetchProperties(),
           fetchResidents(),
           fetchResidentsExtended(),
           fetchLeaseDocsByResident(),
           fetchRentLedger(),
+          fetchMaintenanceRequests(),
         ]);
         if (!cancelled) {
           // Update module-level live bindings so all components see Supabase data
@@ -4213,6 +4214,7 @@ export default function App() {
           setSbResidentsExt(resExt);
           setSbRentLedger(ledger);
           setLeaseDocs(docs);
+          if (maint && maint.length) setMaintenance(maint);
           setDataReady(true);
         }
       } catch (err) {
@@ -4268,8 +4270,18 @@ export default function App() {
   );
 
   // Base mutation callbacks
-  const addMaintenance = (req) => setMaintenance(prev => [req, ...prev]);
-  const updateMaintenance = (id, changes) => setMaintenance(prev => prev.map(m => m.id === id ? { ...m, ...changes } : m));
+  const addMaintenance = async (req) => {
+    setMaintenance(prev => [req, ...prev]);
+    try {
+      await insertMaintenanceRequest({ unit: req.unit, category: req.category, priority: req.priority, description: req.description, propertySlug: req.propertyId });
+    } catch (err) { console.warn('Supabase insert maintenance failed:', err); }
+  };
+  const updateMaintenance = async (id, changes) => {
+    setMaintenance(prev => prev.map(m => m.id === id ? { ...m, ...changes } : m));
+    try {
+      await updateMaintenanceRequest(id, changes);
+    } catch (err) { console.warn('Supabase update maintenance failed:', err); }
+  };
   const addThread = (t) => setThreads(prev => [t, ...prev]);
   const addMessage = (msg) => setMessages(prev => [...prev, msg]);
   const updateThread = (id, changes) => setThreads(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
@@ -4280,12 +4292,13 @@ export default function App() {
   const resetAllState = async () => {
     // Re-fetch Supabase data for core tables
     try {
-      const [props, res, resExt, docs, ledger] = await Promise.all([
-        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(), fetchRentLedger(),
+      const [props, res, resExt, docs, ledger, maint] = await Promise.all([
+        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(), fetchRentLedger(), fetchMaintenanceRequests(),
       ]);
       LIVE_PROPERTIES = props; LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt;
       if (ledger && ledger.length) LIVE_RENT_LEDGER = ledger;
       setSbProperties(props); setSbResidents(res); setSbResidentsExt(resExt); setSbRentLedger(ledger); setLeaseDocs(docs);
+      if (maint && maint.length) setMaintenance(maint);
     } catch (err) {
       console.warn('Reset fetch failed:', err);
       setLeaseDocs(MOCK_LEASE_DOCS);
