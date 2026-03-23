@@ -136,7 +136,7 @@ export async function fetchResidents() {
 export async function fetchResidentsExtended() {
   const { data, error } = await supabase
     .from('residents')
-    .select('slug, status, move_in_date, properties(slug), units(number, bedrooms), leases(start_date, end_date, rent_amount, tenant_portion, hap_payment, status)')
+    .select('slug, status, move_in_date, properties(slug), units(number, bedrooms), leases(start_date, end_date, rent_amount, tenant_portion, hap_payment, status, lease_type)')
     .order('name');
   if (error) throw error;
   const result = {};
@@ -148,6 +148,7 @@ export async function fetchResidentsExtended() {
       unit: r.units?.number || '',
       leaseStart: lease?.start_date || null,
       leaseEnd: lease?.end_date || null,
+      leaseType: lease?.lease_type || "fixed",
       rentAmount: lease ? Number(lease.rent_amount) : 0,
       tenantPortion: lease ? Number(lease.tenant_portion) : 0,
       hapPayment: lease ? Number(lease.hap_payment) : 0,
@@ -217,10 +218,11 @@ export async function updateResident(residentUuid, changes) {
 export async function updateLease(leaseUuid, changes) {
   const mapped = {};
   if (changes.startDate !== undefined) mapped.start_date = changes.startDate;
-  if (changes.endDate !== undefined) mapped.end_date = changes.endDate;
+  if (changes.endDate !== undefined) mapped.end_date = changes.endDate || null;
   if (changes.rentAmount !== undefined) mapped.rent_amount = changes.rentAmount;
   if (changes.tenantPortion !== undefined) mapped.tenant_portion = changes.tenantPortion;
   if (changes.hapPayment !== undefined) mapped.hap_payment = changes.hapPayment;
+  if (changes.leaseType !== undefined) mapped.lease_type = changes.leaseType;
   const { error } = await supabase.from('leases').update(mapped).eq('id', leaseUuid);
   if (error) throw error;
 }

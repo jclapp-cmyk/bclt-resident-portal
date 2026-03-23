@@ -1805,7 +1805,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
               <button style={s.btn(editing ? "ghost" : "primary")} onClick={() => {
                 if (!editing) {
-                  setEditResForm({ name: selectedResident.name, phone: selectedResident.phone || "", email: selectedResident.email || "", rentAmount: String(ext.rentAmount || ""), tenantPortion: String(ext.tenantPortion || ""), hapPayment: String(ext.hapPayment || ""), leaseStart: ext.leaseStart || "", leaseEnd: ext.leaseEnd || "" });
+                  setEditResForm({ name: selectedResident.name, phone: selectedResident.phone || "", email: selectedResident.email || "", rentAmount: String(ext.rentAmount || ""), tenantPortion: String(ext.tenantPortion || ""), hapPayment: String(ext.hapPayment || ""), leaseStart: ext.leaseStart || "", leaseEnd: ext.leaseEnd || "", leaseType: ext.leaseType || "fixed" });
                 }
                 setEditing(!editing);
               }}>{editing ? "Cancel" : "✏️ Edit Resident"}</button>
@@ -1842,7 +1842,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                     try {
                       await updateResident(selectedResident._uuid, { name: ef.name, phone: ef.phone, email: ef.email });
                       const lease = await fetchResidentLease(selectedResident._uuid);
-                      if (lease) await updateLease(lease.id, { rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart, endDate: ef.leaseEnd });
+                      if (lease) await updateLease(lease.id, { rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart, endDate: ef.leaseType === "month-to-month" ? null : ef.leaseEnd, leaseType: ef.leaseType || "fixed" });
                       showSuccess("Resident updated!");
                       setEditing(false);
                       if (onResidentAdded) onResidentAdded();
