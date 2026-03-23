@@ -1949,7 +1949,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                     try {
                       const storagePath = await uploadLeaseFile(file, selectedResident.slug || selectedResident.id);
                       const url = storagePath ? getLeaseFileUrl(storagePath) : null;
-                      await insertLeaseDocument({ residentId: selectedResident._uuid, name: file.name, type: "other", size: file.size, storagePath: storagePath || null });
+                      await insertLeaseDocument({ name: file.name, type: "other", size: file.size }, selectedResident._uuid);
                       showSuccess(`Uploaded ${file.name}`);
                     } catch (err) { showSuccess("Error: " + err.message); }
                     e.target.value = "";
@@ -2035,7 +2035,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 const amt = parseFloat(payForm.amount);
                 if (!amt || !selectedResident._uuid) return;
                 try {
-                  await recordPayment({ residentId: selectedResident._uuid, amount: amt, method: payForm.method, date: payForm.date, note: payForm.note });
+                  await recordPayment({ residentSlug: selectedResident.id, amount: amt, method: payForm.method, paymentDate: payForm.date, note: payForm.note });
                   showSuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment`);
                   setPayForm({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
                 } catch (err) { showSuccess("Error: " + err.message); }
