@@ -1963,8 +1963,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                       const url = storagePath ? getLeaseFileUrl(storagePath) : null;
                       await insertLeaseDocument({ name: file.name, type: "other", size: file.size }, selectedResident._uuid);
                       showSuccess(`Uploaded ${file.name}`);
-                      loadResidentExtra(); // refresh docs locally
-                      if (onDataChanged) onDataChanged();
+                      await loadResidentExtra(); // refresh docs locally
                     } catch (err) { showSuccess("Error: " + err.message); }
                     e.target.value = "";
                   }} />
@@ -1983,7 +1982,14 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                           <td style={s.td}><span style={s.badge(T.infoDim, T.info)}>{LEASE_DOC_TYPES[d.type] || d.type}</span></td>
                           <td style={s.td}>{new Date(d.uploadedAt).toLocaleDateString()}</td>
                           <td style={s.td}>{d.size ? `${Math.round(d.size / 1024)} KB` : "—"}</td>
-                          <td style={s.td}><button style={s.btn("ghost")}>View</button></td>
+                          <td style={s.td}>
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button style={s.btn("ghost")}>View</button>
+                              <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11 }} onClick={async () => {
+                                try { await deleteLeaseDocument(d.id); showSuccess("Deleted"); await loadResidentExtra(); } catch (err) { showSuccess("Error: " + err.message); }
+                              }}>Delete</button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2571,14 +2577,24 @@ const AdminDocuments = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty }) =
   }));
   const combined = [...allDocs, ...propertyDocs].sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
-  const handleUpload = (doc) => {
-    setLeaseDocs(prev => ({ ...prev, [selectedResident]: [...(prev[selectedResident] || []), doc] }));
+  const refreshDocs = async () => {
+    try { const fresh = await fetchLeaseDocsByResident(); setLeaseDocs(fresh || {}); } catch (e) { console.warn(e); }
+  };
+  const handleUpload = async (doc) => {
+    // Find the resident UUID from slug
+    const res = LIVE_RESIDENTS.find(r => r.id === selectedResident);
+    if (res?._uuid) {
+      try {
+        await insertLeaseDocument({ name: doc.name, type: doc.type, size: doc.size, uploadedBy: doc.uploadedBy, storagePath: doc.storagePath }, res._uuid);
+      } catch (e) { console.warn("DB insert failed:", e); }
+    }
+    await refreshDocs();
     showSuccess("Document uploaded");
   };
   const handleDelete = async (docId) => {
     try {
       await deleteLeaseDocument(docId);
-      setLeaseDocs(prev => ({ ...prev, [selectedResident]: (prev[selectedResident] || []).filter(d => d.id !== docId) }));
+      await refreshDocs();
       showSuccess("Document removed");
     } catch (err) {
       showSuccess("Error deleting: " + err.message);
