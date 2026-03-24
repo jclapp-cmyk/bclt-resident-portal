@@ -4594,14 +4594,17 @@ const MaintenanceProfile = ({ mobile }) => {
   );
 };
 
-const PropertySelector = ({ value, onChange, mobile }) => (
+const PropertySelector = ({ value, onChange, mobile, properties }) => {
+  const props = properties || LIVE_PROPERTIES;
+  return (
   <select value={value} onChange={e => onChange(e.target.value)} style={{
     ...s.mSelect(mobile), width: "100%", fontSize: 12, padding: mobile ? "8px 10px" : "6px 8px",
     background: T.bg, color: T.text, fontWeight: 600,
   }}>
-    <option value="all">All Properties ({LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0)} units)</option>
-    {LIVE_PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name} ({p.totalUnits})</option>)}
+    <option value="all">All Properties ({props.reduce((s, p) => s + (p.totalUnits || 0), 0)} units)</option>
+    {props.map(p => <option key={p.id} value={p.id}>{p.name} ({p.totalUnits || 0})</option>)}
   </select>
+  );
 );
 
 const DATE_RANGE_PRESETS = [
@@ -5234,7 +5237,7 @@ export default function App() {
       {role === "admin" && (
         <div style={{ padding: "10px 12px 0" }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: T.dim, textTransform: "uppercase", letterSpacing: "1px", padding: "0 6px", marginBottom: 6 }}>Property</div>
-          <PropertySelector value={selectedProperty} onChange={setSelectedProperty} mobile={mobile} />
+          <PropertySelector value={selectedProperty} onChange={setSelectedProperty} mobile={mobile} properties={sbProperties} />
         </div>
       )}
       <div style={{ padding: "10px 12px 0", position: "relative" }}>
