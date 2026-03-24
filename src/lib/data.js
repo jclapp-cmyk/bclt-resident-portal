@@ -31,7 +31,7 @@ export async function fetchProperties() {
 }
 
 export async function insertProperty(prop) {
-  const slug = prop.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+  const slug = prop.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '') + '-' + Math.random().toString(36).slice(2, 6);
   const { data, error } = await supabase.from('properties').insert({
     slug,
     name: prop.name,
@@ -189,19 +189,24 @@ export async function fetchLeaseDocsByResident() {
 // ── WRITES ──
 
 export async function insertResident(resident, propertyUuid, unitUuid) {
-  const { data, error } = await supabase.from('residents').insert({
-    slug: resident.slug || (resident.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '') + '-' + Math.random().toString(36).slice(2, 6)),
-    property_id: propertyUuid,
-    unit_id: unitUuid,
-    name: resident.name,
-    phone: resident.phone,
-    email: resident.email,
-    preferred_channel: resident.preferredChannel || 'email',
-    status: resident.status || 'active',
-    move_in_date: resident.moveInDate || null,
-  }).select().single();
-  if (error) throw error;
-  return data;
+  const baseSlug = resident.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+  // Always generate unique slug with random suffix — retry on collision
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const slug = baseSlug + '-' + Math.random().toString(36).slice(2, 7);
+    const { data, error } = await supabase.from('residents').insert({
+      slug,
+      property_id: propertyUuid,
+      unit_id: unitUuid,
+      name: resident.name,
+      phone: resident.phone,
+      email: resident.email,
+      preferred_channel: resident.preferredChannel || 'email',
+      status: resident.status || 'active',
+      move_in_date: resident.moveInDate || null,
+    }).select().single();
+    if (!error) return data;
+    if (!error?.message?.includes('slug') || attempt === 2) throw error;
+  }
 }
 
 export async function updateResident(residentUuid, changes) {
