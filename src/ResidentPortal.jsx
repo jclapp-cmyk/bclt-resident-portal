@@ -2213,6 +2213,19 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 ext.status = newStatus;
                 showSuccess(`Resident ${newStatus === "active" ? "reactivated" : "deactivated"}`);
               }}>{ext.status === "active" ? "🚫 Deactivate" : "✅ Reactivate"}</button>
+              {selectedResident.email && (
+                <button style={s.btn("ghost")} onClick={async () => {
+                  if (!selectedResident.email) { showSuccess("No email address on file"); return; }
+                  if (!confirm(`Invite ${selectedResident.name} (${selectedResident.email}) to log in to the portal?`)) return;
+                  try {
+                    await inviteUser(selectedResident.email, "resident", selectedResident._uuid, selectedResident.name);
+                    showSuccess(`Portal invite sent to ${selectedResident.email}`);
+                  } catch (err) {
+                    if (err.message?.includes("duplicate")) showSuccess("This resident already has a portal account");
+                    else showSuccess("Error: " + err.message);
+                  }
+                }}>📧 Invite to Portal</button>
+              )}
             </div>
             <div style={s.grid("1fr 1fr", mobile)}>
               <div style={s.card}>
