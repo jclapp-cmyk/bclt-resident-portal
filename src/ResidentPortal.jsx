@@ -4151,7 +4151,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                   <label style={s.label}>Link to Resident</label>
                   <select style={{ ...s.mSelect(mobile), width: "100%" }} value={inviteForm.residentId} onChange={e => setInviteForm(p => ({ ...p, residentId: e.target.value }))}>
                     <option value="">Select resident (optional)...</option>
-                    {LIVE_RESIDENTS.map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
+                    {LIVE_RESIDENTS.map(r => <option key={r._uuid || r.id} value={r._uuid || r.id}>{r.name} — {r.unit}</option>)}
                   </select>
                 </div>
               )}
