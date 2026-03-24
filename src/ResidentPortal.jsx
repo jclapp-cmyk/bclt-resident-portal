@@ -2216,13 +2216,15 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               {selectedResident.email && (
                 <button style={s.btn("ghost")} onClick={async () => {
                   if (!selectedResident.email) { showSuccess("No email address on file"); return; }
+                  const resUuid = selectedResident._uuid || LIVE_RESIDENTS.find(r => r.id === selectedResident.id || r.name === selectedResident.name)?._uuid;
+                  if (!resUuid) { showSuccess("Error: Could not find resident UUID. Try refreshing the page."); return; }
                   if (!confirm(`Invite ${selectedResident.name} (${selectedResident.email}) to log in to the portal?`)) return;
                   try {
-                    await inviteUser(selectedResident.email, "resident", selectedResident._uuid, selectedResident.name);
-                    showSuccess(`Portal invite sent to ${selectedResident.email}`);
+                    await inviteUser(selectedResident.email, "resident", resUuid, selectedResident.name);
+                    showSuccess(`Portal invite sent to ${selectedResident.email}! They can now sign in with a magic link.`);
                   } catch (err) {
-                    if (err.message?.includes("duplicate")) showSuccess("This resident already has a portal account");
-                    else showSuccess("Error: " + err.message);
+                    if (err.message?.includes("duplicate") || err.message?.includes("unique")) showSuccess("This resident already has a portal account.");
+                    else showSuccess("Error: " + (err.message || "Failed to create account"));
                   }
                 }}>📧 Invite to Portal</button>
               )}
