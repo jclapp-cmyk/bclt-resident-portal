@@ -249,10 +249,11 @@ export async function insertLease(lease, residentUuid, unitUuid) {
     resident_id: residentUuid,
     unit_id: unitUuid,
     start_date: lease.startDate,
-    end_date: lease.endDate,
+    end_date: lease.endDate || null,
     rent_amount: lease.rentAmount,
     tenant_portion: lease.tenantPortion,
     hap_payment: lease.hapPayment,
+    lease_type: lease.leaseType || 'fixed',
   }).select().single();
   if (error) throw error;
   return data;

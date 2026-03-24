@@ -2635,7 +2635,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               // Create lease
               if (addForm.rentAmount && addForm.leaseStart) {
                 await insertLease({
-                  startDate: addForm.leaseStart, endDate: addForm.leaseEnd,
+                  startDate: addForm.leaseStart, endDate: addForm.leaseEnd || null, leaseType: addForm.leaseType || "fixed",
                   rentAmount: parseFloat(addForm.rentAmount) || 0,
                   tenantPortion: parseFloat(addForm.tenantPortion) || 0,
                   hapPayment: parseFloat(addForm.hapPayment) || 0,
