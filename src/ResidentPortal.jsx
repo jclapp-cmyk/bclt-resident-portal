@@ -4935,11 +4935,12 @@ export default function App() {
   // Reusable data reload function
   const reloadData = useCallback(async () => {
     try {
+      const safe = (fn) => fn().catch(err => { console.warn('Fetch failed:', err.message); return null; });
       const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff] = await Promise.all([
-        fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(),
-        fetchRentLedger(), fetchMaintenanceRequests(), fetchVendors(),
-        fetchUnitInspections(), fetchRegInspections(), fetchThreads(), fetchMessages(),
-        fetchComplianceDocs(), fetchOnboardingWorkflows(), fetchStaffMembers(),
+        safe(fetchProperties), safe(fetchResidents), safe(fetchResidentsExtended), safe(fetchLeaseDocsByResident),
+        safe(fetchRentLedger), safe(fetchMaintenanceRequests), safe(fetchVendors),
+        safe(fetchUnitInspections), safe(fetchRegInspections), safe(fetchThreads), safe(fetchMessages),
+        safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
