@@ -101,6 +101,13 @@ export async function deleteUnit(unitUuid) {
   if (error) throw error;
 }
 
+export async function deleteProperty(propertyUuid) {
+  // Delete units first (cascade may not cover all FKs)
+  await supabase.from('units').delete().eq('property_id', propertyUuid);
+  const { error } = await supabase.from('properties').delete().eq('id', propertyUuid);
+  if (error) throw error;
+}
+
 export async function fetchUnits(propertyUuid) {
   const { data, error } = await supabase
     .from('units')

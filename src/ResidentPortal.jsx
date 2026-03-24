@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -2457,6 +2457,14 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
             <button style={s.btn("ghost")} onClick={() => onSelectProperty(selectedProperty, "financial")}>💰 Financials</button>
             <button style={s.btn("ghost")} onClick={() => setShowAddUnit(v => !v)}>{showAddUnit ? "Cancel" : "🏠 Add Unit"}</button>
             <button style={s.btn("ghost")} onClick={() => { setShowAddProp(v => !v); }}>{showAddProp ? "Cancel" : "➕ Add Property"}</button>
+            <button style={{ ...s.btn("ghost"), color: T.danger }} onClick={async () => {
+              if (!confirm(`Delete "${p.name}" and all its units? This cannot be undone.`)) return;
+              try {
+                await deleteProperty(p._uuid);
+                if (onDataRefresh) await onDataRefresh();
+                if (onSelectProperty) onSelectProperty("all", "property");
+              } catch (err) { alert("Error: " + err.message); }
+            }}>🗑️ Delete Property</button>
           </div>
         )}
       </div>
