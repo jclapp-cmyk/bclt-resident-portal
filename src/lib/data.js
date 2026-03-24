@@ -732,3 +732,182 @@ export async function deleteStaffMember(id) {
   const { error } = await supabase.from('staff_members').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ── INCOME CERTIFICATIONS ──
+
+export async function fetchIncomeCertifications(propertyFilter) {
+  let q = supabase.from('income_certifications').select('*, residents(name, slug, units(number), properties(name, slug))').order('created_at', { ascending: false });
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data || []).map(c => ({
+    id: c.id, residentId: c.resident_id,
+    residentName: c.residents?.name, residentSlug: c.residents?.slug,
+    unit: c.residents?.units?.number, propertyName: c.residents?.properties?.name, propertySlug: c.residents?.properties?.slug,
+    certType: c.cert_type, effectiveDate: c.effective_date, status: c.status,
+    stepsCompleted: c.steps_completed || {},
+    householdSize: c.household_size, totalAnnualIncome: Number(c.total_annual_income || 0),
+    totalAssetValue: Number(c.total_asset_value || 0), totalAssetIncome: Number(c.total_asset_income || 0),
+    imputedAssetIncome: Number(c.imputed_asset_income || 0), incomeForDetermination: Number(c.income_for_determination || 0),
+    amiPercentage: c.ami_percentage ? Number(c.ami_percentage) : null, amiCategory: c.ami_category, incomeEligible: c.income_eligible,
+    tenantRent: Number(c.tenant_rent || 0), utilityAllowance: Number(c.utility_allowance || 0), grossRent: Number(c.gross_rent || 0),
+    hapPayment: Number(c.hap_payment || 0), rentLimit: c.rent_limit ? Number(c.rent_limit) : null, rentCompliant: c.rent_compliant,
+    programType: c.program_type, allStudentHousehold: c.all_student_household,
+    residentSignature: c.resident_signature, residentSignedAt: c.resident_signed_at,
+    adminSignature: c.admin_signature, adminSignedAt: c.admin_signed_at, adminSignerName: c.admin_signer_name,
+    demographics: c.demographics, createdAt: c.created_at, updatedAt: c.updated_at,
+  }));
+}
+
+export async function insertIncomeCertification(cert) {
+  const { data, error } = await supabase.from('income_certifications').insert({
+    resident_id: cert.residentId, cert_type: cert.certType || 'annual',
+    effective_date: cert.effectiveDate || new Date().toISOString().slice(0, 10),
+    status: 'draft', steps_completed: cert.stepsCompleted || {},
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateIncomeCertification(id, changes) {
+  const mapped = {};
+  if (changes.status !== undefined) mapped.status = changes.status;
+  if (changes.stepsCompleted !== undefined) mapped.steps_completed = changes.stepsCompleted;
+  if (changes.householdSize !== undefined) mapped.household_size = changes.householdSize;
+  if (changes.totalAnnualIncome !== undefined) mapped.total_annual_income = changes.totalAnnualIncome;
+  if (changes.totalAssetValue !== undefined) mapped.total_asset_value = changes.totalAssetValue;
+  if (changes.totalAssetIncome !== undefined) mapped.total_asset_income = changes.totalAssetIncome;
+  if (changes.imputedAssetIncome !== undefined) mapped.imputed_asset_income = changes.imputedAssetIncome;
+  if (changes.incomeForDetermination !== undefined) mapped.income_for_determination = changes.incomeForDetermination;
+  if (changes.amiPercentage !== undefined) mapped.ami_percentage = changes.amiPercentage;
+  if (changes.amiCategory !== undefined) mapped.ami_category = changes.amiCategory;
+  if (changes.incomeEligible !== undefined) mapped.income_eligible = changes.incomeEligible;
+  if (changes.tenantRent !== undefined) mapped.tenant_rent = changes.tenantRent;
+  if (changes.utilityAllowance !== undefined) mapped.utility_allowance = changes.utilityAllowance;
+  if (changes.grossRent !== undefined) mapped.gross_rent = changes.grossRent;
+  if (changes.hapPayment !== undefined) mapped.hap_payment = changes.hapPayment;
+  if (changes.rentLimit !== undefined) mapped.rent_limit = changes.rentLimit;
+  if (changes.rentCompliant !== undefined) mapped.rent_compliant = changes.rentCompliant;
+  if (changes.programType !== undefined) mapped.program_type = changes.programType;
+  if (changes.allStudentHousehold !== undefined) mapped.all_student_household = changes.allStudentHousehold;
+  if (changes.studentExemption !== undefined) mapped.student_exemption = changes.studentExemption;
+  if (changes.residentSignature !== undefined) mapped.resident_signature = changes.residentSignature;
+  if (changes.residentSignedAt !== undefined) mapped.resident_signed_at = changes.residentSignedAt;
+  if (changes.adminSignature !== undefined) mapped.admin_signature = changes.adminSignature;
+  if (changes.adminSignedAt !== undefined) mapped.admin_signed_at = changes.adminSignedAt;
+  if (changes.adminSignerName !== undefined) mapped.admin_signer_name = changes.adminSignerName;
+  if (changes.demographics !== undefined) mapped.demographics = changes.demographics;
+  mapped.updated_at = new Date().toISOString();
+  const { error } = await supabase.from('income_certifications').update(mapped).eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchTICMembers(certId) {
+  const { data, error } = await supabase.from('tic_household_members').select('*').eq('certification_id', certId).order('sort_order');
+  if (error) throw error;
+  return (data || []).map(m => ({ id: m.id, certId: m.certification_id, name: m.member_name, relationship: m.relationship, dob: m.date_of_birth, ssn4: m.ssn_last4, ftStudent: m.is_full_time_student, ptStudent: m.is_part_time_student, disabled: m.is_disabled, race: m.race_code, ethnicity: m.ethnicity_code, order: m.sort_order }));
+}
+
+export async function insertTICMember(member) {
+  const { data, error } = await supabase.from('tic_household_members').insert({
+    certification_id: member.certId, member_name: member.name, relationship: member.relationship || 'Head of Household',
+    date_of_birth: member.dob || null, ssn_last4: member.ssn4 || null,
+    is_full_time_student: member.ftStudent || false, is_part_time_student: member.ptStudent || false,
+    is_disabled: member.disabled || false, sort_order: member.order || 0,
+  }).select().single();
+  if (error) throw error;
+  return { ...data, id: data.id };
+}
+
+export async function deleteTICMember(id) {
+  const { error } = await supabase.from('tic_household_members').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchTICIncome(certId) {
+  const { data, error } = await supabase.from('tic_income_entries').select('*').eq('certification_id', certId);
+  if (error) throw error;
+  return (data || []).map(e => ({ id: e.id, certId: e.certification_id, memberId: e.member_id, category: e.category, source: e.source_description, amount: Number(e.annual_amount || 0), verified: e.verified, docPath: e.verification_doc_path }));
+}
+
+export async function insertTICIncome(entry) {
+  const { data, error } = await supabase.from('tic_income_entries').insert({
+    certification_id: entry.certId, member_id: entry.memberId, category: entry.category,
+    source_description: entry.source || '', annual_amount: entry.amount || 0,
+    verified: entry.verified || false, verification_doc_path: entry.docPath || null,
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTICIncome(id, changes) {
+  const mapped = {};
+  if (changes.amount !== undefined) mapped.annual_amount = changes.amount;
+  if (changes.source !== undefined) mapped.source_description = changes.source;
+  if (changes.verified !== undefined) mapped.verified = changes.verified;
+  if (changes.docPath !== undefined) mapped.verification_doc_path = changes.docPath;
+  const { error } = await supabase.from('tic_income_entries').update(mapped).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteTICIncome(id) {
+  const { error } = await supabase.from('tic_income_entries').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchTICAssets(certId) {
+  const { data, error } = await supabase.from('tic_asset_entries').select('*').eq('certification_id', certId);
+  if (error) throw error;
+  return (data || []).map(e => ({ id: e.id, certId: e.certification_id, memberId: e.member_id, assetType: e.asset_type, description: e.description, isImputed: e.is_imputed, cashValue: Number(e.cash_value || 0), annualIncome: Number(e.annual_income || 0) }));
+}
+
+export async function insertTICAsset(entry) {
+  const { data, error } = await supabase.from('tic_asset_entries').insert({
+    certification_id: entry.certId, member_id: entry.memberId, asset_type: entry.assetType || 'savings',
+    description: entry.description || '', is_imputed: entry.isImputed || false,
+    cash_value: entry.cashValue || 0, annual_income: entry.annualIncome || 0,
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTICAsset(id) {
+  const { error } = await supabase.from('tic_asset_entries').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchAMIReference(year, county) {
+  const { data, error } = await supabase.from('ami_reference').select('*').eq('year', year || 2026).eq('county', county || 'Marin');
+  if (error) throw error;
+  // Convert to lookup: { householdSize: { 30: limit, 50: limit, ... } }
+  const lookup = {};
+  for (const r of (data || [])) {
+    lookup[r.household_size] = { 100: Number(r.ami_100), 80: Number(r.ami_80), 60: Number(r.ami_60), 50: Number(r.ami_50), 30: Number(r.ami_30) };
+  }
+  return lookup;
+}
+
+export async function fetchRentLimits(year, county) {
+  const { data, error } = await supabase.from('ami_rent_limits').select('*').eq('year', year || 2026).eq('county', county || 'Marin');
+  if (error) throw error;
+  // Convert to lookup: { amiPct: { bedrooms: limit } }
+  const lookup = {};
+  for (const r of (data || [])) {
+    if (!lookup[r.ami_pct]) lookup[r.ami_pct] = {};
+    lookup[r.ami_pct][r.bedrooms] = Number(r.rent_limit);
+  }
+  return lookup;
+}
+
+// Upload TIC verification document
+export async function uploadTICDocument(file, certId) {
+  const path = `tic-documents/${certId}/${Date.now()}-${file.name}`;
+  const { error } = await supabase.storage.from('tic-documents').upload(path, file);
+  if (error) throw error;
+  return path;
+}
+
+export function getTICDocumentUrl(path) {
+  if (!path) return null;
+  const { data } = supabase.storage.from('tic-documents').getPublicUrl(path);
+  return data?.publicUrl || null;
+}

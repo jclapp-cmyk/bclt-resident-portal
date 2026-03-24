@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty } from "./lib/data";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -1318,69 +1318,467 @@ const RentPayments = ({ mobile, rc }) => {
 };
 
 // --- RECERTIFICATION ---
-const Recertification = ({ role, mobile, rc }) => {
-  // TODO: wire recertification to Supabase — using empty state for now
-  const hasRecert = false; // will be true when linked to real data
-  if (!hasRecert) {
+// ── AMI HELPERS ──
+const AMI_FALLBACK = { 1: { 30: 31470, 50: 52450, 60: 62940, 80: 83920, 100: 104900 }, 2: { 30: 35970, 50: 59950, 60: 71940, 80: 95920, 100: 119900 }, 3: { 30: 40455, 50: 67425, 60: 80910, 80: 107880, 100: 134850 }, 4: { 30: 44940, 50: 74900, 60: 89880, 80: 119840, 100: 149800 }, 5: { 30: 48540, 50: 80900, 60: 97080, 80: 129440, 100: 161800 }, 6: { 30: 52140, 50: 86900, 60: 104280, 80: 139040, 100: 173800 }, 7: { 30: 55740, 50: 92900, 60: 111480, 80: 148640, 100: 185800 }, 8: { 30: 59340, 50: 98900, 60: 118680, 80: 158240, 100: 197800 } };
+const determineTICEligibility = (totalIncome, hhSize, amiLookup) => {
+  const lim = (amiLookup || AMI_FALLBACK)[Math.min(Math.max(hhSize || 1, 1), 8)] || AMI_FALLBACK[1];
+  if (totalIncome <= lim[30]) return { pct: Math.round((totalIncome / lim[30]) * 100), category: "Extremely Low (≤30%)", tier: 30, eligible: true };
+  if (totalIncome <= lim[50]) return { pct: Math.round((totalIncome / lim[50]) * 100), category: "Very Low (≤50%)", tier: 50, eligible: true };
+  if (totalIncome <= lim[60]) return { pct: Math.round((totalIncome / lim[60]) * 100), category: "Low (≤60%)", tier: 60, eligible: true };
+  if (totalIncome <= lim[80]) return { pct: Math.round((totalIncome / lim[80]) * 100), category: "Moderate (≤80%)", tier: 80, eligible: true };
+  return { pct: Math.round((totalIncome / lim[100]) * 100), category: "Over Income (>80%)", tier: 0, eligible: false };
+};
+const calcImputed = (totalAssetValue) => totalAssetValue > 5000 ? totalAssetValue * 0.0006 : 0;
+
+// ── SIGNATURE PAD ──
+const SignaturePad = ({ value, onChange, label, mobile }) => {
+  const canvasRef = useRef(null);
+  const [drawing, setDrawing] = useState(false);
+  const startDraw = (e) => { setDrawing(true); const c = canvasRef.current, ctx = c.getContext("2d"); const r = c.getBoundingClientRect(); ctx.beginPath(); ctx.moveTo((e.touches?.[0]?.clientX || e.clientX) - r.left, (e.touches?.[0]?.clientY || e.clientY) - r.top); };
+  const draw = (e) => { if (!drawing) return; const c = canvasRef.current, ctx = c.getContext("2d"); const r = c.getBoundingClientRect(); ctx.lineTo((e.touches?.[0]?.clientX || e.clientX) - r.left, (e.touches?.[0]?.clientY || e.clientY) - r.top); ctx.strokeStyle = "#1A1A1A"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.stroke(); };
+  const endDraw = () => { setDrawing(false); if (canvasRef.current) onChange(canvasRef.current.toDataURL()); };
+  const clear = () => { const c = canvasRef.current; if (c) { c.getContext("2d").clearRect(0, 0, c.width, c.height); onChange(null); } };
+  useEffect(() => { if (value && canvasRef.current) { const img = new Image(); img.onload = () => canvasRef.current?.getContext("2d")?.drawImage(img, 0, 0); img.src = value; } }, []);
+  return (
+    <div>
+      <label style={s.label}>{label}</label>
+      <div style={{ border: `1px solid ${T.border}`, borderRadius: T.radiusSm, background: "#FFFFFF", position: "relative" }}>
+        <canvas ref={canvasRef} width={mobile ? 300 : 500} height={80} style={{ display: "block", width: "100%", height: 80, cursor: "crosshair", touchAction: "none" }}
+          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw} />
+        <button onClick={clear} style={{ position: "absolute", top: 4, right: 4, ...s.btn("ghost"), fontSize: 10, padding: "2px 8px" }}>Clear</button>
+      </div>
+    </div>
+  );
+};
+
+// ── INCOME CERTIFICATION ──
+const IncomeCertification = ({ role, mobile, selectedProperty, rc }) => {
+  const isAdmin = role === "admin";
+  const [certs, setCerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeCert, setActiveCert] = useState(null); // full cert being edited
+  const [step, setStep] = useState(0);
+  const [success, showSuccess] = useSuccess();
+  const [amiLookup, setAmiLookup] = useState(AMI_FALLBACK);
+  const [rentLimits, setRentLimits] = useState({});
+  // Wizard sub-state
+  const [hhMembers, setHhMembers] = useState([]);
+  const [incomeEntries, setIncomeEntries] = useState([]);
+  const [assetEntries, setAssetEntries] = useState([]);
+  const [newMemberForm, setNewMemberForm] = useState({ name: "", relationship: "Head of Household", dob: "", ssn4: "", ftStudent: false });
+  const [showNewMember, setShowNewMember] = useState(false);
+  const [newResidentId, setNewResidentId] = useState("");
+
+  const stepLabels = ["Household", "Income", "Assets", "Eligibility", "Rent & Program", "Review & Sign"];
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([fetchIncomeCertifications(), fetchAMIReference(2026, "Marin"), fetchRentLimits(2026, "Marin")])
+      .then(([c, ami, rents]) => { setCerts(c || []); if (ami && Object.keys(ami).length) setAmiLookup(ami); setRentLimits(rents || {}); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const loadCertData = async (cert) => {
+    try {
+      const [members, income, assets] = await Promise.all([fetchTICMembers(cert.id), fetchTICIncome(cert.id), fetchTICAssets(cert.id)]);
+      setHhMembers(members || []); setIncomeEntries(income || []); setAssetEntries(assets || []);
+    } catch { setHhMembers([]); setIncomeEntries([]); setAssetEntries([]); }
+  };
+
+  const startNewCert = async () => {
+    if (!newResidentId) return;
+    const res = LIVE_RESIDENTS.find(r => r._uuid === newResidentId);
+    if (!res) return;
+    try {
+      const cert = await insertIncomeCertification({ residentId: res._uuid, certType: "annual", effectiveDate: new Date().toISOString().slice(0, 10) });
+      // Pre-fill household from existing household_members
+      const existing = await fetchHouseholdMembers(res._uuid);
+      const headMember = await insertTICMember({ certId: cert.id, name: res.name, relationship: "Head of Household", order: 0 });
+      const otherMembers = [];
+      for (let i = 0; i < (existing || []).length; i++) {
+        const m = existing[i];
+        const tm = await insertTICMember({ certId: cert.id, name: m.name, relationship: m.relationship, dob: m.date_of_birth, order: i + 1 });
+        otherMembers.push(tm);
+      }
+      setHhMembers([{ ...headMember, id: headMember.id, name: res.name, relationship: "Head of Household", order: 0 }, ...otherMembers.map((tm, i) => ({ ...tm, id: tm.id, name: existing[i].name, relationship: existing[i].relationship, order: i + 1 }))]);
+      setIncomeEntries([]); setAssetEntries([]);
+      setActiveCert({ ...cert, id: cert.id, residentName: res.name, unit: res.unit, status: "draft" });
+      setStep(0);
+      showSuccess("Certification started for " + res.name);
+      setNewResidentId("");
+    } catch (err) { showSuccess("Error: " + err.message); }
+  };
+
+  // Totals calculation
+  const totalAnnualIncome = incomeEntries.reduce((s, e) => s + (e.amount || 0), 0);
+  const totalAssetValue = assetEntries.reduce((s, e) => s + (e.cashValue || 0), 0);
+  const totalAssetIncome = assetEntries.reduce((s, e) => s + (e.annualIncome || 0), 0);
+  const imputedIncome = calcImputed(totalAssetValue);
+  const applicableAssetIncome = Math.max(totalAssetIncome, imputedIncome);
+  const incomeForDetermination = totalAnnualIncome + applicableAssetIncome;
+  const eligibility = determineTICEligibility(incomeForDetermination, hhMembers.length, amiLookup);
+
+  const saveCertTotals = async () => {
+    if (!activeCert) return;
+    try {
+      await updateIncomeCertification(activeCert.id, {
+        householdSize: hhMembers.length, totalAnnualIncome, totalAssetValue, totalAssetIncome,
+        imputedAssetIncome: imputedIncome, incomeForDetermination,
+        amiPercentage: eligibility.pct, amiCategory: eligibility.category, incomeEligible: eligibility.eligible,
+      });
+    } catch (err) { console.warn("Save totals failed:", err); }
+  };
+
+  // If editing a cert, show wizard
+  if (activeCert) {
+    const ext = LIVE_RESIDENTS_EXTENDED[LIVE_RESIDENTS.find(r => r._uuid === activeCert.residentId || r.name === activeCert.residentName)?.id] || {};
     return (
       <div>
-        <h1 style={s.sectionTitle}>{role === "admin" ? "Recertification Review" : "Annual Recertification"}</h1>
-        <p style={s.sectionSub}>{role === "admin" ? "Review and manage resident recertifications" : "Complete your annual income recertification"}</p>
-        <EmptyState icon="📋" text={role === "admin" ? "No recertifications are currently due. Recertifications will appear here as they become due based on lease anniversary dates." : "You have no pending recertification. Your property manager will notify you when it's time."} />
+        <button onClick={() => { saveCertTotals(); setActiveCert(null); }} style={{ ...s.btn("ghost"), marginBottom: 16 }}>&larr; Back to Certifications</button>
+        <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Income Certification — {activeCert.residentName}</h1>
+        <p style={s.sectionSub}>Unit {activeCert.unit} · {activeCert.certType === "annual" ? "Annual Recertification" : activeCert.certType} · {activeCert.status}</p>
+
+        {/* Step indicator */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
+          {stepLabels.map((lbl, i) => (
+            <button key={i} onClick={() => setStep(i)} style={{
+              flex: 1, minWidth: mobile ? 80 : 100, padding: "8px 4px", border: `1px solid ${i === step ? T.accent : T.border}`,
+              borderRadius: T.radiusSm, background: i === step ? T.accentDim : i < step ? T.successDim : T.bg,
+              color: i === step ? T.accent : i < step ? T.success : T.muted, fontWeight: i === step ? 700 : 500,
+              fontSize: 11, cursor: "pointer", textAlign: "center",
+            }}>{i < step ? "✓ " : ""}{lbl}</button>
+          ))}
+        </div>
+        <SuccessMessage message={success} />
+
+        {/* STEP 0: HOUSEHOLD */}
+        {step === 0 && (
+          <div>
+            <div style={s.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>Household Members ({hhMembers.length})</div>
+                <button onClick={() => setShowNewMember(v => !v)} style={s.btn(showNewMember ? "ghost" : "primary")}>{showNewMember ? "Cancel" : "➕ Add Member"}</button>
+              </div>
+              {showNewMember && (
+                <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 10, marginBottom: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
+                  <div><label style={s.label}>Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={newMemberForm.name} onChange={e => setNewMemberForm(f => ({ ...f, name: e.target.value }))} /></div>
+                  <div><label style={s.label}>Relationship</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={newMemberForm.relationship} onChange={e => setNewMemberForm(f => ({ ...f, relationship: e.target.value }))}><option>Head of Household</option><option>Spouse</option><option>Co-Head</option><option>Child</option><option>Other Adult</option><option>Foster Child</option><option>Live-in Aide</option></select></div>
+                  <div><label style={s.label}>Date of Birth</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={newMemberForm.dob} onChange={e => setNewMemberForm(f => ({ ...f, dob: e.target.value }))} /></div>
+                  <div><label style={s.label}>SSN Last 4</label><input maxLength={4} style={{ ...s.mInput(mobile), width: "100%" }} placeholder="0000" value={newMemberForm.ssn4} onChange={e => setNewMemberForm(f => ({ ...f, ssn4: e.target.value.replace(/\D/g, "").slice(0, 4) }))} /></div>
+                  <div><label style={s.label}>Full-Time Student</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={newMemberForm.ftStudent ? "yes" : "no"} onChange={e => setNewMemberForm(f => ({ ...f, ftStudent: e.target.value === "yes" }))}><option value="no">No</option><option value="yes">Yes</option></select></div>
+                  <div style={{ display: "flex", alignItems: "flex-end" }}><button disabled={!newMemberForm.name.trim()} onClick={async () => {
+                    try {
+                      const m = await insertTICMember({ certId: activeCert.id, name: newMemberForm.name.trim(), relationship: newMemberForm.relationship, dob: newMemberForm.dob || null, ssn4: newMemberForm.ssn4 || null, ftStudent: newMemberForm.ftStudent, order: hhMembers.length });
+                      setHhMembers(prev => [...prev, { id: m.id, name: newMemberForm.name.trim(), relationship: newMemberForm.relationship, dob: newMemberForm.dob, ssn4: newMemberForm.ssn4, ftStudent: newMemberForm.ftStudent, order: hhMembers.length }]);
+                      setNewMemberForm({ name: "", relationship: "Spouse", dob: "", ssn4: "", ftStudent: false });
+                      setShowNewMember(false);
+                      showSuccess("Member added");
+                    } catch (err) { showSuccess("Error: " + err.message); }
+                  }} style={s.mBtn("primary", mobile)}>Add</button></div>
+                </div>
+              )}
+              <table style={s.table}>
+                <thead><tr>{["#", "Name", "Relationship", "DOB", "SSN-4", "Student", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>{hhMembers.map((m, i) => (
+                  <tr key={m.id || i}>
+                    <td style={s.td}>{i + 1}</td>
+                    <td style={s.td}><span style={{ fontWeight: 600 }}>{m.name}</span></td>
+                    <td style={s.td}>{m.relationship}</td>
+                    <td style={s.td}>{m.dob || "—"}</td>
+                    <td style={s.td}>{m.ssn4 ? `***-**-${m.ssn4}` : "—"}</td>
+                    <td style={s.td}>{m.ftStudent ? "FT" : "N/A"}</td>
+                    <td style={s.td}>{i > 0 && <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11, padding: "2px 8px" }} onClick={async () => { try { await deleteTICMember(m.id); setHhMembers(prev => prev.filter(x => x.id !== m.id)); } catch {} }}>Remove</button>}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
+              <button onClick={() => { saveCertTotals(); setStep(1); }} style={s.mBtn("primary", mobile)}>Next: Income →</button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 1: INCOME */}
+        {step === 1 && (
+          <div>
+            {hhMembers.map((m, mi) => {
+              const memberIncome = incomeEntries.filter(e => e.memberId === m.id);
+              const memberTotal = memberIncome.reduce((s, e) => s + (e.amount || 0), 0);
+              return (
+                <div key={m.id} style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ fontWeight: 700 }}>{m.name} <span style={{ color: T.muted, fontWeight: 400 }}>({m.relationship})</span></span>
+                    <span style={{ fontWeight: 600, color: T.accent }}>${memberTotal.toLocaleString()}/yr</span>
+                  </div>
+                  {["employment", "social_security", "public_assistance", "other"].map(cat => {
+                    const catEntries = memberIncome.filter(e => e.category === cat);
+                    const catLabel = cat === "employment" ? "Employment/Wages" : cat === "social_security" ? "Social Security/Pensions" : cat === "public_assistance" ? "Public Assistance" : "Other Income";
+                    return (
+                      <div key={cat} style={{ marginBottom: 10, padding: "8px 10px", background: T.bg, borderRadius: T.radiusSm }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: catEntries.length ? 8 : 0 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: T.muted }}>{catLabel}</span>
+                          <button onClick={async () => {
+                            try {
+                              const e = await insertTICIncome({ certId: activeCert.id, memberId: m.id, category: cat, source: "", amount: 0 });
+                              setIncomeEntries(prev => [...prev, { id: e.id, certId: activeCert.id, memberId: m.id, category: cat, source: "", amount: 0 }]);
+                            } catch {}
+                          }} style={{ ...s.btn("ghost"), fontSize: 10, padding: "2px 8px" }}>+ Add</button>
+                        </div>
+                        {catEntries.map(entry => (
+                          <div key={entry.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                            <input placeholder="Source" value={entry.source || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, source: e.target.value } : x)); }} onBlur={() => updateTICIncome(entry.id, { source: entry.source }).catch(() => {})} style={{ ...s.input, flex: 2, fontSize: 12, padding: "4px 8px" }} />
+                            <input type="number" placeholder="$/yr" value={entry.amount || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, amount: parseFloat(e.target.value) || 0 } : x)); }} onBlur={() => updateTICIncome(entry.id, { amount: entry.amount }).catch(() => {})} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                            <label style={{ fontSize: 10, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
+                              <input type="file" accept=".pdf,.jpg,.png" style={{ display: "none" }} onChange={async (ev) => {
+                                const file = ev.target.files?.[0]; if (!file) return;
+                                try { const path = await uploadTICDocument(file, activeCert.id); await updateTICIncome(entry.id, { docPath: path }); setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, docPath: path, verified: true } : x)); showSuccess("Doc uploaded"); } catch (err) { showSuccess("Upload failed"); }
+                              }} />📎 {entry.docPath ? "✓" : "Doc"}
+                            </label>
+                            <button onClick={async () => { try { await deleteTICIncome(entry.id); setIncomeEntries(prev => prev.filter(x => x.id !== entry.id)); } catch {} }} style={{ ...s.btn("ghost"), color: T.danger, fontSize: 10, padding: "2px 6px" }}>✕</button>
+                          </div>
+                        ))}
+                        {catEntries.length === 0 && <div style={{ fontSize: 11, color: T.dim, padding: "4px 0" }}>No {catLabel.toLowerCase()} reported</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            <div style={{ ...s.card, background: T.accentDim }}>
+              <DetailRow label="Total Annual Income (E)" value={`$${totalAnnualIncome.toLocaleString()}`} accent={T.accent} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+              <button onClick={() => setStep(0)} style={s.btn("ghost")}>← Household</button>
+              <button onClick={() => { saveCertTotals(); setStep(2); }} style={s.mBtn("primary", mobile)}>Next: Assets →</button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: ASSETS */}
+        {step === 2 && (
+          <div>
+            {hhMembers.map(m => {
+              const memberAssets = assetEntries.filter(e => e.memberId === m.id);
+              return (
+                <div key={m.id} style={{ ...s.card, borderLeft: `3px solid ${T.info}`, marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span style={{ fontWeight: 700 }}>{m.name}</span>
+                    <button onClick={async () => {
+                      try {
+                        const e = await insertTICAsset({ certId: activeCert.id, memberId: m.id, assetType: "savings", cashValue: 0, annualIncome: 0 });
+                        setAssetEntries(prev => [...prev, { id: e.id, certId: activeCert.id, memberId: m.id, assetType: "savings", cashValue: 0, annualIncome: 0 }]);
+                      } catch {}
+                    }} style={{ ...s.btn("ghost"), fontSize: 11 }}>+ Add Asset</button>
+                  </div>
+                  {memberAssets.length === 0 ? <div style={{ fontSize: 12, color: T.dim }}>No assets reported</div> : memberAssets.map(a => (
+                    <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                      <select value={a.assetType} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, assetType: e.target.value } : x))} style={{ ...s.select, flex: 1, fontSize: 12, padding: "4px 6px" }}>
+                        <option value="savings">Savings</option><option value="checking">Checking</option><option value="cd">CD</option><option value="stocks">Stocks/Bonds</option><option value="real_estate">Real Estate</option><option value="retirement">Retirement</option><option value="life_insurance">Life Insurance</option><option value="other">Other</option>
+                      </select>
+                      <input type="number" placeholder="Cash Value" value={a.cashValue || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, cashValue: parseFloat(e.target.value) || 0 } : x))} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                      <input type="number" placeholder="Annual Income" value={a.annualIncome || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, annualIncome: parseFloat(e.target.value) || 0 } : x))} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                      <button onClick={async () => { try { await deleteTICAsset(a.id); setAssetEntries(prev => prev.filter(x => x.id !== a.id)); } catch {} }} style={{ ...s.btn("ghost"), color: T.danger, fontSize: 10, padding: "2px 6px" }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            <div style={s.card}>
+              <DetailRow label="Total Cash Value of Assets (H)" value={`$${totalAssetValue.toLocaleString()}`} />
+              <DetailRow label="Total Annual Income from Assets (I)" value={`$${totalAssetIncome.toLocaleString()}`} />
+              {totalAssetValue > 5000 && <DetailRow label="Imputed Income (J) — $${totalAssetValue.toLocaleString()} × 0.06%" value={`$${imputedIncome.toFixed(2)}`} accent={T.warn} />}
+              <DetailRow label="Total Income from Assets (K)" value={`$${applicableAssetIncome.toLocaleString()}`} accent={T.info} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+              <button onClick={() => setStep(1)} style={s.btn("ghost")}>← Income</button>
+              <button onClick={() => { saveCertTotals(); setStep(3); }} style={s.mBtn("primary", mobile)}>Next: Eligibility →</button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: ELIGIBILITY DETERMINATION */}
+        {step === 3 && (
+          <div>
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Income Eligibility Determination</div>
+              <DetailRow label="Total Annual Income (E)" value={`$${totalAnnualIncome.toLocaleString()}`} />
+              <DetailRow label="Total Income from Assets (K)" value={`$${applicableAssetIncome.toLocaleString()}`} />
+              <div style={{ height: 1, background: T.border, margin: "10px 0" }} />
+              <DetailRow label="Total Annual Household Income (L)" value={`$${incomeForDetermination.toLocaleString()}`} accent={T.accent} />
+              <div style={{ height: 1, background: T.border, margin: "10px 0" }} />
+              <DetailRow label="Household Size" value={hhMembers.length} />
+              <DetailRow label="AMI Category" value={eligibility.category} accent={eligibility.eligible ? T.success : T.danger} />
+              <DetailRow label="Income Eligible" value={eligibility.eligible ? "Yes ✓" : "No ✕"} accent={eligibility.eligible ? T.success : T.danger} />
+              <div style={{ marginTop: 14, padding: 12, background: eligibility.eligible ? T.successDim : T.dangerDim, borderRadius: T.radiusSm }}>
+                <div style={{ fontWeight: 700, color: eligibility.eligible ? T.success : T.danger, marginBottom: 6 }}>{eligibility.eligible ? "✓ Household is income eligible" : "✕ Household exceeds income limits"}</div>
+                <div style={{ fontSize: 12, color: T.muted }}>
+                  {[30, 50, 60, 80].map(pct => {
+                    const lim = (amiLookup[hhMembers.length] || {})[pct];
+                    return lim ? <div key={pct}>{pct}% AMI limit: ${lim.toLocaleString()} {incomeForDetermination <= lim ? "✓" : ""}</div> : null;
+                  })}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+              <button onClick={() => setStep(2)} style={s.btn("ghost")}>← Assets</button>
+              <button onClick={() => { saveCertTotals(); setStep(4); }} style={s.mBtn("primary", mobile)}>Next: Rent →</button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4: RENT & PROGRAM */}
+        {step === 4 && (() => {
+          const tenantRent = activeCert.tenantRent || ext.tenantPortion || 0;
+          const ua = activeCert.utilityAllowance || 0;
+          const grossRent = tenantRent + ua;
+          const bedrooms = ext.bedrooms || 1;
+          const tierLimits = rentLimits[eligibility.tier] || {};
+          const rentLim = tierLimits[bedrooms] || 0;
+          return (
+          <div>
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Rent Details</div>
+              <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                <div><label style={s.label}>Tenant Paid Monthly Rent</label><input type="number" value={activeCert.tenantRent || ext.tenantPortion || ""} onChange={e => setActiveCert(c => ({ ...c, tenantRent: parseFloat(e.target.value) || 0 }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+                <div><label style={s.label}>Monthly Utility Allowance</label><input type="number" value={activeCert.utilityAllowance || ""} onChange={e => setActiveCert(c => ({ ...c, utilityAllowance: parseFloat(e.target.value) || 0 }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+                <div><label style={s.label}>Federal Rent Assistance (HAP)</label><input type="number" value={activeCert.hapPayment || ext.hapPayment || ""} onChange={e => setActiveCert(c => ({ ...c, hapPayment: parseFloat(e.target.value) || 0 }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+              </div>
+              <DetailRow label="Gross Monthly Rent" value={`$${grossRent.toLocaleString()}`} accent={T.accent} />
+              {rentLim > 0 && <DetailRow label={`Max LIHTC Rent Limit (${eligibility.tier}% AMI, ${bedrooms}BR)`} value={`$${rentLim.toLocaleString()}`} />}
+              {rentLim > 0 && <DetailRow label="Rent Compliant" value={grossRent <= rentLim ? "Yes ✓" : "No — Over limit"} accent={grossRent <= rentLim ? T.success : T.danger} />}
+            </div>
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Program Type</div>
+              <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14 }}>
+                <div><label style={s.label}>Primary Program</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={activeCert.programType || "9% LIHTC"} onChange={e => setActiveCert(c => ({ ...c, programType: e.target.value }))}><option>9% LIHTC</option><option>4% LIHTC</option><option>Tax-Exempt Bond</option><option>HOME</option><option>Section 8</option></select></div>
+                <div><label style={s.label}>Federal Assistance Source</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={activeCert.federalAssistanceSource || ""} onChange={e => setActiveCert(c => ({ ...c, federalAssistanceSource: e.target.value }))}><option value="">None/Missing</option><option value="1">HUD PBRA</option><option value="2">Section 8 Mod Rehab</option><option value="3">Public Housing</option><option value="4">HOME Rental Assistance</option><option value="5">HUD HCV (tenant-based)</option><option value="6">HUD PBV</option><option value="7">USDA 521</option><option value="8">Other Federal</option></select></div>
+              </div>
+            </div>
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Student Status</div>
+              <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                <Toggle label="All occupants are full-time students" checked={activeCert.allStudentHousehold || false} onChange={() => setActiveCert(c => ({ ...c, allStudentHousehold: !c.allStudentHousehold }))} />
+              </div>
+              {activeCert.allStudentHousehold && (
+                <div style={{ marginTop: 10 }}><label style={s.label}>Student Exemption</label><select style={{ ...s.mSelect(mobile), width: mobile ? "100%" : 300 }} value={activeCert.studentExemption || ""} onChange={e => setActiveCert(c => ({ ...c, studentExemption: e.target.value }))}><option value="">Select exemption...</option><option value="1">AFDC/TANF Assistance</option><option value="2">Job Training Program</option><option value="3">Single Parent/Dependent Child</option><option value="4">Married/Joint Return</option><option value="5">Former Foster Care</option></select></div>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+              <button onClick={() => setStep(3)} style={s.btn("ghost")}>← Eligibility</button>
+              <button onClick={() => { saveCertTotals(); setStep(5); }} style={s.mBtn("primary", mobile)}>Next: Review & Sign →</button>
+            </div>
+          </div>
+          ); })()}
+
+        {/* STEP 5: REVIEW & SIGNATURE */}
+        {step === 5 && (
+          <div>
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Certification Summary</div>
+              <DetailRow label="Household Size" value={hhMembers.length} />
+              <DetailRow label="Total Annual Income" value={`$${incomeForDetermination.toLocaleString()}`} accent={T.accent} />
+              <DetailRow label="AMI Category" value={eligibility.category} accent={eligibility.eligible ? T.success : T.danger} />
+              <DetailRow label="Income Eligible" value={eligibility.eligible ? "Yes" : "No"} accent={eligibility.eligible ? T.success : T.danger} />
+              <DetailRow label="Program" value={activeCert.programType || "9% LIHTC"} />
+            </div>
+
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Household Certification & Signatures</div>
+              <div style={{ fontSize: 12, color: T.muted, marginBottom: 16, lineHeight: 1.5 }}>
+                Under penalties of perjury, I/we certify that the information presented in this Certification is true and accurate to the best of my/our knowledge and belief.
+              </div>
+              <SignaturePad label="Resident Signature" value={activeCert.residentSignature} onChange={v => setActiveCert(c => ({ ...c, residentSignature: v }))} mobile={mobile} />
+              {isAdmin && (
+                <div style={{ marginTop: 16 }}>
+                  <SignaturePad label="Owner/Representative Signature" value={activeCert.adminSignature} onChange={v => setActiveCert(c => ({ ...c, adminSignature: v }))} mobile={mobile} />
+                  <div style={{ marginTop: 8 }}><label style={s.label}>Signer Name</label><input style={{ ...s.mInput(mobile), width: mobile ? "100%" : 300 }} value={activeCert.adminSignerName || ""} onChange={e => setActiveCert(c => ({ ...c, adminSignerName: e.target.value }))} /></div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, flexWrap: "wrap", gap: 8 }}>
+              <button onClick={() => setStep(4)} style={s.btn("ghost")}>← Rent & Program</button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={async () => {
+                  try {
+                    await saveCertTotals();
+                    await updateIncomeCertification(activeCert.id, { status: "draft", stepsCompleted: { household: true, income: true, assets: true, rent: true, eligibility: true, signature: false } });
+                    showSuccess("Saved as draft");
+                  } catch (err) { showSuccess("Error: " + err.message); }
+                }} style={s.btn("ghost")}>💾 Save Draft</button>
+                <button onClick={async () => {
+                  try {
+                    await saveCertTotals();
+                    const tenantRent = activeCert.tenantRent || 0;
+                    const ua = activeCert.utilityAllowance || 0;
+                    await updateIncomeCertification(activeCert.id, {
+                      status: isAdmin ? "approved" : "pending_review",
+                      stepsCompleted: { household: true, income: true, assets: true, rent: true, eligibility: true, signature: true },
+                      tenantRent, utilityAllowance: ua, grossRent: tenantRent + ua,
+                      hapPayment: activeCert.hapPayment || 0, programType: activeCert.programType || "9% LIHTC",
+                      allStudentHousehold: activeCert.allStudentHousehold || false,
+                      residentSignature: activeCert.residentSignature, residentSignedAt: activeCert.residentSignature ? new Date().toISOString() : null,
+                      adminSignature: activeCert.adminSignature, adminSignedAt: activeCert.adminSignature ? new Date().toISOString() : null,
+                      adminSignerName: activeCert.adminSignerName,
+                    });
+                    showSuccess(isAdmin ? "Certification approved!" : "Submitted for review!");
+                    setActiveCert(null);
+                    fetchIncomeCertifications().then(setCerts).catch(() => {});
+                  } catch (err) { showSuccess("Error: " + err.message); }
+                }} style={s.mBtn("primary", mobile)}>{isAdmin ? "✓ Approve & Complete" : "Submit for Review"}</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
-  const r = MOCK_RECERT;
-  const daysLeft = Math.ceil((new Date(r.deadline) - new Date()) / 86400000);
-  const steps = [
-    { key: "household", label: "Household Composition", done: r.stepsCompleted.household },
-    { key: "income", label: "Income Declaration", done: r.stepsCompleted.income },
-    { key: "documents", label: "Upload Documents", done: r.stepsCompleted.documents },
-    { key: "signature", label: "Electronic Signature", done: r.stepsCompleted.signature },
-  ];
-  const pct = (steps.filter(st => st.done).length / steps.length) * 100;
+
+  // LIST VIEW
+  const filteredCerts = selectedProperty === "all" ? certs : certs.filter(c => c.propertySlug === selectedProperty);
   return (
     <div>
-      <h1 style={s.sectionTitle}>{role === "admin" ? "Recertification Review" : "Annual Recertification"}</h1>
-      <p style={s.sectionSub}>{role === "admin" ? "Review and manage resident submissions" : "Complete your annual income recertification"}</p>
-      <div style={{ ...s.card, borderLeft: `3px solid ${daysLeft < 60 ? T.warn : T.accent}` }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>Deadline: {r.deadline}</div>
-            <div style={{ fontSize: 13, color: T.muted }}>{daysLeft} days remaining</div>
-          </div>
-          <span style={s.badge(T.warnDim, T.warn)}>In Progress</span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+        <div>
+          <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Income Certification</h1>
+          <p style={s.sectionSub}>LIHTC / Section 8 tenant income certifications</p>
         </div>
-        <div style={{ background: T.bg, borderRadius: 6, height: 8, overflow: "hidden", marginBottom: 14 }}>
-          <div style={{ width: `${pct}%`, height: "100%", background: T.accent, borderRadius: 6, transition: "width 0.3s" }} />
-        </div>
-        <div style={{ ...s.grid("1fr 1fr", mobile), gap: 10 }}>
-          {steps.map(step => (
-            <div key={step.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: mobile ? "12px 14px" : "10px 14px", background: step.done ? T.successDim : T.bg, borderRadius: T.radiusSm, border: `1px solid ${step.done ? T.successBorder : T.border}`, minHeight: mobile ? 44 : undefined }}>
-              <span style={{ fontSize: 18 }}>{step.done ? "✓" : "○"}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: step.done ? T.success : T.muted }}>{step.label}</span>
+      </div>
+      <SuccessMessage message={success} />
+
+      {isAdmin && (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Start New Certification</div>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 200 }}><label style={s.label}>Resident</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={newResidentId} onChange={e => setNewResidentId(e.target.value)}>
+                <option value="">Select resident...</option>
+                {filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => <option key={r._uuid} value={r._uuid}>{r.name} — {r.unit}</option>)}
+              </select>
             </div>
-          ))}
+            <button disabled={!newResidentId} onClick={startNewCert} style={s.mBtn("primary", mobile)}>📋 Start Certification</button>
+          </div>
         </div>
-      </div>
-      <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Household Members</div>
-        <table style={s.table}>
-          <thead><tr>{["Name", "Relationship", "Date of Birth", "SSN"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-          <tbody>
-            {r.householdMembers.map((m, i) => (
-              <tr key={i}><td style={s.td}>{m.name}</td><td style={s.td}>{m.relationship}</td><td style={s.td}>{m.dob}</td><td style={s.td}>{m.ssn}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Income Summary</div>
-        <DetailRow label="Employment Income" value={`$${r.income.employment.toLocaleString()}/yr`} />
-        <DetailRow label="Benefits" value={`$${r.income.benefits.toLocaleString()}/yr`} />
-        <DetailRow label="Other Income" value={`$${r.income.other.toLocaleString()}/yr`} />
-        <DetailRow label="Total Annual Income" value={`$${r.income.total.toLocaleString()}/yr`} accent={T.accent} />
-      </div>
+      )}
+
+      {loading ? <div style={{ padding: 40, textAlign: "center", color: T.muted }}>Loading certifications...</div> :
+        filteredCerts.length === 0 ? <EmptyState icon="📋" text="No income certifications yet. Start one for a resident above." /> : (
+        <SortableTable mobile={mobile} keyField="id" onRowClick={(row) => { setActiveCert(row); loadCertData(row); setStep(0); }} columns={[
+          { key: "residentName", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+          { key: "unit", label: "Unit" },
+          { key: "certType", label: "Type", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span> },
+          { key: "effectiveDate", label: "Effective Date" },
+          { key: "status", label: "Status", render: v => {
+            const colors = { draft: [T.dimLight, T.muted], in_progress: [T.warnDim, T.warn], pending_review: [T.infoDim, T.info], approved: [T.successDim, T.success], rejected: [T.dangerDim, T.danger] };
+            const [bg, fg] = colors[v] || colors.draft;
+            return <span style={s.badge(bg, fg)}>{v.replace("_", " ")}</span>;
+          }, filterOptions: ["draft", "in_progress", "pending_review", "approved", "rejected"] },
+          { key: "amiCategory", label: "AMI", render: v => v || "—" },
+          { key: "incomeForDetermination", label: "Income", render: v => v ? `$${Number(v).toLocaleString()}` : "—" },
+        ]} data={filteredCerts} />
+      )}
     </div>
   );
 };
@@ -4613,7 +5011,7 @@ const PropertySelector = ({ value, onChange, mobile, properties }) => {
     {props.map(p => <option key={p.id} value={p.id}>{p.name} ({p.totalUnits || 0})</option>)}
   </select>
   );
-);
+};
 
 const DATE_RANGE_PRESETS = [
   { label: "This Month", value: "month" },
@@ -5180,7 +5578,7 @@ export default function App() {
         case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} notifications={roleNotifs} rc={rc} />;
         case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={myMaint} onSubmit={addMaintenanceN} rc={rc} />;
         case "rent": return <RentPayments mobile={mobile} rc={rc} />;
-        case "recert": return <Recertification role="resident" mobile={mobile} />;
+        case "recert": return <IncomeCertification role="resident" mobile={mobile} selectedProperty={selectedProperty} rc={rc} />;
         case "unit": return <UnitDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} rc={rc} />;
         case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} rc={rc} />;
         case "profile": return <ResidentProfile mobile={mobile} commPrefs={commPrefs} setCommPrefs={setCommPrefs} emergencyContacts={emergencyContacts} onUpdateEmergencyContacts={updateEmergencyContacts} rc={rc} />;
@@ -5200,7 +5598,7 @@ export default function App() {
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
-        case "recert": return <Recertification role="admin" mobile={mobile} />;
+        case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
