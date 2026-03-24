@@ -2648,7 +2648,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             } catch (err) {
               showSuccess("Error: " + (err.message || "Failed to add resident"));
             } finally { setAdding(false); }
-          }} style={{ ...s.mBtn("primary", mobile) }}>{adding ? "Adding..." : "Add Resident"}</button>
+          }} disabled={adding || !addForm.name.trim()} style={{ ...s.mBtn("primary", mobile), opacity: adding ? 0.6 : 1 }}>{adding ? "Adding..." : "Add Resident"}</button>
         </div>
       )}
       {(() => {
