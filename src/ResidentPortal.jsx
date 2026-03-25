@@ -3801,6 +3801,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               <span style={s.badge(chBadge.bg, chBadge.text)}>{chBadge.label}</span>
               {t.priority === "high" && <span style={s.badge(T.dangerDim, T.danger)}>!</span>}
               {t.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent }} />}
+              {isAdmin && <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete this thread?")) { setThreads(prev => prev.filter(th => th.id !== t.id)); setMessages(prev => prev.filter(m => m.threadId !== t.id)); } }} style={{ background: "none", border: "none", cursor: "pointer", color: T.dim, fontSize: 14, padding: "2px 4px", marginLeft: 4 }} title="Delete thread">🗑</button>}
             </div>
           </div>
         </div>
@@ -3885,10 +3886,11 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             </div>
           )}
           <div style={{ display: "flex", gap: 10 }}>
-            <button style={s.btn()} onClick={() => {
+            <button style={s.btn()} onClick={async () => {
               if (!composeData.subject.trim() || !composeData.body.trim()) return;
               const threadId = `THR-${Date.now()}`;
               const ch = composeData.channel === "auto" ? "email" : composeData.channel;
+              // Save thread + message to database
               onAddThread({
                 id: threadId,
                 participants: composeData.broadcast ? ["all"] : [composeData.to],
@@ -3907,6 +3909,29 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 body: composeData.body.trim(),
                 date: new Date().toISOString(),
               });
+              // Actually send the message via SMS/email
+              try {
+                if (composeData.broadcast) {
+                  for (const r of LIVE_RESIDENTS) {
+                    if (ch === "sms" && r.phone) await sendSMS(r.phone, composeData.body.trim());
+                    else if (ch === "email" && r.email) await sendNotification("custom", { to: r.email, subject: composeData.subject.trim(), body: composeData.body.trim() });
+                    else {
+                      if (r.phone) await sendSMS(r.phone, composeData.body.trim());
+                      if (r.email) await sendNotification("custom", { to: r.email, subject: composeData.subject.trim(), body: composeData.body.trim() });
+                    }
+                  }
+                } else {
+                  const r = LIVE_RESIDENTS.find(res => res.id === composeData.to);
+                  if (r) {
+                    if (ch === "sms" && r.phone) await sendSMS(r.phone, composeData.body.trim());
+                    else if (ch === "email" && r.email) await sendNotification("custom", { to: r.email, subject: composeData.subject.trim(), body: composeData.body.trim() });
+                    else {
+                      if (r.phone) await sendSMS(r.phone, composeData.body.trim());
+                      if (r.email) await sendNotification("custom", { to: r.email, subject: composeData.subject.trim(), body: composeData.body.trim() });
+                    }
+                  }
+                }
+              } catch (err) { console.warn("Send delivery failed:", err); }
               setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
               setTab("Inbox");
               showSuccess("Message sent!");
