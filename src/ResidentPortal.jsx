@@ -10,359 +10,40 @@ import { supabase } from "./lib/supabase";
    Roles: Resident, Admin/Management, Maintenance Staff
    ═══════════════════════════════════════════════════════════ */
 
-// ── MOCK DATA ──────────────────────────────────────────────
+// ── DATA DEFAULTS (empty — all real data comes from Supabase) ──
 
-const MOCK_PROPERTIES = [
-  {
-    id: "wharf", name: "Wharf Road Apartments", address: "123 Wharf Rd, Bolinas, CA 94924",
-    type: "Garden-Style Apartments", yearBuilt: 1978, lastRenovation: 2019, totalUnits: 42,
-    unitBreakdown: { "1BR": 12, "2BR": 18, "3BR": 10, "4BR": 2 },
-    totalSF: 38400, commonAreaSF: 4200, lotSize: "2.8 acres", adaUnits: 4,
-    manager: "Sarah Chen", managerPhone: "(415) 555-0100", managerEmail: "sarah@bclt.org", officeHours: "Mon-Fri 9am-5pm",
-    documents: [
-      { name: "Site Plan", type: "site-plan", uploaded: "2024-08-15" },
-      { name: "Plot Map (Plat Survey)", type: "plot-map", uploaded: "2023-03-10" },
-      { name: "1BR Floor Plan", type: "floor-plan", uploaded: "2024-08-15" },
-      { name: "2BR Floor Plan", type: "floor-plan", uploaded: "2024-08-15" },
-      { name: "3BR Floor Plan", type: "floor-plan", uploaded: "2024-08-15" },
-      { name: "Utility Infrastructure Map", type: "utility-map", uploaded: "2024-01-20" },
-      { name: "Emergency Evacuation Routes", type: "evacuation", uploaded: "2024-06-01" },
-    ],
-  },
-  {
-    id: "mesa", name: "Mesa Road Townhomes", address: "456 Mesa Rd, Bolinas, CA 94924",
-    type: "Townhomes", yearBuilt: 1992, lastRenovation: 2022, totalUnits: 18,
-    unitBreakdown: { "2BR": 8, "3BR": 10 },
-    totalSF: 22000, commonAreaSF: 1800, lotSize: "1.5 acres", adaUnits: 2,
-    manager: "David Park", managerPhone: "(415) 555-0200", managerEmail: "david@bclt.org", officeHours: "Mon-Fri 9am-5pm",
-    documents: [
-      { name: "Site Plan", type: "site-plan", uploaded: "2023-05-10" },
-      { name: "Plot Map", type: "plot-map", uploaded: "2022-11-01" },
-    ],
-  },
-  {
-    id: "terrace", name: "Terrace Lane Senior Living", address: "789 Terrace Ln, Bolinas, CA 94924",
-    type: "Senior Housing", yearBuilt: 2005, lastRenovation: null, totalUnits: 24,
-    unitBreakdown: { "1BR": 16, "2BR": 8 },
-    totalSF: 18000, commonAreaSF: 3000, lotSize: "1.2 acres", adaUnits: 6,
-    manager: "Lisa Tran", managerPhone: "(415) 555-0300", managerEmail: "lisa@bclt.org", officeHours: "Mon-Fri 8am-4pm",
-    documents: [
-      { name: "Site Plan", type: "site-plan", uploaded: "2024-02-20" },
-      { name: "ADA Compliance Report", type: "compliance", uploaded: "2024-09-15" },
-    ],
-  },
-];
-const getProperty = (id) => LIVE_PROPERTIES.find(p => p.id === id) || LIVE_PROPERTIES[0];
-const MOCK_PROPERTY = MOCK_PROPERTIES[0]; // backward compat for resident views
-
-const MOCK_UNIT = {
-  number: "B-204",
-  bedrooms: 2,
-  bathrooms: 1,
-  sqft: 885,
-  floorPlan: "2BR Type A",
-  leaseStart: "2023-06-01",
-  leaseEnd: "2024-05-31",
-  rentAmount: 1150,
-  tenantPortion: 485,
-  hapPayment: 665,
-  utilityResponsibility: { electric: "Tenant", gas: "Tenant", water: "Owner", trash: "Owner", internet: "Tenant" },
-  appliances: [
-    { name: "Refrigerator", make: "GE", model: "GTS18", age: "3 yrs", warranty: "Active" },
-    { name: "Stove/Oven", make: "Whirlpool", model: "WFG320", age: "3 yrs", warranty: "Active" },
-    { name: "HVAC", make: "Carrier", model: "24ACC636", age: "5 yrs", warranty: "Expired" },
-    { name: "Water Heater", make: "Rheem", model: "PROE50", age: "2 yrs", warranty: "Active" },
-  ],
-  lastInspection: { date: "2025-11-14", type: "HQS", result: "Pass" },
-};
-
-const MOCK_MAINTENANCE = [
-  { id: "MR-2401", propertyId: "wharf", unit: "B-204", category: "Plumbing", priority: "routine", status: "in-progress", description: "Kitchen faucet dripping constantly", submitted: "2026-03-10", assignedTo: "Mike R.", queuePos: 2, projectedComplete: "2026-03-25", notes: [{ by: "Mike R.", date: "2026-03-12", text: "Parts ordered, will install Thursday." }] },
-  { id: "MR-2398", propertyId: "wharf", unit: "B-204", category: "HVAC", priority: "urgent", status: "completed", description: "Heater not producing warm air", submitted: "2026-02-28", assignedTo: "Mike R.", queuePos: null, projectedComplete: null, completedDate: "2026-03-02", notes: [{ by: "Mike R.", date: "2026-03-01", text: "Replaced ignitor. System running normally." }] },
-  { id: "MR-2405", propertyId: "wharf", unit: "A-108", category: "Electrical", priority: "critical", status: "submitted", description: "Sparking outlet in bedroom", submitted: "2026-03-18", assignedTo: null, queuePos: 1, projectedComplete: null, notes: [] },
-  { id: "MR-2403", propertyId: "wharf", unit: "C-310", category: "Appliance", priority: "routine", status: "in-progress", description: "Dishwasher not draining", submitted: "2026-03-14", assignedTo: "Mike R.", queuePos: 3, projectedComplete: "2026-03-28", notes: [] },
-  { id: "MR-2400", propertyId: "wharf", unit: "A-102", category: "Pest", priority: "routine", status: "submitted", description: "Ants in kitchen near window", submitted: "2026-03-08", assignedTo: null, queuePos: 4, projectedComplete: null, notes: [] },
-  { id: "MR-2410", propertyId: "mesa", unit: "M-101", category: "Plumbing", priority: "urgent", status: "in-progress", description: "Bathroom toilet running continuously", submitted: "2026-03-15", assignedTo: "Mike R.", queuePos: 5, projectedComplete: "2026-03-22", notes: [] },
-  { id: "MR-2411", propertyId: "mesa", unit: "M-308", category: "Structural", priority: "routine", status: "submitted", description: "Cracked window pane in living room", submitted: "2026-03-17", assignedTo: null, queuePos: 6, projectedComplete: null, notes: [] },
-  { id: "MR-2412", propertyId: "terrace", unit: "T-101", category: "HVAC", priority: "routine", status: "completed", description: "Thermostat not responding", submitted: "2026-02-20", assignedTo: "Mike R.", queuePos: null, projectedComplete: null, completedDate: "2026-02-25", notes: [{ by: "Mike R.", date: "2026-02-25", text: "Replaced thermostat batteries and recalibrated." }] },
-  { id: "MR-2413", propertyId: "terrace", unit: "T-202", category: "Appliance", priority: "routine", status: "in-progress", description: "Refrigerator making loud noise", submitted: "2026-03-12", assignedTo: "Mike R.", queuePos: 7, projectedComplete: "2026-03-26", notes: [] },
-];
-
-const MOCK_PAYMENTS = [
-  { date: "2026-03-01", description: "March Rent - Tenant Portion", amount: -485, balance: 0, type: "payment" },
-  { date: "2026-03-01", description: "March Rent - HAP (PHA)", amount: -665, balance: 0, type: "hap" },
-  { date: "2026-03-01", description: "March Rent Charge", amount: 1150, balance: 1150, type: "charge" },
-  { date: "2026-02-01", description: "February Rent - Tenant Portion", amount: -485, balance: 0, type: "payment" },
-  { date: "2026-02-01", description: "February Rent - HAP (PHA)", amount: -665, balance: 0, type: "hap" },
-  { date: "2026-02-01", description: "February Rent Charge", amount: 1150, balance: 1150, type: "charge" },
-];
-
-const MOCK_RESIDENTS = [
-  { id: "maria-santos", propertyId: "wharf", name: "Maria Santos", unit: "B-204", phone: "(415) 555-0101", email: "maria.santos@email.com", preferredChannel: "sms" },
-  { id: "james-whitfield", propertyId: "wharf", name: "James Whitfield", unit: "A-108", phone: "(415) 555-0202", email: "james.w@email.com", preferredChannel: "email" },
-  { id: "linda-chen", propertyId: "wharf", name: "Linda Chen", unit: "C-310", phone: "(415) 555-0303", email: "linda.chen@email.com", preferredChannel: "sms" },
-  { id: "robert-garcia", propertyId: "wharf", name: "Robert Garcia", unit: "A-102", phone: "(415) 555-0404", email: "r.garcia@email.com", preferredChannel: "phone" },
-  { id: "sarah-johnson", propertyId: "wharf", name: "Sarah Johnson", unit: "B-108", phone: "(415) 555-0505", email: "s.johnson@email.com", preferredChannel: "email" },
-  { id: "anna-kowalski", propertyId: "mesa", name: "Anna Kowalski", unit: "M-101", phone: "(415) 555-0601", email: "anna.k@email.com", preferredChannel: "email" },
-  { id: "carlos-rivera", propertyId: "mesa", name: "Carlos Rivera", unit: "M-205", phone: "(415) 555-0602", email: "carlos.r@email.com", preferredChannel: "sms" },
-  { id: "diana-foster", propertyId: "mesa", name: "Diana Foster", unit: "M-308", phone: "(415) 555-0603", email: "diana.f@email.com", preferredChannel: "email" },
-  { id: "helen-park", propertyId: "terrace", name: "Helen Park", unit: "T-101", phone: "(415) 555-0701", email: "helen.p@email.com", preferredChannel: "phone" },
-  { id: "george-williams", propertyId: "terrace", name: "George Williams", unit: "T-108", phone: "(415) 555-0702", email: "george.w@email.com", preferredChannel: "email" },
-  { id: "betty-huang", propertyId: "terrace", name: "Betty Huang", unit: "T-202", phone: "(415) 555-0703", email: "betty.h@email.com", preferredChannel: "sms" },
-];
-
-const MOCK_THREADS = [
-  { id: "THR-001", participants: ["maria-santos"], subject: "Maintenance Request MR-2401", lastMessage: "We have a master key, so no need. We'll send a text when Mike is on his way.", lastDate: "2026-03-12T15:00:00", unread: 0, channel: "sms", type: "direct" },
-  { id: "THR-002", participants: ["all"], subject: "Annual HQS Inspections Scheduled", lastMessage: "Units A-building will be inspected March 25-27. Please ensure access to all rooms.", lastDate: "2026-03-15T08:00:00", unread: 0, channel: "multi", type: "broadcast", priority: "high" },
-  { id: "THR-003", participants: ["james-whitfield"], subject: "Lease Renewal — Unit A-108", lastMessage: "I have a question about the new terms. Can the utility allowance be adjusted?", lastDate: "2026-03-14T11:00:00", unread: 1, channel: "email", type: "direct" },
-  { id: "THR-004", participants: ["all"], subject: "Community BBQ — April 12th", lastMessage: "Join us for a spring community BBQ at the courtyard from 12-3pm.", lastDate: "2026-03-10T09:00:00", unread: 0, channel: "multi", type: "broadcast" },
-  { id: "THR-005", participants: ["linda-chen"], subject: "Recertification Documents Needed", lastMessage: "I'll upload them by Friday. Sorry for the delay!", lastDate: "2026-03-11T16:45:00", unread: 0, channel: "sms", type: "direct" },
-  { id: "THR-006", participants: ["all"], subject: "Parking Lot Resurfacing", lastMessage: "Lot B will be closed March 22-24 for resurfacing. Please use Lot A.", lastDate: "2026-03-05T08:00:00", unread: 0, channel: "multi", type: "broadcast" },
-];
-
-const MOCK_MESSAGES = [
-  { id: "MSG-001", threadId: "THR-001", from: "admin", body: "Hi Maria, your maintenance request MR-2401 for the kitchen faucet has been assigned to Mike R. Parts have been ordered and he'll install them Thursday.", date: "2026-03-12T10:15:00", status: "delivered" },
-  { id: "MSG-002", threadId: "THR-001", from: "maria-santos", body: "Thank you! Thursday works for me. Should I leave a key or will someone be there to let him in?", date: "2026-03-12T14:30:00", status: "read" },
-  { id: "MSG-003", threadId: "THR-001", from: "admin", body: "We have a master key, so no need. We'll send a text when Mike is on his way. Thanks!", date: "2026-03-12T15:00:00", status: "delivered" },
-  { id: "MSG-004", threadId: "THR-002", from: "admin", body: "Units A-building will be inspected March 25-27. Please ensure access to all rooms. A preparation checklist has been posted to your portal.", date: "2026-03-15T08:00:00", status: "delivered" },
-  { id: "MSG-005", threadId: "THR-003", from: "admin", body: "Hi James, your lease renewal for Unit A-108 is ready for review. Please check the portal for the updated terms and let us know if you have questions.", date: "2026-03-13T09:00:00", status: "delivered" },
-  { id: "MSG-006", threadId: "THR-003", from: "james-whitfield", body: "I have a question about the new terms. Can the utility allowance be adjusted? My electric bill has gone up significantly.", date: "2026-03-14T11:00:00", status: "read" },
-  { id: "MSG-007", threadId: "THR-004", from: "admin", body: "Join us for a spring community BBQ at the courtyard from 12-3pm. Food and drinks provided. Hope to see you there!", date: "2026-03-10T09:00:00", status: "delivered" },
-  { id: "MSG-008", threadId: "THR-005", from: "admin", body: "Hi Linda, we still need your updated pay stubs for recertification. Can you upload them to the portal by end of week?", date: "2026-03-11T10:00:00", status: "delivered" },
-  { id: "MSG-009", threadId: "THR-005", from: "linda-chen", body: "I'll upload them by Friday. Sorry for the delay!", date: "2026-03-11T16:45:00", status: "read" },
-  { id: "MSG-010", threadId: "THR-006", from: "admin", body: "Lot B will be closed March 22-24 for resurfacing. Please use Lot A during this time. Thank you for your patience.", date: "2026-03-05T08:00:00", status: "delivered" },
-];
-
-const MOCK_COMM_TEMPLATES = [
-  { id: "TPL-1", name: "Rent Reminder", channel: "sms", body: "BCLT: Reminder — your rent payment is due on the 1st. Pay online at your portal or contact the office." },
-  { id: "TPL-2", name: "Maintenance Update", channel: "sms", body: "BCLT: Your maintenance request has been updated. Check your portal for details." },
-  { id: "TPL-3", name: "Recertification Nudge", channel: "email", subject: "Action Required: Annual Recertification", body: "Dear resident, your annual recertification deadline is approaching. Please complete all steps in your portal as soon as possible." },
-  { id: "TPL-4", name: "Inspection Notice", channel: "multi", subject: "Upcoming Inspection Notice", body: "Your unit is scheduled for an upcoming inspection. Please ensure access to all rooms and review the preparation checklist on your portal." },
-  { id: "TPL-5", name: "Emergency Alert", channel: "sms", body: "BCLT ALERT: This is an urgent notice. Please contact the office at (415) 555-0100 for details." },
-];
-
-const MOCK_RECERT = {
-  status: "in-progress",
-  deadline: "2026-06-01",
-  anniversaryDate: "2026-06-01",
-  stepsCompleted: { household: true, income: true, documents: false, signature: false },
-  householdMembers: [
-    { name: "Maria Santos", relationship: "Head of Household", dob: "1985-04-12", ssn: "***-**-4521" },
-    { name: "Luis Santos", relationship: "Spouse", dob: "1983-09-28", ssn: "***-**-7834" },
-    { name: "Sofia Santos", relationship: "Child", dob: "2015-11-03", ssn: "***-**-2190" },
-  ],
-  income: { employment: 28400, benefits: 0, other: 0, total: 28400 },
-  documents: [],
-};
-
-const MOCK_REG_INSPECTIONS = [
-  { id: "RI-01", propertyId: "wharf", type: "HQS", authority: "Marin County Housing Authority", date: "2025-11-14", result: "Pass", score: null, nextDue: "2026-11-14", units: 42, deficiencies: 0 },
-  { id: "RI-02", propertyId: "wharf", type: "REAC/NSPIRE", authority: "HUD", date: "2025-06-20", result: "Pass", score: 88, nextDue: "2027-06-20", units: 42, deficiencies: 3 },
-  { id: "RI-03", propertyId: "wharf", type: "Fire & Safety", authority: "Bolinas Fire Dept.", date: "2025-09-10", result: "Pass", score: null, nextDue: "2026-09-10", units: null, deficiencies: 1 },
-  { id: "RI-04", propertyId: "wharf", type: "LIHTC Compliance", authority: "TCAC (California)", date: "2025-04-15", result: "Pass", score: null, nextDue: "2026-04-15", units: 10, deficiencies: 0 },
-  { id: "RI-05", propertyId: "wharf", type: "Lead-Based Paint", authority: "EPA / CA DPH", date: "2024-08-22", result: "Pass", score: null, nextDue: "2026-08-22", units: 8, deficiencies: 0 },
-  { id: "RI-06", propertyId: "mesa", type: "HQS", authority: "Marin County Housing Authority", date: "2025-10-05", result: "Pass", score: null, nextDue: "2026-10-05", units: 18, deficiencies: 0 },
-  { id: "RI-07", propertyId: "mesa", type: "Fire & Safety", authority: "Bolinas Fire Dept.", date: "2025-08-20", result: "Pass", score: null, nextDue: "2026-08-20", units: null, deficiencies: 0 },
-  { id: "RI-08", propertyId: "terrace", type: "HQS", authority: "Marin County Housing Authority", date: "2025-12-01", result: "Pass", score: null, nextDue: "2026-12-01", units: 24, deficiencies: 1 },
-  { id: "RI-09", propertyId: "terrace", type: "REAC/NSPIRE", authority: "HUD", date: "2025-03-15", result: "Pass", score: 92, nextDue: "2027-03-15", units: 24, deficiencies: 1 },
-  { id: "RI-10", propertyId: "terrace", type: "Fire & Safety", authority: "Bolinas Fire Dept.", date: "2025-07-10", result: "Pass", score: null, nextDue: "2026-07-10", units: null, deficiencies: 0 },
-];
-
+const MOCK_PROPERTIES = [];
+const MOCK_PROPERTY = {};
+const MOCK_UNIT = {};
+const MOCK_MAINTENANCE = [];
+const MOCK_PAYMENTS = [];
+const MOCK_RESIDENTS = [];
+const MOCK_THREADS = [];
+const MOCK_MESSAGES = [];
+const MOCK_COMM_TEMPLATES = [];
+const MOCK_RECERT = { status: 'not-started', deadline: '', anniversaryDate: '', stepsCompleted: {}, householdMembers: [], income: { total: 0 }, documents: [] };
+const MOCK_REG_INSPECTIONS = [];
 const MOCK_UNIT_INSPECTION_CATEGORIES = [
-  { id: "cat-1", name: "Move-In", description: "Document unit condition at lease start", frequency: "At move-in", scoring: "pass-fail", active: true, checklist: ["Walls & paint condition", "Flooring condition", "Windows & screens", "Doors & locks", "Kitchen appliances", "Bathroom fixtures", "Plumbing (run all faucets)", "Electrical (test all outlets)", "Smoke/CO detectors", "HVAC operation", "Cleanliness", "Exterior/patio"] },
-  { id: "cat-2", name: "Move-Out", description: "Assess unit condition at lease end", frequency: "At move-out", scoring: "pass-fail", active: true, checklist: ["Walls & paint condition", "Flooring condition", "Windows & screens", "Doors & locks", "Kitchen appliances", "Bathroom fixtures", "Plumbing", "Electrical", "Smoke/CO detectors", "HVAC", "Cleanliness", "Damage beyond normal wear"] },
-  { id: "cat-3", name: "Annual / Routine", description: "Proactive check on unit condition and safety", frequency: "Annually", scoring: "pass-fail", active: true, checklist: ["Smoke detectors (test & battery)", "CO detectors", "Fire extinguisher", "HVAC filter", "Water heater", "Plumbing leaks", "Window locks", "Door locks & deadbolts", "Electrical panels", "Pest evidence", "Mold/moisture", "General condition"] },
-  { id: "cat-4", name: "Pre-HQS / Pre-REAC", description: "Internal walkthrough before official inspection", frequency: "Before scheduled inspection", scoring: "scored", active: true, checklist: ["Smoke detectors", "Electrical hazards", "Plumbing leaks/drips", "HVAC operational", "Hot water (120\u00B0F max)", "Windows open/close/lock", "Doors secure", "Handrails secure", "Trip hazards", "Paint condition (lead-safe)", "Kitchen ventilation", "Bathroom ventilation", "GFCIs functional", "Pest evidence", "Egress paths clear"] },
-  { id: "cat-5", name: "Housekeeping", description: "Sanitation and cleanliness per lease terms", frequency: "As needed", scoring: "pass-fail", active: true, checklist: ["Kitchen cleanliness", "Bathroom cleanliness", "Trash/debris", "Pest attractants", "Clutter/fire hazards", "Odors"] },
-  { id: "cat-6", name: "Safety / Smoke Detector", description: "Verify life safety devices", frequency: "Semi-annual", scoring: "pass-fail", active: true, checklist: ["Smoke detector - bedroom 1", "Smoke detector - bedroom 2", "Smoke detector - hallway", "Smoke detector - kitchen", "CO detector", "Fire extinguisher present", "Fire extinguisher charge"] },
-  { id: "cat-7", name: "Pest", description: "Check for pest activity", frequency: "Quarterly", scoring: "pass-fail", active: true, checklist: ["Roach evidence", "Bed bug evidence", "Rodent evidence", "Ant activity", "Entry points sealed", "Moisture issues"] },
-  { id: "cat-8", name: "Seasonal / Preventive", description: "HVAC, weatherization, plumbing", frequency: "Seasonal", scoring: "pass-fail", active: true, checklist: ["HVAC filter replaced", "HVAC operation test", "Weather stripping", "Caulking condition", "Pipe insulation", "Gutter/drainage"] },
+  { id: 'cat-1', name: 'Move-In', description: 'Document unit condition at lease start', frequency: 'At move-in', scoring: 'pass-fail', active: true, checklist: ['Walls & paint condition', 'Flooring condition', 'Windows & screens', 'Doors & locks', 'Kitchen appliances', 'Bathroom fixtures', 'Plumbing', 'Electrical', 'Smoke/CO detectors', 'HVAC operation', 'Cleanliness', 'Exterior/patio'] },
+  { id: 'cat-2', name: 'Move-Out', description: 'Assess unit condition at lease end', frequency: 'At move-out', scoring: 'pass-fail', active: true, checklist: ['Walls & paint condition', 'Flooring condition', 'Windows & screens', 'Doors & locks', 'Kitchen appliances', 'Bathroom fixtures', 'Plumbing', 'Electrical', 'Smoke/CO detectors', 'HVAC', 'Cleanliness', 'Damage beyond normal wear'] },
+  { id: 'cat-3', name: 'Annual / Routine', description: 'Proactive check on unit condition and safety', frequency: 'Annually', scoring: 'pass-fail', active: true, checklist: ['Smoke detectors', 'CO detectors', 'Fire extinguisher', 'HVAC filter', 'Water heater', 'Plumbing leaks', 'Window locks', 'Door locks', 'Electrical panels', 'Pest evidence', 'Mold/moisture', 'General condition'] },
+  { id: 'cat-4', name: 'Pre-HQS / Pre-REAC', description: 'Internal walkthrough before official inspection', frequency: 'Before scheduled inspection', scoring: 'scored', active: true, checklist: ['Smoke detectors', 'Electrical hazards', 'Plumbing leaks', 'HVAC operational', 'Hot water', 'Windows', 'Doors', 'Handrails', 'Trip hazards', 'Paint condition', 'Kitchen ventilation', 'Bathroom ventilation', 'GFCIs', 'Pest evidence', 'Egress paths'] },
+  { id: 'cat-5', name: 'Housekeeping', description: 'Sanitation and cleanliness per lease terms', frequency: 'As needed', scoring: 'pass-fail', active: true, checklist: ['Kitchen cleanliness', 'Bathroom cleanliness', 'Trash/debris', 'Pest attractants', 'Clutter/fire hazards', 'Odors'] },
+  { id: 'cat-6', name: 'Safety / Smoke Detector', description: 'Verify life safety devices', frequency: 'Semi-annual', scoring: 'pass-fail', active: true, checklist: ['Smoke detectors', 'CO detector', 'Fire extinguisher present', 'Fire extinguisher charge'] },
+  { id: 'cat-7', name: 'Pest', description: 'Check for pest activity', frequency: 'Quarterly', scoring: 'pass-fail', active: true, checklist: ['Roach evidence', 'Bed bug evidence', 'Rodent evidence', 'Ant activity', 'Entry points sealed', 'Moisture issues'] },
+  { id: 'cat-8', name: 'Seasonal / Preventive', description: 'HVAC, weatherization, plumbing', frequency: 'Seasonal', scoring: 'pass-fail', active: true, checklist: ['HVAC filter', 'HVAC operation', 'Weather stripping', 'Caulking', 'Pipe insulation', 'Gutter/drainage'] },
 ];
-
-const MOCK_UNIT_INSPECTIONS = [
-  { id: "UI-101", propertyId: "wharf", unit: "B-204", category: "Annual / Routine", date: "2025-12-05", inspector: "Mike R.", result: "Pass", score: null, failedItems: [], notes: "All items in good condition." },
-  { id: "UI-102", propertyId: "wharf", unit: "B-204", category: "Safety / Smoke Detector", date: "2025-10-15", inspector: "Mike R.", result: "Fail", score: null, failedItems: ["CO detector - battery dead", "Fire extinguisher charge - low"], notes: "Replaced CO battery. Fire extinguisher scheduled for replacement." },
-  { id: "UI-103", propertyId: "wharf", unit: "A-108", category: "Pre-HQS / Pre-REAC", date: "2025-11-01", inspector: "Mike R.", result: "Pass", score: "14/15", failedItems: ["Paint condition (lead-safe) - peeling in bathroom"], notes: "Minor paint touch-up needed before HQS." },
-  { id: "UI-104", propertyId: "wharf", unit: "C-310", category: "Pest", date: "2026-01-20", inspector: "Mike R.", result: "Fail", score: null, failedItems: ["Roach evidence - kitchen cabinets", "Entry points sealed - gap under sink"], notes: "Vendor treatment scheduled." },
-  { id: "UI-105", propertyId: "wharf", unit: "B-204", category: "Seasonal / Preventive", date: "2026-03-01", inspector: "Mike R.", result: "Pass", score: null, failedItems: [], notes: "HVAC filter replaced. All weatherization intact." },
-  { id: "UI-106", propertyId: "mesa", unit: "M-101", category: "Annual / Routine", date: "2025-11-20", inspector: "Mike R.", result: "Pass", score: null, failedItems: [], notes: "Unit in good condition." },
-  { id: "UI-107", propertyId: "mesa", unit: "M-205", category: "Safety / Smoke Detector", date: "2026-01-10", inspector: "Mike R.", result: "Pass", score: null, failedItems: [], notes: "All detectors functional." },
-  { id: "UI-108", propertyId: "terrace", unit: "T-101", category: "Annual / Routine", date: "2025-12-15", inspector: "Mike R.", result: "Pass", score: null, failedItems: [], notes: "Unit in excellent condition." },
-  { id: "UI-109", propertyId: "terrace", unit: "T-202", category: "Seasonal / Preventive", date: "2026-02-10", inspector: "Mike R.", result: "Fail", score: null, failedItems: ["HVAC filter - heavily clogged"], notes: "Filter replaced on site." },
-];
-
-const MOCK_VENDORS = [
-  { id: "V-01", company: "Bay Plumbing Co.", contact: "Tom Hernandez", phone: "(415) 555-0142", email: "tom@bayplumbing.com", trade: "Plumbing", license: "CA-PLB-892341", licenseExp: "2027-03-15", insured: true, coiExp: "2026-12-01", active: true, notes: "Preferred for emergency calls. 24/7 availability." },
-  { id: "V-02", company: "Pacific HVAC Services", contact: "Janet Liu", phone: "(415) 555-0287", email: "janet@pachvac.com", trade: "HVAC", license: "CA-HVAC-445120", licenseExp: "2026-08-30", insured: true, coiExp: "2026-09-15", active: true, notes: "Handles all Carrier warranty work." },
-  { id: "V-03", company: "Marin Pest Solutions", contact: "Dave Kowalski", phone: "(415) 555-0391", email: "dave@marinpest.com", trade: "Pest Control", license: "CA-PCO-12890", licenseExp: "2027-01-10", insured: true, coiExp: "2027-01-10", active: true, notes: "Quarterly treatment contract. Bed bug specialist." },
-  { id: "V-04", company: "Coastal Electric", contact: "Ray Nguyen", phone: "(415) 555-0544", email: "ray@coastalelectric.com", trade: "Electrical", license: "CA-ELEC-667234", licenseExp: "2026-05-20", insured: true, coiExp: "2026-06-01", active: true, notes: "" },
-  { id: "V-05", company: "Summit Roofing", contact: "Carlos Mendez", phone: "(415) 555-0678", email: "carlos@summitroofing.com", trade: "Roofing", license: "CA-ROF-334521", licenseExp: "2025-11-30", insured: false, coiExp: "2025-11-30", active: false, notes: "License expired. DO NOT USE until renewed." },
-];
-
-const MOCK_COMM_PREFS = {
-  preferredChannel: "sms",
-  phone: "(415) 555-0101",
-  email: "maria.santos@email.com",
-  quietHoursStart: "21:00",
-  quietHoursEnd: "08:00",
-  language: "en",
-};
-
-const MOCK_EMERGENCY_CONTACTS = {
-  "maria-santos": [
-    { id: "EC-1", name: "Elena Santos", relationship: "Mother", phone: "(415) 555-0901", email: "elena.s@email.com" },
-    { id: "EC-2", name: "Luis Santos", relationship: "Spouse", phone: "(415) 555-0902", email: "" },
-  ],
-  "james-whitfield": [
-    { id: "EC-3", name: "Carol Whitfield", relationship: "Sister", phone: "(415) 555-0903", email: "carol.w@email.com" },
-  ],
-  "linda-chen": [
-    { id: "EC-4", name: "David Chen", relationship: "Brother", phone: "(415) 555-0904", email: "d.chen@email.com" },
-  ],
-  "robert-garcia": [
-    { id: "EC-5", name: "Ana Garcia", relationship: "Wife", phone: "(415) 555-0905", email: "" },
-  ],
-  "sarah-johnson": [
-    { id: "EC-6", name: "Mark Johnson", relationship: "Father", phone: "(415) 555-0906", email: "mark.j@email.com" },
-  ],
-};
-
-const MOCK_ADMIN_NOTES = {
-  "maria-santos": [
-    { id: "AN-1", date: "2026-03-10", by: "Sarah Chen", text: "Discussed lease renewal timeline. Family happy with unit." },
-  ],
-  "james-whitfield": [
-    { id: "AN-2", date: "2026-03-14", by: "Sarah Chen", text: "Requested utility allowance adjustment — forwarded to PHA." },
-  ],
-};
-
-const MOCK_RESIDENTS_EXTENDED = {
-  "maria-santos": { propertyId: "wharf", unit: "B-204", leaseStart: "2023-06-01", leaseEnd: "2024-05-31", rentAmount: 1150, tenantPortion: 485, hapPayment: 665, bedrooms: 2, moveIn: "2023-06-01", status: "active" },
-  "james-whitfield": { propertyId: "wharf", unit: "A-108", leaseStart: "2022-09-01", leaseEnd: "2025-08-31", rentAmount: 950, tenantPortion: 320, hapPayment: 630, bedrooms: 1, moveIn: "2022-09-01", status: "active" },
-  "linda-chen": { propertyId: "wharf", unit: "C-310", leaseStart: "2024-01-15", leaseEnd: "2025-01-14", rentAmount: 1350, tenantPortion: 550, hapPayment: 800, bedrooms: 3, moveIn: "2024-01-15", status: "active" },
-  "robert-garcia": { propertyId: "wharf", unit: "A-102", leaseStart: "2021-03-01", leaseEnd: "2026-02-28", rentAmount: 950, tenantPortion: 295, hapPayment: 655, bedrooms: 1, moveIn: "2021-03-01", status: "active" },
-  "sarah-johnson": { propertyId: "wharf", unit: "B-108", leaseStart: "2024-07-01", leaseEnd: "2025-06-30", rentAmount: 1150, tenantPortion: 410, hapPayment: 740, bedrooms: 2, moveIn: "2024-07-01", status: "active" },
-  "anna-kowalski": { propertyId: "mesa", unit: "M-101", leaseStart: "2023-03-01", leaseEnd: "2025-02-28", rentAmount: 1250, tenantPortion: 520, hapPayment: 730, bedrooms: 2, moveIn: "2023-03-01", status: "active" },
-  "carlos-rivera": { propertyId: "mesa", unit: "M-205", leaseStart: "2024-06-01", leaseEnd: "2025-05-31", rentAmount: 1450, tenantPortion: 600, hapPayment: 850, bedrooms: 3, moveIn: "2024-06-01", status: "active" },
-  "diana-foster": { propertyId: "mesa", unit: "M-308", leaseStart: "2022-11-01", leaseEnd: "2025-10-31", rentAmount: 1400, tenantPortion: 580, hapPayment: 820, bedrooms: 3, moveIn: "2022-11-01", status: "active" },
-  "helen-park": { propertyId: "terrace", unit: "T-101", leaseStart: "2023-08-01", leaseEnd: "2025-07-31", rentAmount: 850, tenantPortion: 280, hapPayment: 570, bedrooms: 1, moveIn: "2023-08-01", status: "active" },
-  "george-williams": { propertyId: "terrace", unit: "T-108", leaseStart: "2024-02-01", leaseEnd: "2026-01-31", rentAmount: 850, tenantPortion: 310, hapPayment: 540, bedrooms: 1, moveIn: "2024-02-01", status: "active" },
-  "betty-huang": { propertyId: "terrace", unit: "T-202", leaseStart: "2023-12-01", leaseEnd: "2025-11-30", rentAmount: 1050, tenantPortion: 400, hapPayment: 650, bedrooms: 2, moveIn: "2023-12-01", status: "active" },
-};
-
-const MOCK_LEASE_DOCS = {
-  "maria-santos": [
-    { id: "LD-1", name: "Lease_Agreement_2023.pdf", type: "lease", size: 512000, uploadedAt: "2023-06-01T10:00:00Z", uploadedBy: "Admin" },
-    { id: "LD-2", name: "Lease_Renewal_2024.pdf", type: "renewal", size: 245000, uploadedAt: "2024-05-15T14:00:00Z", uploadedBy: "Admin" },
-    { id: "LD-3", name: "HQS_Inspection_Nov2025.pdf", type: "inspection", size: 180000, uploadedAt: "2025-11-14T16:00:00Z", uploadedBy: "Admin" },
-  ],
-  "james-whitfield": [
-    { id: "LD-4", name: "Lease_Agreement_2022.pdf", type: "lease", size: 498000, uploadedAt: "2022-09-01T10:00:00Z", uploadedBy: "Admin" },
-    { id: "LD-5", name: "HUD_50058_2025.pdf", type: "hud_form", size: 320000, uploadedAt: "2025-06-20T11:00:00Z", uploadedBy: "Admin" },
-  ],
-  "linda-chen": [
-    { id: "LD-6", name: "Lease_Agreement_2024.pdf", type: "lease", size: 510000, uploadedAt: "2024-01-15T10:00:00Z", uploadedBy: "Admin" },
-  ],
-  "robert-garcia": [
-    { id: "LD-7", name: "Lease_Agreement_2021.pdf", type: "lease", size: 475000, uploadedAt: "2021-03-01T10:00:00Z", uploadedBy: "Admin" },
-    { id: "LD-8", name: "Utility_Allowance_2025.pdf", type: "utility", size: 95000, uploadedAt: "2025-01-15T10:00:00Z", uploadedBy: "Admin" },
-  ],
-  "sarah-johnson": [
-    { id: "LD-9", name: "Lease_Agreement_2024.pdf", type: "lease", size: 530000, uploadedAt: "2024-07-01T10:00:00Z", uploadedBy: "Admin" },
-  ],
-};
-
-const LEASE_DOC_TYPES = {
-  lease: "Lease Agreement", renewal: "Renewal", inspection: "Inspection Report",
-  hud_form: "HUD Form", addendum: "Addendum", notice: "Notice",
-  compliance: "Compliance", financial: "Financial Report",
-  utility: "Utility Allowance", other: "Other",
-};
-
-const MOCK_COMPLIANCE_DOCS = [
-  { propertyId: "wharf", residentId: "maria-santos", unit: "B-204", docType: "lease", status: "current", expires: "2024-05-31", lastUploaded: "2024-05-15" },
-  { propertyId: "wharf", residentId: "maria-santos", unit: "B-204", docType: "inspection", status: "current", expires: null, lastUploaded: "2025-11-14" },
-  { propertyId: "wharf", residentId: "maria-santos", unit: "B-204", docType: "hud_form", status: "missing", expires: null, lastUploaded: null },
-  { propertyId: "wharf", residentId: "james-whitfield", unit: "A-108", docType: "lease", status: "current", expires: "2025-08-31", lastUploaded: "2022-09-01" },
-  { propertyId: "wharf", residentId: "james-whitfield", unit: "A-108", docType: "inspection", status: "current", expires: null, lastUploaded: "2025-11-01" },
-  { propertyId: "wharf", residentId: "james-whitfield", unit: "A-108", docType: "hud_form", status: "current", expires: null, lastUploaded: "2025-06-20" },
-  { propertyId: "wharf", residentId: "linda-chen", unit: "C-310", docType: "lease", status: "expired", expires: "2025-01-14", lastUploaded: "2024-01-15" },
-  { propertyId: "wharf", residentId: "linda-chen", unit: "C-310", docType: "inspection", status: "missing", expires: null, lastUploaded: null },
-  { propertyId: "wharf", residentId: "linda-chen", unit: "C-310", docType: "hud_form", status: "missing", expires: null, lastUploaded: null },
-  { propertyId: "wharf", residentId: "robert-garcia", unit: "A-102", docType: "lease", status: "current", expires: "2026-02-28", lastUploaded: "2021-03-01" },
-  { propertyId: "wharf", residentId: "robert-garcia", unit: "A-102", docType: "inspection", status: "current", expires: null, lastUploaded: "2025-10-15" },
-  { propertyId: "wharf", residentId: "robert-garcia", unit: "A-102", docType: "hud_form", status: "current", expires: null, lastUploaded: "2025-04-15" },
-  { propertyId: "wharf", residentId: "sarah-johnson", unit: "B-108", docType: "lease", status: "expired", expires: "2025-06-30", lastUploaded: "2024-07-01" },
-  { propertyId: "wharf", residentId: "sarah-johnson", unit: "B-108", docType: "inspection", status: "missing", expires: null, lastUploaded: null },
-  { propertyId: "wharf", residentId: "sarah-johnson", unit: "B-108", docType: "hud_form", status: "missing", expires: null, lastUploaded: null },
-  { propertyId: "mesa", residentId: "anna-kowalski", unit: "M-101", docType: "lease", status: "current", expires: "2025-02-28", lastUploaded: "2023-03-01" },
-  { propertyId: "mesa", residentId: "anna-kowalski", unit: "M-101", docType: "hud_form", status: "current", expires: null, lastUploaded: "2025-01-10" },
-  { propertyId: "mesa", residentId: "carlos-rivera", unit: "M-205", docType: "lease", status: "current", expires: "2025-05-31", lastUploaded: "2024-06-01" },
-  { propertyId: "mesa", residentId: "diana-foster", unit: "M-308", docType: "lease", status: "current", expires: "2025-10-31", lastUploaded: "2022-11-01" },
-  { propertyId: "mesa", residentId: "diana-foster", unit: "M-308", docType: "inspection", status: "missing", expires: null, lastUploaded: null },
-  { propertyId: "terrace", residentId: "helen-park", unit: "T-101", docType: "lease", status: "current", expires: "2025-07-31", lastUploaded: "2023-08-01" },
-  { propertyId: "terrace", residentId: "helen-park", unit: "T-101", docType: "hud_form", status: "current", expires: null, lastUploaded: "2025-02-15" },
-  { propertyId: "terrace", residentId: "george-williams", unit: "T-108", docType: "lease", status: "current", expires: "2026-01-31", lastUploaded: "2024-02-01" },
-  { propertyId: "terrace", residentId: "betty-huang", unit: "T-202", docType: "lease", status: "current", expires: "2025-11-30", lastUploaded: "2023-12-01" },
-  { propertyId: "terrace", residentId: "betty-huang", unit: "T-202", docType: "inspection", status: "current", expires: null, lastUploaded: "2026-02-10" },
-];
-
-const MOCK_ONBOARDING = [
-  { id: "OB-1", propertyId: "wharf", residentId: "sarah-johnson", type: "move-in", status: "in-progress", startDate: "2026-02-15", targetDate: "2026-03-01",
-    steps: { appReview: true, bgCheck: true, leaseSigning: true, keyHandoff: false, unitWalkthrough: false, utilitySetup: false, welcomePacket: false } },
-  { id: "OB-2", propertyId: "wharf", residentId: "linda-chen", type: "move-in", status: "completed", startDate: "2024-01-05", targetDate: "2024-01-15",
-    steps: { appReview: true, bgCheck: true, leaseSigning: true, keyHandoff: true, unitWalkthrough: true, utilitySetup: true, welcomePacket: true } },
-  { id: "OB-3", propertyId: "wharf", residentId: "robert-garcia", type: "move-out", status: "in-progress", startDate: "2026-02-01", targetDate: "2026-02-28",
-    steps: { noticeReceived: true, inspectionScheduled: true, finalWalkthrough: false, depositReview: false, keyReturn: false, unitTurnover: false } },
-  { id: "OB-4", propertyId: "wharf", residentId: "james-whitfield", type: "move-out", status: "not-started", startDate: "2026-08-01", targetDate: "2026-08-31",
-    steps: { noticeReceived: false, inspectionScheduled: false, finalWalkthrough: false, depositReview: false, keyReturn: false, unitTurnover: false } },
-  { id: "OB-5", propertyId: "mesa", residentId: "carlos-rivera", type: "move-in", status: "in-progress", startDate: "2026-03-01", targetDate: "2026-03-15",
-    steps: { appReview: true, bgCheck: true, leaseSigning: false, keyHandoff: false, unitWalkthrough: false, utilitySetup: false, welcomePacket: false } },
-  { id: "OB-6", propertyId: "terrace", residentId: "george-williams", type: "move-in", status: "completed", startDate: "2024-01-15", targetDate: "2024-02-01",
-    steps: { appReview: true, bgCheck: true, leaseSigning: true, keyHandoff: true, unitWalkthrough: true, utilitySetup: true, welcomePacket: true } },
-];
-
-const ONBOARDING_STEP_LABELS = {
-  appReview: "Application Review", bgCheck: "Background Check", leaseSigning: "Lease Signing",
-  keyHandoff: "Key Handoff", unitWalkthrough: "Unit Walkthrough", utilitySetup: "Utility Setup", welcomePacket: "Welcome Packet",
-  noticeReceived: "Notice Received", inspectionScheduled: "Inspection Scheduled", finalWalkthrough: "Final Walkthrough",
-  depositReview: "Security Deposit Review", keyReturn: "Key Return", unitTurnover: "Unit Turnover",
-};
-
-const MOCK_RENT_LEDGER = [
-  { propertyId: "wharf", residentId: "maria-santos", unit: "B-204", name: "Maria Santos", rentDue: 1150, tenantPaid: 485, hapReceived: 665, balance: 0, status: "paid", month: "2026-03" },
-  { propertyId: "wharf", residentId: "james-whitfield", unit: "A-108", name: "James Whitfield", rentDue: 950, tenantPaid: 320, hapReceived: 630, balance: 0, status: "paid", month: "2026-03" },
-  { propertyId: "wharf", residentId: "linda-chen", unit: "C-310", name: "Linda Chen", rentDue: 1350, tenantPaid: 0, hapReceived: 800, balance: 550, status: "partial", month: "2026-03" },
-  { propertyId: "wharf", residentId: "robert-garcia", unit: "A-102", name: "Robert Garcia", rentDue: 950, tenantPaid: 0, hapReceived: 655, balance: 295, status: "outstanding", month: "2026-03" },
-  { propertyId: "wharf", residentId: "sarah-johnson", unit: "B-108", name: "Sarah Johnson", rentDue: 1150, tenantPaid: 410, hapReceived: 740, balance: 0, status: "paid", month: "2026-03" },
-  { propertyId: "mesa", residentId: "anna-kowalski", unit: "M-101", name: "Anna Kowalski", rentDue: 1250, tenantPaid: 520, hapReceived: 730, balance: 0, status: "paid", month: "2026-03" },
-  { propertyId: "mesa", residentId: "carlos-rivera", unit: "M-205", name: "Carlos Rivera", rentDue: 1450, tenantPaid: 600, hapReceived: 850, balance: 0, status: "paid", month: "2026-03" },
-  { propertyId: "mesa", residentId: "diana-foster", unit: "M-308", name: "Diana Foster", rentDue: 1400, tenantPaid: 0, hapReceived: 820, balance: 580, status: "partial", month: "2026-03" },
-  { propertyId: "terrace", residentId: "helen-park", unit: "T-101", name: "Helen Park", rentDue: 850, tenantPaid: 280, hapReceived: 570, balance: 0, status: "paid", month: "2026-03" },
-  { propertyId: "terrace", residentId: "george-williams", unit: "T-108", name: "George Williams", rentDue: 850, tenantPaid: 310, hapReceived: 540, balance: 0, status: "paid", month: "2026-03" },
-  { propertyId: "terrace", residentId: "betty-huang", unit: "T-202", name: "Betty Huang", rentDue: 1050, tenantPaid: 400, hapReceived: 650, balance: 0, status: "paid", month: "2026-03" },
-];
-
-const MOCK_MONTHLY_REVENUE = [
-  { month: "2025-10", propertyId: "wharf", rentRoll: 5350, collected: 5150 },
-  { month: "2025-11", propertyId: "wharf", rentRoll: 5350, collected: 5350 },
-  { month: "2025-12", propertyId: "wharf", rentRoll: 5550, collected: 5550 },
-  { month: "2026-01", propertyId: "wharf", rentRoll: 5550, collected: 5550 },
-  { month: "2026-02", propertyId: "wharf", rentRoll: 5550, collected: 5550 },
-  { month: "2026-03", propertyId: "wharf", rentRoll: 5550, collected: 4705 },
-  { month: "2025-10", propertyId: "mesa", rentRoll: 4100, collected: 4100 },
-  { month: "2025-11", propertyId: "mesa", rentRoll: 4100, collected: 3920 },
-  { month: "2025-12", propertyId: "mesa", rentRoll: 4100, collected: 4100 },
-  { month: "2026-01", propertyId: "mesa", rentRoll: 4100, collected: 4100 },
-  { month: "2026-02", propertyId: "mesa", rentRoll: 4100, collected: 4100 },
-  { month: "2026-03", propertyId: "mesa", rentRoll: 4100, collected: 3520 },
-  { month: "2025-10", propertyId: "terrace", rentRoll: 2750, collected: 2750 },
-  { month: "2025-11", propertyId: "terrace", rentRoll: 2750, collected: 2750 },
-  { month: "2025-12", propertyId: "terrace", rentRoll: 2750, collected: 2750 },
-  { month: "2026-01", propertyId: "terrace", rentRoll: 2750, collected: 2750 },
-  { month: "2026-02", propertyId: "terrace", rentRoll: 2750, collected: 2750 },
-  { month: "2026-03", propertyId: "terrace", rentRoll: 2750, collected: 2750 },
-];
+const MOCK_UNIT_INSPECTIONS = [];
+const MOCK_VENDORS = [];
+const MOCK_COMM_PREFS = { preferredChannel: 'email', phone: '', email: '', quietHoursStart: '21:00', quietHoursEnd: '08:00', language: 'en' };
+const MOCK_EMERGENCY_CONTACTS = {};
+const MOCK_ADMIN_NOTES = {};
+const MOCK_RESIDENTS_EXTENDED = {};
+const MOCK_LEASE_DOCS = {};
+const MOCK_COMPLIANCE_DOCS = [];
+const MOCK_ONBOARDING = [];
+const MOCK_RENT_LEDGER = [];
+const MOCK_MONTHLY_REVENUE = [];
 
 const DEFAULT_SETTINGS = {
   property: { manager: "Sarah Chen", managerPhone: "(415) 555-0100", managerEmail: "sarah@bclt.org", officeHours: "Mon-Fri 9am-5pm" },
@@ -949,7 +630,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc }) 
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Active Maintenance</div>
-        {maintenance.filter(m => m.unit === "B-204" && m.status !== "completed").map(m => (
+        {maintenance.filter(m => m.unit === (rc?.unit || "") && m.status !== "completed").map(m => (
           <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}` }}>
             <div>
               <span style={{ fontWeight: 600, fontSize: 14 }}>{m.category}</span>
@@ -1126,13 +807,13 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
   const [showForm, setShowForm] = useState(false);
   const [success, showSuccess] = useSuccess();
   const [formData, setFormData] = useState({ category: "Plumbing", urgency: "routine", description: "", permission: "Yes, enter anytime" });
-  const myRequests = maintenance.filter(m => m.unit === (rc?.unit || "B-204"));
+  const myRequests = maintenance.filter(m => m.unit === (rc?.unit || ""));
 
   const handleSubmit = () => {
     if (!formData.description.trim()) return;
     const newReq = {
       id: `MR-${2406 + maintenance.length}`,
-      unit: rc?.unit || "B-204",
+      unit: rc?.unit || "",
       category: formData.category,
       priority: formData.urgency,
       status: "submitted",
@@ -1877,7 +1558,7 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
 // --- UNIT DETAILS (Resident) ---
 const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
   const u = MOCK_UNIT;
-  const rid = rc?.id || "maria-santos";
+  const rid = rc?.id || "";
   const residentDocs = leaseDocs[rid] || [];
 
   const handleUpload = (doc) => {
@@ -1944,7 +1625,7 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
   const [editingEC, setEditingEC] = useState(null);
   const [ecForm, setEcForm] = useState({ name: "", relationship: "", phone: "", email: "" });
   const [success, showSuccess] = useSuccess();
-  const myContacts = emergencyContacts[rc?.id || "maria-santos"] || [];
+  const myContacts = emergencyContacts[rc?.id || ""] || [];
 
   const saveContact = () => {
     setEditingContact(false);
@@ -1967,19 +1648,19 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
     } else {
       updated = myContacts.map(ec => ec.id === editingEC ? { ...ec, ...ecForm } : ec);
     }
-    onUpdateEmergencyContacts(rc?.id || "maria-santos", updated);
+    onUpdateEmergencyContacts(rc?.id || "", updated);
     setEditingEC(null);
     showSuccess(editingEC === "new" ? "Emergency contact added!" : "Emergency contact updated!");
   };
   const deleteEC = (id) => {
-    onUpdateEmergencyContacts(rc?.id || "maria-santos", myContacts.filter(ec => ec.id !== id));
+    onUpdateEmergencyContacts(rc?.id || "", myContacts.filter(ec => ec.id !== id));
     showSuccess("Emergency contact removed.");
   };
 
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>My Profile</h1>
-      <p style={s.sectionSub}>Maria Santos — Unit B-204</p>
+      <p style={s.sectionSub}>{rc?.name || "Resident"} — Unit {rc?.unit || "—"}</p>
       <SuccessMessage message={success} />
       <TabBar tabs={tabs} active={tab} onChange={setTab} mobile={mobile} />
 
@@ -1999,8 +1680,8 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
             </div>
           ) : (
             <div>
-              <DetailRow label="Name" value="Maria Santos" />
-              <DetailRow label="Unit" value="B-204" />
+              <DetailRow label="Name" value={rc?.name || "—"} />
+              <DetailRow label="Unit" value={rc?.unit || "—"} />
               <DetailRow label="Phone" value={contactForm.phone} />
               <DetailRow label="Email" value={contactForm.email} />
               <DetailRow label="Preferred Channel" value={commPrefs.preferredChannel.toUpperCase()} accent={T.accent} />
@@ -3444,9 +3125,9 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
   const tabs = isResident ? null : isAdmin ? ["All Inspections", "Unit History", "Categories", "Schedule"] : ["Unit History", "Categories", "My Assigned"];
   const [tab, setTab] = useState(isResident ? null : tabs[0]);
   const [success, showSuccess] = useSuccess();
-  const [schedForm, setSchedForm] = useState({ category: "", unit: rc?.unit || "B-204", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
+  const [schedForm, setSchedForm] = useState({ category: "", unit: rc?.unit || "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
 
-  const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "B-204")) : unitInspections;
+  const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "")) : unitInspections;
   // Derive property filter from unitInspections — if all same property, filter reg inspections too
   const propIds = [...new Set(unitInspections.map(i => i.propertyId).filter(Boolean))];
   const regInsp = propIds.length === 1 ? LIVE_REG_INSPECTIONS.filter(i => i.propertyId === propIds[0]) : LIVE_REG_INSPECTIONS;
@@ -5655,7 +5336,7 @@ export default function App() {
   };
   const addInspectionN = (insp) => {
     addInspection(insp);
-    pushNotif({ id: `N-${Date.now()}`, type: "inspection", icon: "🔍", message: `Inspection scheduled: ${insp.category} — ${insp.unit}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance", ...(insp.unit === "B-204" ? ["resident"] : [])] });
+    pushNotif({ id: `N-${Date.now()}`, type: "inspection", icon: "🔍", message: `Inspection scheduled: ${insp.category} — ${insp.unit}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance", ...(insp.unit === (rc?.unit || "") ? ["resident"] : [])] });
   };
 
   const nav = NAV[role] || [];
