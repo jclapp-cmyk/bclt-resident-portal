@@ -1560,7 +1560,7 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
 // --- UNIT DETAILS (Resident) ---
 const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
   const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
-  const u = { number: rc?.unit || "—", bedrooms: ext.bedrooms || 0, bathrooms: 1, sqft: 0, floorPlan: `${ext.bedrooms || 0}BR`, leaseStart: ext.leaseStart || "—", leaseEnd: ext.leaseEnd || "—", rentAmount: ext.rentAmount || 0, tenantPortion: ext.tenantPortion || 0, hapPayment: ext.hapPayment || 0, utilityResponsibility: {} };
+  const u = { number: rc?.unit || "—", bedrooms: ext.bedrooms || 0, bathrooms: 1, sqft: 0, floorPlan: `${ext.bedrooms || 0}BR`, leaseStart: ext.leaseStart || "—", leaseEnd: ext.leaseEnd || "—", rentAmount: ext.rentAmount || 0, tenantPortion: ext.tenantPortion || 0, hapPayment: ext.hapPayment || 0, utilityResponsibility: {}, appliances: [], lastInspection: null };
   const rid = rc?.id || "";
   const residentDocs = leaseDocs[rid] || [];
 
@@ -1601,9 +1601,9 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Last Inspection</div>
-        <DetailRow label="Date" value={u.lastInspection.date} />
-        <DetailRow label="Type" value={u.lastInspection.type} />
-        <DetailRow label="Result" value={u.lastInspection.result} accent={u.lastInspection.result === "Pass" ? T.success : T.danger} />
+        <DetailRow label="Date" value={u.lastInspection?.date || "—"} />
+        <DetailRow label="Type" value={u.lastInspection?.type || "—"} />
+        <DetailRow label="Result" value={u.lastInspection?.result || "—"} accent={u.lastInspection?.result === "Pass" ? T.success : T.danger} />
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Property Management</div>
