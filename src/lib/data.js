@@ -250,6 +250,7 @@ export async function updateResident(residentUuid, changes) {
   if (changes.phone !== undefined) mapped.phone = changes.phone;
   if (changes.email !== undefined) mapped.email = changes.email;
   if (changes.preferredChannel !== undefined) mapped.preferred_channel = changes.preferredChannel;
+  if (changes.smsConsent !== undefined) mapped.sms_consent = changes.smsConsent;
   if (changes.mailingStreet !== undefined) mapped.mailing_street = changes.mailingStreet;
   if (changes.mailingCity !== undefined) mapped.mailing_city = changes.mailingCity;
   if (changes.mailingState !== undefined) mapped.mailing_state = changes.mailingState;

@@ -2213,7 +2213,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
               <button style={s.btn(editing ? "ghost" : "primary")} onClick={() => {
                 if (!editing) {
-                  setEditResForm({ name: selectedResident.name, phone: selectedResident.phone || "", email: selectedResident.email || "", mailingStreet: selectedResident.mailingStreet || "", mailingCity: selectedResident.mailingCity || "", mailingState: selectedResident.mailingState || "CA", mailingZip: selectedResident.mailingZip || "", rentAmount: String(ext.rentAmount || ""), tenantPortion: String(ext.tenantPortion || ""), hapPayment: String(ext.hapPayment || ""), leaseStart: ext.leaseStart || "", leaseEnd: ext.leaseEnd || "", leaseType: ext.leaseType || "fixed" });
+                  setEditResForm({ name: selectedResident.name, phone: selectedResident.phone || "", email: selectedResident.email || "", preferredChannel: selectedResident.preferredChannel || "email", smsConsent: selectedResident.smsConsent || false, mailingStreet: selectedResident.mailingStreet || "", mailingCity: selectedResident.mailingCity || "", mailingState: selectedResident.mailingState || "CA", mailingZip: selectedResident.mailingZip || "", rentAmount: String(ext.rentAmount || ""), tenantPortion: String(ext.tenantPortion || ""), hapPayment: String(ext.hapPayment || ""), leaseStart: ext.leaseStart || "", leaseEnd: ext.leaseEnd || "", leaseType: ext.leaseType || "fixed" });
                 }
                 setEditing(!editing);
               }}>{editing ? "Cancel" : "✏️ Edit Resident"}</button>
@@ -2246,6 +2246,15 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Name</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.name || ""} onChange={e => setEditResForm(f => ({ ...f, name: e.target.value }))} /></div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.phone || ""} onChange={e => setEditResForm(f => ({ ...f, phone: e.target.value }))} /></div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.email || ""} onChange={e => setEditResForm(f => ({ ...f, email: e.target.value }))} /></div>
+                  <div style={{ marginBottom: 10 }}><label style={s.label}>Preferred Channel</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={ef.preferredChannel || "email"} onChange={e => setEditResForm(f => ({ ...f, preferredChannel: e.target.value }))}><option value="email">Email</option><option value="sms">SMS</option><option value="both">Email + SMS</option><option value="phone">Phone</option></select></div>
+                  {(ef.preferredChannel === "sms" || ef.preferredChannel === "both") && (
+                    <div style={{ marginBottom: 10, padding: "10px 12px", background: T.infoDim, borderRadius: T.radiusSm, fontSize: 12 }}>
+                      <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
+                        <input type="checkbox" checked={ef.smsConsent || false} onChange={e => setEditResForm(f => ({ ...f, smsConsent: e.target.checked }))} style={{ marginTop: 2 }} />
+                        <span>Resident has opted in to receive SMS messages from BCLT. By checking this box, you confirm the resident has provided express written consent to receive text messages at the phone number on file. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out.</span>
+                      </label>
+                    </div>
+                  )}
                   <div style={{ fontWeight: 600, fontSize: 13, marginTop: 12, marginBottom: 6, color: T.muted }}>Mailing Address</div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Street / PO Box</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.mailingStreet || ""} onChange={e => setEditResForm(f => ({ ...f, mailingStreet: e.target.value }))} placeholder="123 Main St or PO Box 456" /></div>
                   <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
@@ -2271,7 +2280,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   {(ef.leaseType || "fixed") === "fixed" && <div style={{ marginBottom: 10 }}><label style={s.label}>Lease End</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.leaseEnd || ""} onChange={e => setEditResForm(f => ({ ...f, leaseEnd: e.target.value }))} /></div>}
                   <button style={{ ...s.mBtn("primary", mobile), marginTop: 8 }} onClick={async () => {
                     try {
-                      await updateResident(selectedResident._uuid, { name: ef.name, phone: ef.phone, email: ef.email, mailingStreet: ef.mailingStreet, mailingCity: ef.mailingCity, mailingState: ef.mailingState, mailingZip: ef.mailingZip });
+                      await updateResident(selectedResident._uuid, { name: ef.name, phone: ef.phone, email: ef.email, preferredChannel: ef.preferredChannel, smsConsent: ef.smsConsent, mailingStreet: ef.mailingStreet, mailingCity: ef.mailingCity, mailingState: ef.mailingState, mailingZip: ef.mailingZip });
                       const lease = await fetchResidentLease(selectedResident._uuid);
                       if (lease) await updateLease(lease.id, { rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart, endDate: ef.leaseType === "month-to-month" ? null : ef.leaseEnd, leaseType: ef.leaseType || "fixed" });
                       showSuccess("Resident updated!");
@@ -2574,7 +2583,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   setMsgSubject(""); setMsgBody("");
                 } catch (err) { showSuccess("Error: " + err.message); }
               }} style={{ ...s.mBtn("primary", mobile) }}>Send {(msgChannel) === "both" ? "Email + SMS" : (msgChannel) === "sms" ? "SMS" : "Email"}</button>
-              {(msgChannel) !== "email" && !selectedResident.phone && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ No phone number on file for this resident</div>}
+              {msgChannel !== "email" && !selectedResident.phone && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ No phone number on file for this resident</div>}
+              {msgChannel !== "email" && selectedResident.phone && !selectedResident.smsConsent && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ SMS consent not recorded. Go to Edit Resident → Preferred Channel to record opt-in.</div>}
               {(msgChannel) !== "sms" && !selectedResident.email && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ No email on file for this resident</div>}
             </div>
             {resThreads.length === 0 ? <EmptyState icon="💬" text="No communication threads yet" /> : resThreads.sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).map(t => (
