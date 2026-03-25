@@ -16,7 +16,8 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing type or data' });
   }
 
-  const fromEmail = 'BCLT Portal <notifications@bolinaslandtrust.org>';
+  // Use verified Resend domain, or fallback to Resend's shared domain
+  const fromEmail = process.env.FROM_EMAIL || 'BCLT Portal <onboarding@resend.dev>';
 
   let email;
   try {
@@ -32,6 +33,9 @@ export default async function handler(req, res) {
         break;
       case 'inspection_notice':
         email = buildInspectionNoticeEmail(data);
+        break;
+      case 'custom':
+        email = { to: data.to, subject: data.subject || 'BCLT Portal Message', body: data.body || '' };
         break;
       default:
         return res.status(400).json({ error: `Unknown notification type: ${type}` });
