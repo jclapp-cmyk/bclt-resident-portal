@@ -953,6 +953,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate }) => {
 
 // --- RENT & PAYMENTS ---
 const RentPayments = ({ mobile, rc }) => {
+  const _ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
   const [showPay, setShowPay] = useState(false);
   return (
     <div>
@@ -960,9 +961,9 @@ const RentPayments = ({ mobile, rc }) => {
       <p style={s.sectionSub}>View your ledger and make payments</p>
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
         <StatCard label="Current Balance" value="$0.00" accent={T.success} mobile={mobile} />
-        <StatCard label="Monthly Rent" value={`$${MOCK_UNIT.rentAmount}`} accent={T.accent} mobile={mobile} />
-        <StatCard label="Your Portion" value={`$${MOCK_UNIT.tenantPortion}`} accent={T.accent} mobile={mobile} />
-        <StatCard label="HAP Payment" value={`$${MOCK_UNIT.hapPayment}`} accent={T.info} mobile={mobile} />
+        <StatCard label="Monthly Rent" value={`$${_ext.rentAmount || 0}`} accent={T.accent} mobile={mobile} />
+        <StatCard label="Your Portion" value={`$${_ext.tenantPortion || 0}`} accent={T.accent} mobile={mobile} />
+        <StatCard label="HAP Payment" value={`$${_ext.hapPayment || 0}`} accent={T.info} mobile={mobile} />
       </div>
       <button style={{ ...s.btn(), marginBottom: 20 }} onClick={() => setShowPay(!showPay)}>Make a Payment</button>
       {showPay && (
@@ -1557,7 +1558,8 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
 
 // --- UNIT DETAILS (Resident) ---
 const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
-  const u = MOCK_UNIT;
+  const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
+  const u = { number: rc?.unit || "—", bedrooms: ext.bedrooms || 0, bathrooms: 1, sqft: 0, floorPlan: `${ext.bedrooms || 0}BR`, leaseStart: ext.leaseStart || "—", leaseEnd: ext.leaseEnd || "—", rentAmount: ext.rentAmount || 0, tenantPortion: ext.tenantPortion || 0, hapPayment: ext.hapPayment || 0, utilityResponsibility: {} };
   const rid = rc?.id || "";
   const residentDocs = leaseDocs[rid] || [];
 
@@ -4248,9 +4250,8 @@ const buildCalendarEvents = (maintenance, vendors, unitInspections) => {
     add(m.submitted, "maintenance", "🔧", T.warn, `${m.id} Submitted`, `${m.category}: ${m.description}`, "maintenance");
     if (m.projectedComplete) add(m.projectedComplete, "maintenance", "🔧", T.warn, `${m.id} Target Completion`, `${m.category} — ${m.unit}`, "maintenance");
   });
-  // Recertification
-  add(MOCK_RECERT.deadline, "recert", "📋", T.danger, "Recertification Deadline", "Maria Santos — Annual recert due", "recert");
-  Object.entries(LIVE_RESIDENTS_EXTENDED).forEach(([id, r]) => {
+  // Recertification — skip if no data
+  Object.entries(LIVE_RESIDENTS_EXTENDED || {}).forEach(([id, r]) => {
     const res = LIVE_RESIDENTS.find(rr => rr.id === id);
     add(r.leaseEnd, "recert", "📋", T.danger, `Lease Expiry — ${r.unit}`, res ? res.name : id, "recert");
   });
