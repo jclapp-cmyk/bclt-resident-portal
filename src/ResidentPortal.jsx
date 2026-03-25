@@ -2559,12 +2559,17 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 try {
                   if (channel === "email" && selectedResident.email) {
                     await sendNotification("custom", { to: selectedResident.email, subject: msgSubject, body: msgBody });
+                    showSuccess(`Email sent to ${selectedResident.name}`);
                   } else if (channel === "sms" && selectedResident.phone) {
-                    await sendSMS(selectedResident.phone, msgBody);
+                    const result = await sendSMS(selectedResident.phone, msgBody);
+                    if (result?.success) showSuccess(`SMS sent to ${selectedResident.name}`);
+                    else throw new Error(result?.error || "SMS failed");
                   } else if (channel === "both") {
-                    await sendBoth({ email: selectedResident.email, phone: selectedResident.phone, subject: msgSubject, emailBody: msgBody, smsBody: msgBody });
+                    const results = await sendBoth({ email: selectedResident.email, phone: selectedResident.phone, subject: msgSubject, emailBody: msgBody, smsBody: msgBody });
+                    showSuccess(`Email + SMS sent to ${selectedResident.name}`);
+                  } else {
+                    throw new Error(channel === "sms" ? "No phone number on file" : "No email on file");
                   }
-                  showSuccess(`${channel === "both" ? "Email + SMS" : channel === "sms" ? "SMS" : "Email"} sent to ${selectedResident.name}`);
                   setMsgSubject(""); setMsgBody("");
                 } catch (err) { showSuccess("Error: " + err.message); }
               }} style={{ ...s.mBtn("primary", mobile) }}>Send {(editResForm._channel || "email") === "both" ? "Email + SMS" : (editResForm._channel || "email") === "sms" ? "SMS" : "Email"}</button>

@@ -362,12 +362,15 @@ export async function updateThread(code, changes) {
 
 export async function deleteThread(code) {
   // Get the thread UUID from code
-  const { data: thread } = await supabase.from('message_threads').select('id').eq('code', code).single();
+  const { data: thread, error: findErr } = await supabase.from('message_threads').select('id').eq('code', code).single();
+  if (findErr) console.warn('Find thread failed:', findErr);
   if (thread) {
     // Delete messages first (FK constraint)
-    await supabase.from('messages').delete().eq('thread_id', thread.id);
+    const { error: msgErr } = await supabase.from('messages').delete().eq('thread_id', thread.id);
+    if (msgErr) console.warn('Delete messages failed:', msgErr);
     // Delete the thread
-    await supabase.from('message_threads').delete().eq('id', thread.id);
+    const { error: thrErr } = await supabase.from('message_threads').delete().eq('id', thread.id);
+    if (thrErr) console.warn('Delete thread failed:', thrErr);
   }
 }
 
