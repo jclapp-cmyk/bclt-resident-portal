@@ -590,7 +590,7 @@ const BOTTOM_TABS = {
 
 // --- RESIDENT DASHBOARD ---
 const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc }) => {
-  const daysUntilRecert = Math.ceil((new Date(MOCK_RECERT.deadline) - new Date()) / 86400000);
+  const daysUntilRecert = MOCK_RECERT.deadline ? Math.ceil((new Date(MOCK_RECERT.deadline) - new Date()) / 86400000) : 999;
   const openRequests = maintenance.filter(m => m.unit === rc?.unit && m.status !== "completed").length;
   return (
     <div>
@@ -1606,10 +1606,10 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Property Management</div>
-        <DetailRow label="Manager" value={MOCK_PROPERTY.manager} />
-        <DetailRow label="Phone" value={MOCK_PROPERTY.managerPhone} />
-        <DetailRow label="Email" value={MOCK_PROPERTY.managerEmail} />
-        <DetailRow label="Office Hours" value={MOCK_PROPERTY.officeHours} />
+        <DetailRow label="Manager" value={LIVE_PROPERTIES[0]?.manager || "—"} />
+        <DetailRow label="Phone" value={LIVE_PROPERTIES[0]?.managerPhone || "—"} />
+        <DetailRow label="Email" value={LIVE_PROPERTIES[0]?.managerEmail || "—"} />
+        <DetailRow label="Office Hours" value={LIVE_PROPERTIES[0]?.officeHours || "—"} />
       </div>
       <LeaseDocumentsPanel docs={residentDocs} onUpload={handleUpload} canUpload={true} canDelete={false} residentSlug={rc?.id} />
     </div>
@@ -1737,7 +1737,7 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
           <table style={s.table}>
             <thead><tr>{["Name", "Relationship", "Date of Birth"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
             <tbody>
-              {MOCK_RECERT.householdMembers.map((m, i) => (
+              {(MOCK_RECERT.householdMembers || []).map((m, i) => (
                 <tr key={i}>
                   <td style={s.td}><span style={{ fontWeight: 600 }}>{m.name}</span></td>
                   <td style={s.td}>{m.relationship}</td>
@@ -1755,17 +1755,17 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
       {tab === "Lease Summary" && (
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Lease & Unit Details</div>
-          <DetailRow label="Unit" value={`${MOCK_UNIT.number} — ${MOCK_UNIT.floorPlan}`} />
-          <DetailRow label="Bedrooms / Bathrooms" value={`${MOCK_UNIT.bedrooms} BR / ${MOCK_UNIT.bathrooms} BA`} />
-          <DetailRow label="Square Footage" value={`${MOCK_UNIT.sqft} sq ft`} />
-          <DetailRow label="Lease Start" value={MOCK_UNIT.leaseStart} />
-          <DetailRow label="Lease End" value={MOCK_UNIT.leaseEnd} />
+          <DetailRow label="Unit" value={`${u.number} — ${u.floorPlan}`} />
+          <DetailRow label="Bedrooms / Bathrooms" value={`${u.bedrooms} BR / ${u.bathrooms} BA`} />
+          <DetailRow label="Square Footage" value={`${u.sqft} sq ft`} />
+          <DetailRow label="Lease Start" value={u.leaseStart} />
+          <DetailRow label="Lease End" value={u.leaseEnd} />
           <div style={{ marginTop: 14, fontWeight: 700, marginBottom: 10, fontSize: 14 }}>Rent Breakdown</div>
-          <DetailRow label="Total Rent" value={`$${MOCK_UNIT.rentAmount}`} />
-          <DetailRow label="Your Portion" value={`$${MOCK_UNIT.tenantPortion}`} accent={T.accent} />
-          <DetailRow label="HAP Payment (PHA)" value={`$${MOCK_UNIT.hapPayment}`} accent={T.success} />
+          <DetailRow label="Total Rent" value={`$${u.rentAmount}`} />
+          <DetailRow label="Your Portion" value={`$${u.tenantPortion}`} accent={T.accent} />
+          <DetailRow label="HAP Payment (PHA)" value={`$${u.hapPayment}`} accent={T.success} />
           <div style={{ marginTop: 14, fontWeight: 700, marginBottom: 10, fontSize: 14 }}>Utilities</div>
-          {Object.entries(MOCK_UNIT.utilityResponsibility).map(([util, resp]) => (
+          {Object.entries(u.utilityResponsibility).map(([util, resp]) => (
             <DetailRow key={util} label={util.charAt(0).toUpperCase() + util.slice(1)} value={resp} accent={resp === "Tenant" ? T.warn : T.success} />
           ))}
         </div>
@@ -4074,11 +4074,11 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
         <div>
           <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Property Information</div>
-            <DetailRow label="Property Name" value={MOCK_PROPERTY.name} />
-            <DetailRow label="Address" value={MOCK_PROPERTY.address} />
-            <DetailRow label="Type" value={MOCK_PROPERTY.type} />
-            <DetailRow label="Year Built" value={MOCK_PROPERTY.yearBuilt} />
-            <DetailRow label="Total Units" value={MOCK_PROPERTY.totalUnits} />
+            <DetailRow label="Property Name" value={(LIVE_PROPERTIES[0]?.name || "—")} />
+            <DetailRow label="Address" value={(LIVE_PROPERTIES[0]?.address || "—")} />
+            <DetailRow label="Type" value={(LIVE_PROPERTIES[0]?.type || "—")} />
+            <DetailRow label="Year Built" value={(LIVE_PROPERTIES[0]?.yearBuilt || "—")} />
+            <DetailRow label="Total Units" value={(LIVE_PROPERTIES[0]?.totalUnits || 0)} />
           </div>
           <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Management Contact</div>
@@ -4420,7 +4420,7 @@ const ComplianceDashboard = ({ mobile, vendors, unitInspections, selectedPropert
   const now = new Date();
   const compliantVendors = vendors.filter(v => v.active && v.insured && new Date(v.licenseExp) > now).length;
   const vendorPct = vendors.length ? Math.round((compliantVendors / vendors.length) * 100) : 0;
-  const recertSteps = Object.values(MOCK_RECERT.stepsCompleted);
+  const recertSteps = Object.values(MOCK_RECERT.stepsCompleted || {});
   const recertDone = recertSteps.filter(Boolean).length;
   const recertPct = Math.round((recertDone / recertSteps.length) * 100);
   const auditScore = Math.round((docPct + regPassRate + vendorPct + recertPct) / 4);
