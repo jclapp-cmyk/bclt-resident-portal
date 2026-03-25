@@ -2145,6 +2145,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [editResForm, setEditResForm] = useState({});
   const [msgSubject, setMsgSubject] = useState("");
   const [msgBody, setMsgBody] = useState("");
+  const [msgChannel, setMsgChannel] = useState("email");
   const [payForm, setPayForm] = useState({ amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
   const [householdMembers, setHouseholdMembers] = useState([]);
   const [hhForm, setHhForm] = useState({ name: "", relationship: "Spouse", phone: "", email: "" });
@@ -2545,17 +2546,17 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Send Message to {selectedResident.name.split(" ")[0]}</div>
               <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
                 {[{ id: "email", label: "📧 Email" }, { id: "sms", label: "📱 SMS" }, { id: "both", label: "📧+📱 Both" }].map(ch => (
-                  <button key={ch.id} onClick={() => setMsgChannel?.(ch.id) || setEditResForm(f => ({ ...f, _channel: ch.id }))} style={{ ...s.btn((editResForm._channel || "email") === ch.id ? "primary" : "ghost"), fontSize: 12 }}>{ch.label}</button>
+                  <button key={ch.id} onClick={() => setMsgChannel(ch.id)} style={{ ...s.btn(msgChannel === ch.id ? "primary" : "ghost"), fontSize: 12 }}>{ch.label}</button>
                 ))}
               </div>
-              {(editResForm._channel || "email") !== "sms" && (
+              {(msgChannel) !== "sms" && (
                 <div style={{ marginBottom: 14 }}><label style={s.label}>Subject</label><input type="text" placeholder="e.g. Lease renewal reminder" value={msgSubject} onChange={e => setMsgSubject(e.target.value)} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
               )}
-              <div style={{ marginBottom: 14 }}><label style={s.label}>{(editResForm._channel || "email") === "sms" ? "SMS Message (160 chars)" : "Message"}</label><textarea placeholder="Type your message..." value={msgBody} onChange={e => setMsgBody(e.target.value)} style={{ ...s.mInput(mobile), width: "100%", minHeight: (editResForm._channel || "email") === "sms" ? 60 : 80, resize: "vertical" }} />
-                {(editResForm._channel || "email") === "sms" && <div style={{ fontSize: 11, color: msgBody.length > 160 ? T.danger : T.dim, marginTop: 4 }}>{msgBody.length}/160</div>}
+              <div style={{ marginBottom: 14 }}><label style={s.label}>{(msgChannel) === "sms" ? "SMS Message (160 chars)" : "Message"}</label><textarea placeholder="Type your message..." value={msgBody} onChange={e => setMsgBody(e.target.value)} style={{ ...s.mInput(mobile), width: "100%", minHeight: (msgChannel) === "sms" ? 60 : 80, resize: "vertical" }} />
+                {(msgChannel) === "sms" && <div style={{ fontSize: 11, color: msgBody.length > 160 ? T.danger : T.dim, marginTop: 4 }}>{msgBody.length}/160</div>}
               </div>
-              <button disabled={!msgBody.trim() || ((editResForm._channel || "email") !== "sms" && !msgSubject.trim())} onClick={async () => {
-                const channel = editResForm._channel || "email";
+              <button disabled={!msgBody.trim() || ((msgChannel) !== "sms" && !msgSubject.trim())} onClick={async () => {
+                const channel = msgChannel;
                 try {
                   if (channel === "email" && selectedResident.email) {
                     await sendNotification("custom", { to: selectedResident.email, subject: msgSubject, body: msgBody });
@@ -2572,9 +2573,9 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   }
                   setMsgSubject(""); setMsgBody("");
                 } catch (err) { showSuccess("Error: " + err.message); }
-              }} style={{ ...s.mBtn("primary", mobile) }}>Send {(editResForm._channel || "email") === "both" ? "Email + SMS" : (editResForm._channel || "email") === "sms" ? "SMS" : "Email"}</button>
-              {(editResForm._channel || "email") !== "email" && !selectedResident.phone && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ No phone number on file for this resident</div>}
-              {(editResForm._channel || "email") !== "sms" && !selectedResident.email && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ No email on file for this resident</div>}
+              }} style={{ ...s.mBtn("primary", mobile) }}>Send {(msgChannel) === "both" ? "Email + SMS" : (msgChannel) === "sms" ? "SMS" : "Email"}</button>
+              {(msgChannel) !== "email" && !selectedResident.phone && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ No phone number on file for this resident</div>}
+              {(msgChannel) !== "sms" && !selectedResident.email && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ No email on file for this resident</div>}
             </div>
             {resThreads.length === 0 ? <EmptyState icon="💬" text="No communication threads yet" /> : resThreads.sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).map(t => (
               <div key={t.id} style={s.card}>
