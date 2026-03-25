@@ -14,6 +14,7 @@ import { supabase } from "./lib/supabase";
 
 const MOCK_PROPERTIES = [];
 const MOCK_PROPERTY = {};
+const getProperty = (id) => LIVE_PROPERTIES.find(p => p.id === id || p._uuid === id) || LIVE_PROPERTIES[0] || {};
 const MOCK_UNIT = {};
 const MOCK_MAINTENANCE = [];
 const MOCK_PAYMENTS = [];
