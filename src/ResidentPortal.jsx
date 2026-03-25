@@ -2122,7 +2122,7 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
 };
 
 // --- ADMIN RESIDENTS ---
-const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty, onResidentAdded, onDataChanged, leaseDocs: leaseDocsFromApp, sbRentLedger, pendingResidentView, onClearPendingResident }) => {
+const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty, onResidentAdded, onDataChanged, leaseDocs: leaseDocsFromApp, sbRentLedger, pendingResidentView, onClearPendingResident, onAddThread, onAddMessage }) => {
   const [selectedResident, setSelectedResident] = useState(null);
   const [tab, setTab] = useState("Overview");
 
@@ -2569,17 +2569,25 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 try {
                   if (channel === "email" && selectedResident.email) {
                     await sendNotification("custom", { to: selectedResident.email, subject: msgSubject, body: msgBody });
-                    showSuccess(`Email sent to ${selectedResident.name}`);
                   } else if (channel === "sms" && selectedResident.phone) {
                     const result = await sendSMS(selectedResident.phone, msgBody);
-                    if (result?.success) showSuccess(`SMS sent to ${selectedResident.name}`);
-                    else throw new Error(result?.error || "SMS failed");
+                    if (!result?.success) throw new Error(result?.error || "SMS failed");
                   } else if (channel === "both") {
-                    const results = await sendBoth({ email: selectedResident.email, phone: selectedResident.phone, subject: msgSubject, emailBody: msgBody, smsBody: msgBody });
-                    showSuccess(`Email + SMS sent to ${selectedResident.name}`);
+                    await sendBoth({ email: selectedResident.email, phone: selectedResident.phone, subject: msgSubject, emailBody: msgBody, smsBody: msgBody });
                   } else {
                     throw new Error(channel === "sms" ? "No phone number on file" : "No email on file");
                   }
+                  // Log the communication as a thread
+                  const threadId = `THR-${Date.now()}`;
+                  const now = new Date().toISOString();
+                  if (onAddThread) onAddThread({
+                    id: threadId, participants: [selectedResident.id], subject: msgSubject || `${channel.toUpperCase()} to ${selectedResident.name}`,
+                    lastMessage: msgBody.slice(0, 100), lastDate: now, unread: 0, channel: channel === "both" ? "multi" : channel, type: "direct",
+                  });
+                  if (onAddMessage) onAddMessage({
+                    id: `MSG-${Date.now()}`, threadId, from: "admin", body: msgBody, date: now, status: "delivered",
+                  });
+                  showSuccess(`${channel === "both" ? "Email + SMS" : channel === "sms" ? "SMS" : "Email"} sent to ${selectedResident.name}`);
                   setMsgSubject(""); setMsgBody("");
                 } catch (err) { showSuccess("Error: " + err.message); }
               }} style={{ ...s.mBtn("primary", mobile) }}>Send {(msgChannel) === "both" ? "Email + SMS" : (msgChannel) === "sms" ? "SMS" : "Email"}</button>
@@ -5700,7 +5708,7 @@ export default function App() {
       const fInsp = filterByProperty(unitInspections, sp);
       switch (page) {
         case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} />;
-        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onDataChanged={reloadData} leaseDocs={leaseDocs} sbRentLedger={sbRentLedger} pendingResidentView={pendingResidentView} onClearPendingResident={() => setPendingResidentView(null)} onResidentAdded={async () => {
+        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onDataChanged={reloadData} leaseDocs={leaseDocs} sbRentLedger={sbRentLedger} pendingResidentView={pendingResidentView} onClearPendingResident={() => setPendingResidentView(null)} onAddThread={addThreadN} onAddMessage={addMessageN} onResidentAdded={async () => {
           try { const [res, resExt] = await Promise.all([fetchResidents(), fetchResidentsExtended()]); LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt; setSbResidents(res); setSbResidentsExt(resExt); } catch(e) { console.warn(e); }
         }} />;
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
