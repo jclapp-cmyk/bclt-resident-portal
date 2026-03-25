@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
-import { sendNotification } from "./lib/notify";
+import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
 
 /* ═══════════════════════════════════════════════════════════
@@ -2543,13 +2543,33 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
           <div>
             <div style={{ ...s.card, borderLeft: `3px solid ${T.info}`, marginBottom: 16 }}>
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Send Message to {selectedResident.name.split(" ")[0]}</div>
-              <div style={{ marginBottom: 14 }}><label style={s.label}>Subject</label><input type="text" placeholder="e.g. Lease renewal reminder" value={msgSubject} onChange={e => setMsgSubject(e.target.value)} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
-              <div style={{ marginBottom: 14 }}><label style={s.label}>Message</label><textarea placeholder="Type your message..." value={msgBody} onChange={e => setMsgBody(e.target.value)} style={{ ...s.mInput(mobile), width: "100%", minHeight: 80, resize: "vertical" }} /></div>
-              <button disabled={!msgSubject.trim() || !msgBody.trim()} onClick={() => {
-                // TODO: wire to Supabase threads/messages
-                showSuccess(`Message sent to ${selectedResident.name}`);
-                setMsgSubject(""); setMsgBody("");
-              }} style={{ ...s.mBtn("primary", mobile) }}>Send Message</button>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                {[{ id: "email", label: "📧 Email" }, { id: "sms", label: "📱 SMS" }, { id: "both", label: "📧+📱 Both" }].map(ch => (
+                  <button key={ch.id} onClick={() => setMsgChannel?.(ch.id) || setEditResForm(f => ({ ...f, _channel: ch.id }))} style={{ ...s.btn((editResForm._channel || "email") === ch.id ? "primary" : "ghost"), fontSize: 12 }}>{ch.label}</button>
+                ))}
+              </div>
+              {(editResForm._channel || "email") !== "sms" && (
+                <div style={{ marginBottom: 14 }}><label style={s.label}>Subject</label><input type="text" placeholder="e.g. Lease renewal reminder" value={msgSubject} onChange={e => setMsgSubject(e.target.value)} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+              )}
+              <div style={{ marginBottom: 14 }}><label style={s.label}>{(editResForm._channel || "email") === "sms" ? "SMS Message (160 chars)" : "Message"}</label><textarea placeholder="Type your message..." value={msgBody} onChange={e => setMsgBody(e.target.value)} style={{ ...s.mInput(mobile), width: "100%", minHeight: (editResForm._channel || "email") === "sms" ? 60 : 80, resize: "vertical" }} />
+                {(editResForm._channel || "email") === "sms" && <div style={{ fontSize: 11, color: msgBody.length > 160 ? T.danger : T.dim, marginTop: 4 }}>{msgBody.length}/160</div>}
+              </div>
+              <button disabled={!msgBody.trim() || ((editResForm._channel || "email") !== "sms" && !msgSubject.trim())} onClick={async () => {
+                const channel = editResForm._channel || "email";
+                try {
+                  if (channel === "email" && selectedResident.email) {
+                    await sendNotification("custom", { to: selectedResident.email, subject: msgSubject, body: msgBody });
+                  } else if (channel === "sms" && selectedResident.phone) {
+                    await sendSMS(selectedResident.phone, msgBody);
+                  } else if (channel === "both") {
+                    await sendBoth({ email: selectedResident.email, phone: selectedResident.phone, subject: msgSubject, emailBody: msgBody, smsBody: msgBody });
+                  }
+                  showSuccess(`${channel === "both" ? "Email + SMS" : channel === "sms" ? "SMS" : "Email"} sent to ${selectedResident.name}`);
+                  setMsgSubject(""); setMsgBody("");
+                } catch (err) { showSuccess("Error: " + err.message); }
+              }} style={{ ...s.mBtn("primary", mobile) }}>Send {(editResForm._channel || "email") === "both" ? "Email + SMS" : (editResForm._channel || "email") === "sms" ? "SMS" : "Email"}</button>
+              {(editResForm._channel || "email") !== "email" && !selectedResident.phone && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ No phone number on file for this resident</div>}
+              {(editResForm._channel || "email") !== "sms" && !selectedResident.email && <div style={{ color: T.warn, fontSize: 12, marginTop: 8 }}>⚠ No email on file for this resident</div>}
             </div>
             {resThreads.length === 0 ? <EmptyState icon="💬" text="No communication threads yet" /> : resThreads.sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).map(t => (
               <div key={t.id} style={s.card}>
