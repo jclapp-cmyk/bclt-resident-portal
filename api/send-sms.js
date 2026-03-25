@@ -6,9 +6,10 @@ export default async function handler(req, res) {
 
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
   const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
-  if (!accountSid || !authToken || !fromNumber) {
+  if (!accountSid || !authToken) {
     return res.status(500).json({ error: 'Twilio credentials not configured' });
   }
 
@@ -16,9 +17,14 @@ export default async function handler(req, res) {
     const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
     const params = new URLSearchParams({
       To: to.startsWith('+') ? to : `+1${to.replace(/\D/g, '')}`,
-      From: fromNumber,
       Body: body,
     });
+    // Use Messaging Service if available (required for A2P 10DLC), otherwise fall back to From number
+    if (messagingServiceSid) {
+      params.set('MessagingServiceSid', messagingServiceSid);
+    } else if (fromNumber) {
+      params.set('From', fromNumber);
+    }
 
     const response = await fetch(url, {
       method: 'POST',
