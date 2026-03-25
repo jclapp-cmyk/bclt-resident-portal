@@ -603,6 +603,35 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc }) 
         <StatCard label="Recert Deadline" value={`${daysUntilRecert}d`} accent={daysUntilRecert < 90 ? T.warn : T.accent} mobile={mobile} />
         <StatCard label="Next Inspection" value="Nov 14" accent={T.info} mobile={mobile} />
       </div>
+      {(() => {
+        const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || {};
+        return (
+        <div style={{ ...s.card, marginBottom: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>My Contact Info</div>
+            <a href="#" onClick={(e) => { e.preventDefault(); }} style={{ fontSize: 12, color: T.accent, textDecoration: "none", fontWeight: 600 }}>Edit in My Profile →</a>
+          </div>
+          <div style={{ display: "flex", gap: mobile ? 12 : 20, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Phone</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.phone || "Not set"}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Email</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.email || "Not set"}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Preferred Contact</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{(myRes.preferredChannel || "email").toUpperCase()}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>SMS Consent</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: myRes.smsConsent ? T.success : T.warn }}>{myRes.smsConsent ? "✓ Opted In" : "Not opted in"}</div>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
       <div style={{ ...s.card, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div>
