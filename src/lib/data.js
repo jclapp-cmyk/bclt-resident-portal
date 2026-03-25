@@ -360,6 +360,17 @@ export async function updateThread(code, changes) {
   if (error) throw error;
 }
 
+export async function deleteThread(code) {
+  // Get the thread UUID from code
+  const { data: thread } = await supabase.from('message_threads').select('id').eq('code', code).single();
+  if (thread) {
+    // Delete messages first (FK constraint)
+    await supabase.from('messages').delete().eq('thread_id', thread.id);
+    // Delete the thread
+    await supabase.from('message_threads').delete().eq('id', thread.id);
+  }
+}
+
 export async function fetchCommTemplates() {
   const { data, error } = await supabase.from('comm_templates').select('*').order('name');
   if (error) throw error;
