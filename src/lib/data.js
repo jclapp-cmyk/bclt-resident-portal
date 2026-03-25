@@ -152,6 +152,11 @@ export async function fetchResidents() {
     phone: r.phone,
     email: r.email,
     preferredChannel: r.preferred_channel,
+    mailingStreet: r.mailing_street || '',
+    mailingCity: r.mailing_city || '',
+    mailingState: r.mailing_state || '',
+    mailingZip: r.mailing_zip || '',
+    mailingAddress: [r.mailing_street, r.mailing_city, r.mailing_state, r.mailing_zip].filter(Boolean).join(', '),
   }));
 }
 
@@ -227,6 +232,10 @@ export async function insertResident(resident, propertyUuid, unitUuid) {
       phone: resident.phone,
       email: resident.email,
       preferred_channel: resident.preferredChannel || 'email',
+      mailing_street: resident.mailingStreet || null,
+      mailing_city: resident.mailingCity || null,
+      mailing_state: resident.mailingState || null,
+      mailing_zip: resident.mailingZip || null,
       status: resident.status || 'active',
       move_in_date: resident.moveInDate || null,
     }).select().single();
@@ -241,6 +250,10 @@ export async function updateResident(residentUuid, changes) {
   if (changes.phone !== undefined) mapped.phone = changes.phone;
   if (changes.email !== undefined) mapped.email = changes.email;
   if (changes.preferredChannel !== undefined) mapped.preferred_channel = changes.preferredChannel;
+  if (changes.mailingStreet !== undefined) mapped.mailing_street = changes.mailingStreet;
+  if (changes.mailingCity !== undefined) mapped.mailing_city = changes.mailingCity;
+  if (changes.mailingState !== undefined) mapped.mailing_state = changes.mailingState;
+  if (changes.mailingZip !== undefined) mapped.mailing_zip = changes.mailingZip;
   if (changes.status !== undefined) mapped.status = changes.status;
   const { error } = await supabase.from('residents').update(mapped).eq('id', residentUuid);
   if (error) throw error;
