@@ -3734,7 +3734,7 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
   );
 };
 
-const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, onAddThread, onAddMessage, onUpdateThread, rc }) => {
+const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, onAddThread, onAddMessage, onUpdateThread, onDeleteThread, rc }) => {
   const isAdmin = role === "admin";
   const isMaint = role === "maintenance";
   const tabs = isAdmin ? ["Inbox", "Compose", "Templates"] : isMaint ? ["Messages"] : ["Messages", "Preferences"];
@@ -3801,7 +3801,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               <span style={s.badge(chBadge.bg, chBadge.text)}>{chBadge.label}</span>
               {t.priority === "high" && <span style={s.badge(T.dangerDim, T.danger)}>!</span>}
               {t.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent }} />}
-              {isAdmin && <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete this thread?")) { setThreads(prev => prev.filter(th => th.id !== t.id)); setMessages(prev => prev.filter(m => m.threadId !== t.id)); } }} style={{ background: "none", border: "none", cursor: "pointer", color: T.dim, fontSize: 14, padding: "2px 4px", marginLeft: 4 }} title="Delete thread">🗑</button>}
+              {isAdmin && onDeleteThread && <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete this thread?")) onDeleteThread(t.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: T.dim, fontSize: 14, padding: "2px 4px", marginLeft: 4 }} title="Delete thread">🗑</button>}
             </div>
           </div>
         </div>
@@ -5694,7 +5694,7 @@ export default function App() {
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
-        case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
+        case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "compliance": return <ComplianceDashboard mobile={mobile} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
