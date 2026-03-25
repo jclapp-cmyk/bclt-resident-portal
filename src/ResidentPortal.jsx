@@ -1054,7 +1054,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
         </table>
       </div>
       <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Upcoming Regulatory Inspections</div>
+        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Upcoming Inspections</div>
         {regInsp.filter(i => new Date(i.nextDue) < new Date("2027-01-01")).slice(0, 3).map(i => (
           <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}` }}>
             <div>
@@ -2597,7 +2597,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>New Resident</div>
           <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
-            <div><label style={s.label}>Full Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} placeholder="First Last" /></div>
+            <div><label style={s.label}>First Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.firstName || ""} onChange={e => setAddForm(p => ({ ...p, firstName: e.target.value, name: e.target.value + " " + (p.lastName || "") }))} placeholder="First" /></div>
+            <div><label style={s.label}>Last Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.lastName || ""} onChange={e => setAddForm(p => ({ ...p, lastName: e.target.value, name: (p.firstName || "") + " " + e.target.value }))} placeholder="Last" /></div>
             <div><label style={s.label}>Property *</label>
               <select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.propertyId} onChange={e => { setAddForm(p => ({ ...p, propertyId: e.target.value, unitId: "" })); const pr = LIVE_PROPERTIES.find(x => x.id === e.target.value); if (pr?._uuid) fetchUnits(pr._uuid).then(u => setAddFormUnits(u || [])).catch(() => {}); }}>
                 {LIVE_PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -2825,7 +2826,12 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
             <SuccessMessage message={propSuccess} />
             <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
               <div><label style={s.label}>Property Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.name} onChange={e => setPropForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Wharf Road Apartments" /></div>
-              <div><label style={s.label}>Address</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.address} onChange={e => setPropForm(p => ({ ...p, address: e.target.value }))} placeholder="123 Main St, City, ST 00000" /></div>
+              <div><label style={s.label}>Street Address</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.street || ""} onChange={e => setPropForm(p => ({ ...p, street: e.target.value }))} placeholder="123 Main St" /></div>
+              <div><label style={s.label}>City</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.city || ""} onChange={e => setPropForm(p => ({ ...p, city: e.target.value }))} placeholder="Bolinas" /></div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}><label style={s.label}>State</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.state || "CA"} onChange={e => setPropForm(p => ({ ...p, state: e.target.value }))} placeholder="CA" maxLength={2} /></div>
+                <div style={{ flex: 1 }}><label style={s.label}>Zip</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.zip || ""} onChange={e => setPropForm(p => ({ ...p, zip: e.target.value }))} placeholder="94924" maxLength={10} /></div>
+              </div>
               <div><label style={s.label}>Type</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.type} onChange={e => setPropForm(p => ({ ...p, type: e.target.value }))} placeholder="e.g. Garden-Style Apartments" /></div>
               <div><label style={s.label}>Total Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.totalUnits} onChange={e => setPropForm(p => ({ ...p, totalUnits: e.target.value }))} /></div>
               <div><label style={s.label}>Total SF</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={propForm.totalSF} onChange={e => setPropForm(p => ({ ...p, totalSF: e.target.value }))} /></div>
@@ -2834,7 +2840,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               try {
                 await insertProperty({ ...propForm, totalUnits: parseInt(propForm.totalUnits) || 0, totalSF: parseInt(propForm.totalSF) || 0 });
                 showPropSuccess(`Property "${propForm.name}" created!`);
-                setPropForm({ name: "", address: "", type: "", totalUnits: "", totalSF: "" });
+                setPropForm({ name: "", street: "", city: "", state: "CA", zip: "", type: "", totalUnits: "", totalSF: "" });
                 if (onDataRefresh) onDataRefresh();
                 setTimeout(() => setShowAddProp(false), 1500);
               } catch (err) { showPropSuccess("Error: " + err.message); }
@@ -2928,7 +2934,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Units ({unitList.length})</div>
           <SuccessMessage message={unitSuccess} />
           <table style={s.table}>
-            <thead><tr>{["Unit", "BR", "BA", "Sqft", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Unit", "Resident", "BR", "BA", "Sqft", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
             <tbody>
               {unitList.map(u => {
                 const uid = u._uuid || u.id;
@@ -2936,6 +2942,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                   return (
                     <tr key={uid}>
                       <td style={s.td}><input style={{ ...s.input, width: 80, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.number || ""} onChange={e => setEditUnitForm(f => ({ ...f, number: e.target.value }))} /></td>
+                      <td style={s.td}><span style={{ color: T.dim, fontSize: 12 }}>—</span></td>
                       <td style={s.td}><input type="number" style={{ ...s.input, width: 50, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.bedrooms || ""} onChange={e => setEditUnitForm(f => ({ ...f, bedrooms: e.target.value }))} /></td>
                       <td style={s.td}><input type="number" style={{ ...s.input, width: 50, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.bathrooms || ""} onChange={e => setEditUnitForm(f => ({ ...f, bathrooms: e.target.value }))} /></td>
                       <td style={s.td}><input type="number" style={{ ...s.input, width: 70, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.sqft || ""} onChange={e => setEditUnitForm(f => ({ ...f, sqft: e.target.value }))} /></td>
@@ -2955,9 +2962,17 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                     </tr>
                   );
                 }
+                const unitResident = propResidents.find(r => r.unit === u.number);
                 return (
                   <tr key={uid}>
                     <td style={s.td}><span style={{ fontWeight: 600 }}>{u.number}</span></td>
+                    <td style={s.td}>{unitResident ? (
+                      <button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={() => {
+                        if (onSelectProperty) onSelectProperty(selectedProperty, "residents");
+                        // Small delay to let page switch, then we'd need to select the resident
+                        // For now just navigate to residents filtered by this property
+                      }}>{unitResident.name}</button>
+                    ) : <span style={{ color: T.dim, fontSize: 12 }}>Vacant</span>}</td>
                     <td style={s.td}>{u.bedrooms}</td>
                     <td style={s.td}>{u.bathrooms}</td>
                     <td style={s.td}>{u.sqft || "—"}</td>
@@ -3317,7 +3332,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
           </div>
           <div style={s.card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>Upcoming Regulatory Inspections</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Upcoming Inspections</div>
               <ExportButton mobile={mobile} onClick={() => generateCSV(
                 [{ label: "Type", key: "type" }, { label: "Authority", key: "authority" }, { label: "Last Date", key: "date" }, { label: "Result", key: "result" }, { label: "Next Due", key: "nextDue" }, { label: "Deficiencies", key: "deficiencies" }],
                 regInsp, "regulatory_inspections"
@@ -3356,7 +3371,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
   const isResident = role === "resident";
   const isAdmin = role === "admin";
-  const tabs = isResident ? null : isAdmin ? ["Regulatory", "Unit History", "Categories", "Schedule"] : ["Unit History", "Categories", "My Assigned"];
+  const tabs = isResident ? null : isAdmin ? ["All Inspections", "Unit History", "Categories", "Schedule"] : ["Unit History", "Categories", "My Assigned"];
   const [tab, setTab] = useState(isResident ? null : tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [schedForm, setSchedForm] = useState({ category: "", unit: rc?.unit || "B-204", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
@@ -3377,7 +3392,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
 
       {isAdmin && (
         <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-          <StatCard label="Regulatory Tracked" value={regInsp.length} accent={T.accent} mobile={mobile} />
+          <StatCard label="Tracked" value={regInsp.length} accent={T.accent} mobile={mobile} />
           <StatCard label="Due Within 6mo" value={regDueSoon} accent={T.warn} mobile={mobile} />
           <StatCard label="Last REAC Score" value="88" accent={T.success} mobile={mobile} />
           <StatCard label="Unit Inspections" value={unitInspections.length} accent={T.info} mobile={mobile} />
@@ -3388,10 +3403,10 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
       <SuccessMessage message={success} />
 
       {/* Regulatory — admin only */}
-      {tab === "Regulatory" && (
+      {tab === "All Inspections" && (
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Regulatory Inspection Log</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Inspection Log</div>
             <ExportButton mobile={mobile} onClick={() => generateCSV(
               [{ label: "Type", key: "type" }, { label: "Authority", key: "authority" }, { label: "Last Date", key: "date" }, { label: "Result", key: "result" }, { label: "Score", key: "score" }, { label: "Next Due", key: "nextDue" }, { label: "Deficiencies", key: "deficiencies" }],
               regInsp, "regulatory_inspections"
@@ -4709,7 +4724,7 @@ const ComplianceDashboard = ({ mobile, vendors, unitInspections, selectedPropert
         </div>
       )}
 
-      {tab === "Regulatory" && (
+      {tab === "All Inspections" && (
         <div>
           {[...regInsp].sort((a, b) => new Date(a.nextDue) - new Date(b.nextDue)).map(i => {
             const days = Math.ceil((new Date(i.nextDue) - now) / 86400000);

@@ -12,7 +12,11 @@ export async function fetchProperties() {
     id: p.slug,
     _uuid: p.id,
     name: p.name,
-    address: p.address,
+    address: [p.street, p.city, p.state, p.zip].filter(Boolean).join(', ') || p.address || '',
+    street: p.street || p.address || '',
+    city: p.city || '',
+    state: p.state || 'CA',
+    zip: p.zip || '',
     type: p.type,
     yearBuilt: p.year_built,
     lastRenovation: p.last_renovation,
@@ -35,7 +39,11 @@ export async function insertProperty(prop) {
   const { data, error } = await supabase.from('properties').insert({
     slug,
     name: prop.name,
-    address: prop.address || '',
+    address: [prop.street, prop.city, prop.state, prop.zip].filter(Boolean).join(', ') || prop.address || '',
+    street: prop.street || '',
+    city: prop.city || '',
+    state: prop.state || 'CA',
+    zip: prop.zip || '',
     type: prop.type || '',
     year_built: prop.yearBuilt || null,
     total_units: prop.totalUnits || 0,
@@ -70,7 +78,14 @@ export async function insertUnit(unit, propertyUuid) {
 export async function updateProperty(propUuid, changes) {
   const mapped = {};
   if (changes.name !== undefined) mapped.name = changes.name;
-  if (changes.address !== undefined) mapped.address = changes.address;
+  if (changes.street !== undefined) mapped.street = changes.street;
+  if (changes.city !== undefined) mapped.city = changes.city;
+  if (changes.state !== undefined) mapped.state = changes.state;
+  if (changes.zip !== undefined) mapped.zip = changes.zip;
+  if (changes.street !== undefined || changes.city !== undefined || changes.state !== undefined || changes.zip !== undefined) {
+    mapped.address = [changes.street, changes.city, changes.state, changes.zip].filter(Boolean).join(', ');
+  }
+  if (changes.address !== undefined && !changes.street) mapped.address = changes.address;
   if (changes.type !== undefined) mapped.type = changes.type;
   if (changes.totalUnits !== undefined) mapped.total_units = changes.totalUnits;
   if (changes.totalSF !== undefined) mapped.total_sf = changes.totalSF;
@@ -130,7 +145,9 @@ export async function fetchResidents() {
     id: r.slug,
     _uuid: r.id,
     propertyId: r.properties?.slug || '',
-    name: r.name,
+    name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.name,
+    firstName: r.first_name || r.name?.split(' ')[0] || '',
+    lastName: r.last_name || r.name?.split(' ').slice(1).join(' ') || '',
     unit: r.units?.number || '',
     phone: r.phone,
     email: r.email,
@@ -205,6 +222,8 @@ export async function insertResident(resident, propertyUuid, unitUuid) {
       property_id: propertyUuid,
       unit_id: unitUuid,
       name: resident.name,
+      first_name: resident.firstName || resident.name?.split(' ')[0] || '',
+      last_name: resident.lastName || resident.name?.split(' ').slice(1).join(' ') || '',
       phone: resident.phone,
       email: resident.email,
       preferred_channel: resident.preferredChannel || 'email',
