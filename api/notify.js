@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   }
 
   // Use verified Resend domain, or fallback to Resend's shared domain
-  const fromEmail = process.env.FROM_EMAIL || 'BCLT Portal <onboarding@resend.dev>';
+  const fromEmail = process.env.FROM_EMAIL || 'BCLT Portal <portal@bolinaslandtrust.org>';
 
   let email;
   try {
