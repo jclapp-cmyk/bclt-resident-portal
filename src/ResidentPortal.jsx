@@ -590,7 +590,7 @@ const BOTTOM_TABS = {
 // ── PAGE COMPONENTS ────────────────────────────────────────
 
 // --- RESIDENT DASHBOARD ---
-const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc }) => {
+const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, onNavigate }) => {
   const daysUntilRecert = MOCK_RECERT.deadline ? Math.ceil((new Date(MOCK_RECERT.deadline) - new Date()) / 86400000) : 999;
   const openRequests = maintenance.filter(m => m.unit === rc?.unit && m.status !== "completed").length;
   return (
@@ -609,7 +609,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc }) 
         <div style={{ ...s.card, marginBottom: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>My Contact Info</div>
-            <a href="#" onClick={(e) => { e.preventDefault(); }} style={{ fontSize: 12, color: T.accent, textDecoration: "none", fontWeight: 600 }}>Edit in My Profile →</a>
+            <button onClick={() => onNavigate && onNavigate("profile")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: T.accent, fontWeight: 600, padding: 0 }}>Edit in My Profile →</button>
           </div>
           <div style={{ display: "flex", gap: mobile ? 12 : 20, flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: 150 }}>
@@ -5414,7 +5414,7 @@ export default function App() {
       const myMaint = rc?.unit ? maintenance.filter(m => m.unit === rc.unit) : maintenance;
       const myThreads = rc?.id ? threads.filter(t => t.type === "broadcast" || t.participants.includes(rc.id)) : threads;
       switch (page) {
-        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} notifications={roleNotifs} rc={rc} />;
+        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
         case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={myMaint} onSubmit={addMaintenanceN} rc={rc} />;
         case "rent": return <RentPayments mobile={mobile} rc={rc} />;
         case "recert": return <IncomeCertification role="resident" mobile={mobile} selectedProperty={selectedProperty} rc={rc} />;
