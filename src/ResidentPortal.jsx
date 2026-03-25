@@ -2103,6 +2103,22 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
                 ))}
               </div>
             </div>
+            <div style={{ marginBottom: 14, padding: "12px 14px", background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>SMS Text Message Consent</div>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                <input type="checkbox" checked={myRes.smsConsent || false} onChange={async (e) => {
+                  const consent = e.target.checked;
+                  try {
+                    await updateResident(myRes._uuid, { smsConsent: consent });
+                    myRes.smsConsent = consent;
+                    showSuccess(consent ? "SMS consent recorded. You will receive text messages from BCLT." : "SMS consent removed. You will no longer receive text messages.");
+                  } catch (err) { showSuccess("Error: " + err.message); }
+                }} style={{ marginTop: 3, width: 18, height: 18 }} />
+                <span style={{ fontSize: 13, lineHeight: 1.5, color: T.text }}>
+                  I agree to receive text messages from Bolinas Community Land Trust at the phone number on file. Message frequency varies. Message and data rates may apply. Reply STOP to cancel at any time. Reply HELP for help.
+                </span>
+              </label>
+            </div>
             <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
               <div><label style={s.label}>Quiet Hours Start</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursStart} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursStart: e.target.value }))} /></div>
               <div><label style={s.label}>Quiet Hours End</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursEnd} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursEnd: e.target.value }))} /></div>
@@ -2247,14 +2263,9 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.phone || ""} onChange={e => setEditResForm(f => ({ ...f, phone: e.target.value }))} /></div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.email || ""} onChange={e => setEditResForm(f => ({ ...f, email: e.target.value }))} /></div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Preferred Channel</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={ef.preferredChannel || "email"} onChange={e => setEditResForm(f => ({ ...f, preferredChannel: e.target.value }))}><option value="email">Email</option><option value="sms">SMS</option><option value="both">Email + SMS</option><option value="phone">Phone</option></select></div>
-                  {(ef.preferredChannel === "sms" || ef.preferredChannel === "both") && (
-                    <div style={{ marginBottom: 10, padding: "10px 12px", background: T.infoDim, borderRadius: T.radiusSm, fontSize: 12 }}>
-                      <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
-                        <input type="checkbox" checked={ef.smsConsent || false} onChange={e => setEditResForm(f => ({ ...f, smsConsent: e.target.checked }))} style={{ marginTop: 2 }} />
-                        <span>Resident has opted in to receive SMS messages from BCLT. By checking this box, you confirm the resident has provided express written consent to receive text messages at the phone number on file. Message frequency varies. Msg & data rates may apply. Reply STOP to opt out.</span>
-                      </label>
-                    </div>
-                  )}
+                  <div style={{ marginBottom: 10, padding: "8px 12px", background: selectedResident.smsConsent ? T.successDim : T.warnDim, borderRadius: T.radiusSm, fontSize: 12, color: selectedResident.smsConsent ? T.success : T.warn }}>
+                    {selectedResident.smsConsent ? "✓ SMS consent recorded by resident" : "⚠ SMS consent not yet provided by resident — resident must opt in from their portal"}
+                  </div>
                   <div style={{ fontWeight: 600, fontSize: 13, marginTop: 12, marginBottom: 6, color: T.muted }}>Mailing Address</div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Street / PO Box</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.mailingStreet || ""} onChange={e => setEditResForm(f => ({ ...f, mailingStreet: e.target.value }))} placeholder="123 Main St or PO Box 456" /></div>
                   <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
