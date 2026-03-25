@@ -2122,9 +2122,18 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
 };
 
 // --- ADMIN RESIDENTS ---
-const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty, onResidentAdded, onDataChanged, leaseDocs: leaseDocsFromApp, sbRentLedger }) => {
+const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, adminNotes, onAddAdminNote, selectedProperty, onResidentAdded, onDataChanged, leaseDocs: leaseDocsFromApp, sbRentLedger, pendingResidentView, onClearPendingResident }) => {
   const [selectedResident, setSelectedResident] = useState(null);
   const [tab, setTab] = useState("Overview");
+
+  // Auto-open resident detail when navigating from property units
+  useEffect(() => {
+    if (pendingResidentView) {
+      const res = LIVE_RESIDENTS.find(r => r.id === pendingResidentView || r._uuid === pendingResidentView);
+      if (res) { setSelectedResident(res); setTab("Overview"); }
+      if (onClearPendingResident) onClearPendingResident();
+    }
+  }, [pendingResidentView]);
   const [noteText, setNoteText] = useState("");
   const [success, showSuccess] = useSuccess();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -2976,9 +2985,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                     <td style={s.td}><span style={{ fontWeight: 600 }}>{u.number}</span></td>
                     <td style={s.td}>{unitResident ? (
                       <button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={() => {
-                        if (onSelectProperty) onSelectProperty(selectedProperty, "residents");
-                        // Small delay to let page switch, then we'd need to select the resident
-                        // For now just navigate to residents filtered by this property
+                        if (onSelectProperty) onSelectProperty(selectedProperty, "residents", unitResident.id);
                       }}>{unitResident.name}</button>
                     ) : <span style={{ color: T.dim, fontSize: 12 }}>Vacant</span>}</td>
                     <td style={s.td}>{u.bedrooms}</td>
@@ -5367,6 +5374,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState("all");
+  const [pendingResidentView, setPendingResidentView] = useState(null);
   const [sbProperties, setSbProperties] = useState(null);
   const [sbResidents, setSbResidents] = useState(null);
   const [sbResidentsExt, setSbResidentsExt] = useState(null);
@@ -5593,9 +5601,10 @@ export default function App() {
     if (mobile) setSidebarOpen(false);
   };
 
-  const selectProperty = useCallback((propId, targetPage) => {
+  const selectProperty = useCallback((propId, targetPage, residentSlug) => {
     setSelectedProperty(propId);
     setPage(targetPage || "residents");
+    if (residentSlug) setPendingResidentView(residentSlug);
     if (mobile) setSidebarOpen(false);
   }, [mobile]);
 
@@ -5630,7 +5639,7 @@ export default function App() {
       const fInsp = filterByProperty(unitInspections, sp);
       switch (page) {
         case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} />;
-        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onDataChanged={reloadData} leaseDocs={leaseDocs} sbRentLedger={sbRentLedger} onResidentAdded={async () => {
+        case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onDataChanged={reloadData} leaseDocs={leaseDocs} sbRentLedger={sbRentLedger} pendingResidentView={pendingResidentView} onClearPendingResident={() => setPendingResidentView(null)} onResidentAdded={async () => {
           try { const [res, resExt] = await Promise.all([fetchResidents(), fetchResidentsExtended()]); LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt; setSbResidents(res); setSbResidentsExt(resExt); } catch(e) { console.warn(e); }
         }} />;
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
