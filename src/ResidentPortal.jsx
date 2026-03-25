@@ -4879,7 +4879,7 @@ const MobileTabBar = ({ role, activePage, onNavigate, navBadges, onMoreClick }) 
   const tabs = BOTTOM_TABS[role] || BOTTOM_TABS.resident;
   const isMore = !tabs.some(t => t.id === activePage);
   return (
-    <div data-print-hide style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 70, background: T.cardBg, borderTop: `1px solid ${T.border}`, display: "flex", zIndex: 1100, paddingBottom: "env(safe-area-inset-bottom, 20px)" }}>
+    <div data-print-hide style={{ position: "fixed", bottom: 0, left: 0, right: 0, height: 70, background: T.surface, borderTop: `1px solid ${T.border}`, display: "flex", zIndex: 1100, paddingBottom: "env(safe-area-inset-bottom, 20px)", boxShadow: "0 -2px 10px rgba(0,0,0,0.1)" }}>
       {tabs.map(t => {
         const active = activePage === t.id;
         return (
