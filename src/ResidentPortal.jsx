@@ -1708,6 +1708,29 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
                 <div><label style={s.label}>Phone</label><input style={s.mInput(mobile)} value={contactForm.phone} onChange={e => setContactForm(p => ({ ...p, phone: e.target.value }))} /></div>
                 <div><label style={s.label}>Email</label><input style={s.mInput(mobile)} type="email" value={contactForm.email} onChange={e => setContactForm(p => ({ ...p, email: e.target.value }))} /></div>
               </div>
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>Preferred Contact Method</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {["email", "sms", "both", "phone"].map(ch => (
+                    <button key={ch} onClick={() => setCommPrefs(prev => ({ ...prev, preferredChannel: ch }))} style={{ ...s.btn(commPrefs.preferredChannel === ch ? "primary" : "ghost"), flex: 1, fontSize: 12, textTransform: "uppercase" }}>{ch === "both" ? "Email+SMS" : ch}</button>
+                  ))}
+                </div>
+              </div>
+              {(commPrefs.preferredChannel === "sms" || commPrefs.preferredChannel === "both") && (
+                <div style={{ marginBottom: 14, padding: "12px 14px", background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                    <input type="checkbox" checked={myRes.smsConsent || false} onChange={async (e) => {
+                      const consent = e.target.checked;
+                      try {
+                        await updateResident(myRes._uuid, { smsConsent: consent });
+                        myRes.smsConsent = consent;
+                        showSuccess(consent ? "SMS consent recorded." : "SMS consent removed.");
+                      } catch (err) { showSuccess("Error: " + err.message); }
+                    }} style={{ marginTop: 3, width: 18, height: 18 }} />
+                    <span style={{ fontSize: 13, lineHeight: 1.5 }}>I agree to receive text messages from Bolinas Community Land Trust. Msg & data rates may apply. Reply STOP to cancel.</span>
+                  </label>
+                </div>
+              )}
               <button style={s.btn()} onClick={saveContact}>Save Changes</button>
             </div>
           ) : (
@@ -1716,7 +1739,8 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
               <DetailRow label="Unit" value={rc?.unit || "—"} />
               <DetailRow label="Phone" value={contactForm.phone} />
               <DetailRow label="Email" value={contactForm.email} />
-              <DetailRow label="Preferred Channel" value={commPrefs.preferredChannel.toUpperCase()} accent={T.accent} />
+              <DetailRow label="Preferred Channel" value={(commPrefs.preferredChannel || "email").toUpperCase()} accent={T.accent} />
+              <DetailRow label="SMS Consent" value={myRes.smsConsent ? "✓ Opted In" : "Not opted in"} accent={myRes.smsConsent ? T.success : T.warn} />
             </div>
           )}
         </div>
