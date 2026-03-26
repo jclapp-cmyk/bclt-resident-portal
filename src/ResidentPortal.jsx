@@ -2125,8 +2125,11 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                       if (lease) {
                         await updateLease(lease.id, { rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart || null, endDate: ef.leaseType === "month-to-month" ? null : (ef.leaseEnd || null), leaseType: ef.leaseType || "fixed" });
                       } else if (ef.rentAmount || ef.leaseStart) {
-                        // No lease exists — create one
-                        await insertLease({ residentId: selectedResident._uuid, rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart || new Date().toISOString().slice(0, 10), endDate: ef.leaseType === "month-to-month" ? null : (ef.leaseEnd || null), leaseType: ef.leaseType || "fixed" });
+                        // No lease exists — create one, need unit UUID
+                        const resRecord = LIVE_RESIDENTS.find(r => r._uuid === selectedResident._uuid) || selectedResident;
+                        const unitUuid = resRecord?.unitId || selectedResident?.unitId || null;
+                        // If no unit UUID, look it up from the resident's unit_id in Supabase
+                        await insertLease({ residentId: selectedResident._uuid, unitId: unitUuid, rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart || new Date().toISOString().slice(0, 10), endDate: ef.leaseType === "month-to-month" ? null : (ef.leaseEnd || null), leaseType: ef.leaseType || "fixed" });
                       }
                       showSuccess("Resident updated!");
                       setEditing(false);

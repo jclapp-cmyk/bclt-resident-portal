@@ -149,6 +149,7 @@ export async function fetchResidents() {
     firstName: r.first_name || r.name?.split(' ')[0] || '',
     lastName: r.last_name || r.name?.split(' ').slice(1).join(' ') || '',
     unit: r.units?.number || '',
+    unitId: r.unit_id || null,
     phone: r.phone,
     email: r.email,
     preferredChannel: r.preferred_channel,
