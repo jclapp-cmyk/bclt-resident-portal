@@ -691,7 +691,15 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
         <StatCard label="Open Work Orders" value={open} accent={T.warn} mobile={mobile} />
         <StatCard label="Critical / Urgent" value={critical} accent={T.danger} mobile={mobile} />
-        <StatCard label="Upcoming Inspections" value={upcomingInsp} accent={T.info} mobile={mobile} />
+        {(() => {
+          const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty);
+          const certsDue = residents.filter(r => {
+            const ext = LIVE_RESIDENTS_EXTENDED[r.id] || {};
+            const cs = getCertStatus(ext.moveIn || ext.leaseStart, null);
+            return ["overdue", "urgent", "due-soon"].includes(cs.status);
+          }).length;
+          return <StatCard label="Certs Due" value={certsDue} accent={certsDue > 0 ? T.danger : T.success} mobile={mobile} />;
+        })()}
         <StatCard label="Vendor Alerts" value={expVendors} accent={expVendors > 0 ? T.danger : T.success} mobile={mobile} />
       </div>
 
@@ -1062,6 +1070,37 @@ const SignaturePad = ({ value, onChange, label, mobile }) => {
       </div>
     </div>
   );
+};
+
+// ── CERT DUE DATE HELPER ──
+const getCertDueDate = (moveInDate) => {
+  if (!moveInDate) return null;
+  const now = new Date();
+  const mi = new Date(moveInDate);
+  // Next anniversary of move-in date
+  let due = new Date(now.getFullYear(), mi.getMonth(), mi.getDate());
+  if (due < now) due = new Date(now.getFullYear() + 1, mi.getMonth(), mi.getDate());
+  return due;
+};
+const getCertStatus = (moveInDate, lastCertDate) => {
+  const due = getCertDueDate(moveInDate);
+  if (!due) return { status: "unknown", daysUntil: null, label: "No Move-In Date", color: "muted" };
+  const now = new Date();
+  const days = Math.ceil((due - now) / 86400000);
+  if (lastCertDate) {
+    const lastCert = new Date(lastCertDate);
+    const certYear = lastCert.getFullYear();
+    const dueYear = due.getFullYear();
+    // If cert was done this year, they're good
+    if (certYear >= dueYear || (dueYear - certYear === 1 && due > now)) {
+      return { status: "current", daysUntil: days, label: "Current", color: "success" };
+    }
+  }
+  if (days < 0) return { status: "overdue", daysUntil: days, label: `Overdue (${Math.abs(days)}d)`, color: "danger" };
+  if (days <= 30) return { status: "urgent", daysUntil: days, label: `Due in ${days}d`, color: "danger" };
+  if (days <= 60) return { status: "due-soon", daysUntil: days, label: `Due in ${days}d`, color: "warn" };
+  if (days <= 90) return { status: "upcoming", daysUntil: days, label: `Due in ${days}d`, color: "info" };
+  return { status: "ok", daysUntil: days, label: `Due in ${days}d`, color: "success" };
 };
 
 // ── INCOME CERTIFICATION ──
@@ -1475,6 +1514,56 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc }) => {
         </div>
       )}
 
+      {/* Due Soon / Overdue Summary */}
+      {isAdmin && (() => {
+        const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty);
+        const certsByResident = {};
+        certs.forEach(c => {
+          if (c.status === "approved" && (!certsByResident[c.residentId] || new Date(c.effectiveDate) > new Date(certsByResident[c.residentId])))
+            certsByResident[c.residentId] = c.effectiveDate;
+        });
+        const resWithStatus = residents.map(r => {
+          const ext = LIVE_RESIDENTS_EXTENDED[r.id] || {};
+          const lastCert = certsByResident[r._uuid] || null;
+          const certStatus = getCertStatus(ext.moveIn || ext.leaseStart, lastCert);
+          return { ...r, moveIn: ext.moveIn || ext.leaseStart, lastCert, ...certStatus };
+        }).filter(r => r.moveIn);
+        const overdue = resWithStatus.filter(r => r.status === "overdue").length;
+        const urgent = resWithStatus.filter(r => r.status === "urgent").length;
+        const dueSoon = resWithStatus.filter(r => r.status === "due-soon").length;
+        const upcoming = resWithStatus.filter(r => r.status === "upcoming").length;
+        const current = resWithStatus.filter(r => r.status === "current" || r.status === "ok").length;
+        const needsAction = resWithStatus.filter(r => ["overdue", "urgent", "due-soon"].includes(r.status));
+        return (<>
+          <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 16 }}>
+            <StatCard label="Overdue" value={overdue} accent={overdue > 0 ? T.danger : T.success} mobile={mobile} />
+            <StatCard label="Due ≤30 Days" value={urgent} accent={urgent > 0 ? T.danger : T.success} mobile={mobile} />
+            <StatCard label="Due ≤60 Days" value={dueSoon} accent={dueSoon > 0 ? T.warn : T.success} mobile={mobile} />
+            <StatCard label="Current" value={current} accent={T.success} mobile={mobile} />
+          </div>
+          {needsAction.length > 0 && (
+            <div style={{ ...s.card, borderLeft: `3px solid ${T.danger}`, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15, color: T.danger }}>⚠️ Action Required ({needsAction.length})</div>
+              {needsAction.sort((a, b) => (a.daysUntil || 0) - (b.daysUntil || 0)).map(r => (
+                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+                  <div>
+                    <span style={{ fontWeight: 600 }}>{r.name}</span>
+                    <span style={{ color: T.muted, fontSize: 13, marginLeft: 10 }}>Unit {r.unit}</span>
+                    {r.lastCert && <span style={{ color: T.dim, fontSize: 12, marginLeft: 10 }}>Last cert: {r.lastCert}</span>}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={s.badge(r.color === "danger" ? T.dangerDim : T.warnDim, r.color === "danger" ? T.danger : T.warn)}>{r.label}</span>
+                    <button style={s.btn("primary")} onClick={() => { setNewResidentId(r._uuid); }}>Start Cert</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>);
+      })()}
+
+      {/* Existing Certifications */}
+      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Certification History</div>
       {loading ? <div style={{ padding: 40, textAlign: "center", color: T.muted }}>Loading certifications...</div> :
         filteredCerts.length === 0 ? <EmptyState icon="📋" text="No income certifications yet. Start one for a resident above." /> : (
         <SortableTable mobile={mobile} keyField="id" onRowClick={(row) => { setActiveCert(row); loadCertData(row); setStep(0); }} columns={[
