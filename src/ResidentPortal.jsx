@@ -1898,24 +1898,23 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
         </div>
       )}
 
-      {tab === "Lease Summary" && (
+      {tab === "Lease Summary" && (() => {
+        const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
+        return (
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Lease & Unit Details</div>
-          <DetailRow label="Unit" value={`${u.number} — ${u.floorPlan}`} />
-          <DetailRow label="Bedrooms / Bathrooms" value={`${u.bedrooms} BR / ${u.bathrooms} BA`} />
-          <DetailRow label="Square Footage" value={`${u.sqft} sq ft`} />
-          <DetailRow label="Lease Start" value={u.leaseStart} />
-          <DetailRow label="Lease End" value={u.leaseEnd} />
+          <DetailRow label="Unit" value={rc?.unit || "—"} />
+          <DetailRow label="Bedrooms" value={ext.bedrooms || "—"} />
+          <DetailRow label="Lease Type" value={ext.leaseType === "month-to-month" ? "Month-to-Month" : "Fixed Term"} />
+          <DetailRow label="Lease Start" value={ext.leaseStart || "—"} />
+          {ext.leaseType !== "month-to-month" && <DetailRow label="Lease End" value={ext.leaseEnd || "—"} />}
           <div style={{ marginTop: 14, fontWeight: 700, marginBottom: 10, fontSize: 14 }}>Rent Breakdown</div>
-          <DetailRow label="Total Rent" value={`$${u.rentAmount}`} />
-          <DetailRow label="Your Portion" value={`$${u.tenantPortion}`} accent={T.accent} />
-          <DetailRow label="HAP Payment (PHA)" value={`$${u.hapPayment}`} accent={T.success} />
-          <div style={{ marginTop: 14, fontWeight: 700, marginBottom: 10, fontSize: 14 }}>Utilities</div>
-          {Object.entries(u.utilityResponsibility).map(([util, resp]) => (
-            <DetailRow key={util} label={util.charAt(0).toUpperCase() + util.slice(1)} value={resp} accent={resp === "Tenant" ? T.warn : T.success} />
-          ))}
+          <DetailRow label="Total Rent" value={ext.rentAmount ? `$${ext.rentAmount}` : "—"} />
+          <DetailRow label="Your Portion" value={ext.tenantPortion ? `$${ext.tenantPortion}` : "—"} accent={T.accent} />
+          <DetailRow label="HAP Payment (PHA)" value={ext.hapPayment ? `$${ext.hapPayment}` : "—"} accent={T.success} />
         </div>
-      )}
+        );
+      })()}
 
       {tab === "Preferences" && (
         <div>
