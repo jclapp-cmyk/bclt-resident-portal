@@ -278,15 +278,18 @@ export async function fetchResidentLease(residentUuid) {
 }
 
 export async function insertLease(lease, residentUuid, unitUuid) {
+  const resId = lease.residentId || residentUuid;
+  const uId = lease.unitId || unitUuid || null;
   const { data, error } = await supabase.from('leases').insert({
-    resident_id: residentUuid,
-    unit_id: unitUuid,
-    start_date: lease.startDate,
+    resident_id: resId,
+    unit_id: uId,
+    start_date: lease.startDate || null,
     end_date: lease.endDate || null,
-    rent_amount: lease.rentAmount,
-    tenant_portion: lease.tenantPortion,
-    hap_payment: lease.hapPayment,
+    rent_amount: lease.rentAmount || 0,
+    tenant_portion: lease.tenantPortion || 0,
+    hap_payment: lease.hapPayment || 0,
     lease_type: lease.leaseType || 'fixed',
+    status: 'active',
   }).select().single();
   if (error) throw error;
   return data;

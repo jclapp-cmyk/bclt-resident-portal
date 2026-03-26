@@ -2120,8 +2120,14 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   <button style={{ ...s.mBtn("primary", mobile), marginTop: 8 }} onClick={async () => {
                     try {
                       await updateResident(selectedResident._uuid, { name: ef.name, phone: ef.phone, email: ef.email, preferredChannel: ef.preferredChannel, smsConsent: ef.smsConsent, mailingStreet: ef.mailingStreet, mailingCity: ef.mailingCity, mailingState: ef.mailingState, mailingZip: ef.mailingZip });
-                      const lease = await fetchResidentLease(selectedResident._uuid);
-                      if (lease) await updateLease(lease.id, { rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart, endDate: ef.leaseType === "month-to-month" ? null : ef.leaseEnd, leaseType: ef.leaseType || "fixed" });
+                      let lease = null;
+                      try { lease = await fetchResidentLease(selectedResident._uuid); } catch {}
+                      if (lease) {
+                        await updateLease(lease.id, { rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart || null, endDate: ef.leaseType === "month-to-month" ? null : (ef.leaseEnd || null), leaseType: ef.leaseType || "fixed" });
+                      } else if (ef.rentAmount || ef.leaseStart) {
+                        // No lease exists — create one
+                        await insertLease({ residentId: selectedResident._uuid, rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart || new Date().toISOString().slice(0, 10), endDate: ef.leaseType === "month-to-month" ? null : (ef.leaseEnd || null), leaseType: ef.leaseType || "fixed" });
+                      }
                       showSuccess("Resident updated!");
                       setEditing(false);
                       if (onResidentAdded) onResidentAdded();
