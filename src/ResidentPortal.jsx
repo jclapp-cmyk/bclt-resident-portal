@@ -591,17 +591,19 @@ const BOTTOM_TABS = {
 
 // --- RESIDENT DASHBOARD ---
 const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, onNavigate }) => {
-  const daysUntilRecert = MOCK_RECERT.deadline ? Math.ceil((new Date(MOCK_RECERT.deadline) - new Date()) / 86400000) : 999;
+  const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
+  const certStatus = getCertStatus(ext.moveIn || ext.leaseStart, null);
   const openRequests = maintenance.filter(m => m.unit === rc?.unit && m.status !== "completed").length;
+  const propName = LIVE_PROPERTIES.find(p => p.id === rc?.propertyId)?.name || "BCLT";
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, {rc?.firstName || "Resident"}</h1>
-      <p style={s.sectionSub}>Unit {rc?.unit || "—"} — Bolinas Community Land Trust</p>
+      <p style={s.sectionSub}>Unit {rc?.unit || "—"} — {propName}</p>
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
         <StatCard label="Rent Balance" value="$0.00" accent={T.success} mobile={mobile} />
         <StatCard label="Open Requests" value={openRequests} accent={openRequests > 0 ? T.warn : T.success} mobile={mobile} />
-        <StatCard label="Recert Deadline" value={`${daysUntilRecert}d`} accent={daysUntilRecert < 90 ? T.warn : T.accent} mobile={mobile} />
-        <StatCard label="Next Inspection" value="Nov 14" accent={T.info} mobile={mobile} />
+        <StatCard label="Income Cert" value={certStatus.label} accent={certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success} mobile={mobile} />
+        <StatCard label="Lease Status" value={ext.leaseEnd ? (new Date(ext.leaseEnd) < new Date() ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "M-to-M" : "Active")} accent={ext.leaseEnd && new Date(ext.leaseEnd) < new Date() ? T.danger : T.success} mobile={mobile} />
       </div>
       {(() => {
         const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || {};
@@ -1677,8 +1679,9 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
 
 // --- UNIT DETAILS (Resident) ---
 const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
-  const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
-  const u = { number: rc?.unit || "—", bedrooms: ext.bedrooms || 0, bathrooms: 1, sqft: 0, floorPlan: `${ext.bedrooms || 0}BR`, leaseStart: ext.leaseStart || "—", leaseEnd: ext.leaseEnd || "—", rentAmount: ext.rentAmount || 0, tenantPortion: ext.tenantPortion || 0, hapPayment: ext.hapPayment || 0, utilityResponsibility: {}, appliances: [], lastInspection: null };
+  if (!rc || !rc.id) return <div><h1 style={s.sectionTitle}>My Unit</h1><EmptyState icon="🏠" text="Unit information not available. Your profile may not be linked to a unit yet." /></div>;
+  const ext = LIVE_RESIDENTS_EXTENDED[rc.id] || {};
+  const u = { number: rc.unit || "—", bedrooms: ext.bedrooms || 0, bathrooms: 1, sqft: 0, floorPlan: `${ext.bedrooms || 0}BR`, leaseStart: ext.leaseStart || "—", leaseEnd: ext.leaseEnd || "—", rentAmount: ext.rentAmount || 0, tenantPortion: ext.tenantPortion || 0, hapPayment: ext.hapPayment || 0, utilityResponsibility: {}, appliances: [], lastInspection: null };
   const rid = rc?.id || "";
   const residentDocs = leaseDocs[rid] || [];
 
@@ -1741,8 +1744,8 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
   const tabs = ["Contact", "Emergency Contacts", "Household", "Lease Summary", "Preferences"];
   const [tab, setTab] = useState(tabs[0]);
   const [editingContact, setEditingContact] = useState(false);
-  const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || LIVE_RESIDENTS[0];
-  const [contactForm, setContactForm] = useState({ phone: myRes.phone, email: myRes.email });
+  const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || { phone: "", email: "", name: rc?.name || "Resident", preferredChannel: "email" };
+  const [contactForm, setContactForm] = useState({ phone: myRes.phone || "", email: myRes.email || "" });
   const [editingEC, setEditingEC] = useState(null);
   const [ecForm, setEcForm] = useState({ name: "", relationship: "", phone: "", email: "" });
   const [success, showSuccess] = useSuccess();
