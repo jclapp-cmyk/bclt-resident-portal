@@ -1525,9 +1525,22 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                         timestamp: new Date().toISOString(),
                         roles: ["admin"],
                       });
+                      // Email all admins
+                      fetchUserProfiles().then(profiles => {
+                        const admins = (profiles || []).filter(p => p.role === "admin" && p.email);
+                        admins.forEach(admin => {
+                          sendNotification("custom", {
+                            to: admin.email,
+                            subject: `Income Certification Submitted — ${activeCert.residentName} (${activeCert.unit})`,
+                            body: `${activeCert.residentName} in Unit ${activeCert.unit} has submitted their income certification for review.\n\nTotal Annual Household Income: $${incomeForDetermination.toLocaleString()}\nAMI Category: ${eligibility.category}\n\nPlease log in to the Resident Portal to review and approve.`,
+                          }).catch(() => {});
+                        });
+                      }).catch(() => {});
                     }
+                    // Refresh certs before clearing active cert to avoid stale list
+                    const refreshed = await fetchIncomeCertifications();
+                    setCerts(refreshed || []);
                     setActiveCert(null);
-                    fetchIncomeCertifications().then(setCerts).catch(() => {});
                   } catch (err) { showSuccess("Error: " + err.message); }
                 }} style={s.mBtn("primary", mobile)}>{isAdmin ? "✓ Approve & Complete" : "Submit for Review"}</button>
               </div>
@@ -1658,6 +1671,17 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
           }, filterOptions: ["draft", "in_progress", "pending_review", "approved", "rejected"] },
           { key: "amiCategory", label: "AMI", render: v => v || "—" },
           { key: "incomeForDetermination", label: "Income", render: v => v ? `$${Number(v).toLocaleString()}` : "—" },
+          ...(isAdmin ? [{ key: "id", label: "", render: (v, row) => row.status === "pending_review" ? (
+            <button onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                await updateIncomeCertification(v, { status: "approved" });
+                showSuccess("Certification approved!");
+                const refreshed = await fetchIncomeCertifications();
+                setCerts(refreshed || []);
+              } catch (err) { showSuccess("Error: " + err.message); }
+            }} style={{ ...s.btn("primary"), fontSize: 11, padding: "4px 10px", whiteSpace: "nowrap" }}>✓ Approve</button>
+          ) : null }] : []),
         ]} data={filteredCerts} />
       )}
     </div>
