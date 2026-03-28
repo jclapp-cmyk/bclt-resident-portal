@@ -922,6 +922,17 @@ export async function insertTICAsset(entry) {
   return data;
 }
 
+export async function updateTICAsset(id, updates) {
+  const mapped = {};
+  if (updates.assetType !== undefined) mapped.asset_type = updates.assetType;
+  if (updates.description !== undefined) mapped.description = updates.description;
+  if (updates.cashValue !== undefined) mapped.cash_value = updates.cashValue;
+  if (updates.annualIncome !== undefined) mapped.annual_income = updates.annualIncome;
+  if (updates.isImputed !== undefined) mapped.is_imputed = updates.isImputed;
+  const { error } = await supabase.from('tic_asset_entries').update(mapped).eq('id', id);
+  if (error) throw error;
+}
+
 export async function deleteTICAsset(id) {
   const { error } = await supabase.from('tic_asset_entries').delete().eq('id', id);
   if (error) throw error;

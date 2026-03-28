@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -1050,26 +1050,27 @@ const determineTICEligibility = (totalIncome, hhSize, amiLookup) => {
   if (totalIncome <= lim[80]) return { pct: Math.round((totalIncome / lim[80]) * 100), category: "Moderate (≤80%)", tier: 80, eligible: true };
   return { pct: Math.round((totalIncome / lim[100]) * 100), category: "Over Income (>80%)", tier: 0, eligible: false };
 };
-const calcImputed = (totalAssetValue) => totalAssetValue > 5000 ? totalAssetValue * 0.0006 : 0;
+const calcImputed = (totalAssetValue) => totalAssetValue > 5000 ? totalAssetValue * 0.06 : 0;
 
-// ── SIGNATURE PAD ──
+// ── TYPED SIGNATURE ──
 const SignaturePad = ({ value, onChange, label, mobile }) => {
-  const canvasRef = useRef(null);
-  const [drawing, setDrawing] = useState(false);
-  const startDraw = (e) => { setDrawing(true); const c = canvasRef.current, ctx = c.getContext("2d"); const r = c.getBoundingClientRect(); ctx.beginPath(); ctx.moveTo((e.touches?.[0]?.clientX || e.clientX) - r.left, (e.touches?.[0]?.clientY || e.clientY) - r.top); };
-  const draw = (e) => { if (!drawing) return; const c = canvasRef.current, ctx = c.getContext("2d"); const r = c.getBoundingClientRect(); ctx.lineTo((e.touches?.[0]?.clientX || e.clientX) - r.left, (e.touches?.[0]?.clientY || e.clientY) - r.top); ctx.strokeStyle = "#1A1A1A"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.stroke(); };
-  const endDraw = () => { setDrawing(false); if (canvasRef.current) onChange(canvasRef.current.toDataURL()); };
-  const clear = () => { const c = canvasRef.current; if (c) { c.getContext("2d").clearRect(0, 0, c.width, c.height); onChange(null); } };
-  useEffect(() => { if (value && canvasRef.current) { const img = new Image(); img.onload = () => canvasRef.current?.getContext("2d")?.drawImage(img, 0, 0); img.src = value; } }, []);
+  // Typed name signature — type your full legal name
+  const typedName = (typeof value === "string" && !value.startsWith("data:")) ? value : "";
   return (
     <div>
       <label style={s.label}>{label}</label>
-      <div style={{ border: `1px solid ${T.border}`, borderRadius: T.radiusSm, background: "#FFFFFF", position: "relative" }}>
-        <canvas ref={canvasRef} width={mobile ? 300 : 500} height={80} style={{ display: "block", width: "100%", height: 80, cursor: "crosshair", touchAction: "none" }}
-          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
-          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw} />
-        <button onClick={clear} style={{ position: "absolute", top: 4, right: 4, ...s.btn("ghost"), fontSize: 10, padding: "2px 8px" }}>Clear</button>
-      </div>
+      <input
+        style={{ ...s.mInput(mobile), width: "100%", fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: mobile ? 18 : 22, fontStyle: "italic", padding: "14px 16px", borderColor: typedName ? T.accent : T.border }}
+        value={typedName}
+        onChange={e => onChange(e.target.value)}
+        placeholder="Type your full legal name"
+      />
+      {typedName && (
+        <div style={{ marginTop: 8, padding: "12px 16px", background: T.bg, borderRadius: T.radiusSm, fontFamily: "'Georgia', 'Times New Roman', serif", fontSize: mobile ? 22 : 26, fontStyle: "italic", color: T.accent, borderBottom: `2px solid ${T.accent}`, letterSpacing: "0.5px" }}>
+          {typedName}
+        </div>
+      )}
+      {typedName && <button onClick={() => onChange("")} style={{ ...s.btn("ghost"), fontSize: 11, padding: "2px 8px", marginTop: 4 }}>Clear</button>}
     </div>
   );
 };
@@ -1106,7 +1107,7 @@ const getCertStatus = (moveInDate, lastCertDate) => {
 };
 
 // ── INCOME CERTIFICATION ──
-const IncomeCertification = ({ role, mobile, selectedProperty, rc }) => {
+const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) => {
   const isAdmin = role === "admin";
   const [certs, setCerts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1327,11 +1328,11 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc }) => {
                   </div>
                   {memberAssets.length === 0 ? <div style={{ fontSize: 12, color: T.dim }}>No assets reported</div> : memberAssets.map(a => (
                     <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                      <select value={a.assetType} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, assetType: e.target.value } : x))} style={{ ...s.select, flex: 1, fontSize: 12, padding: "4px 6px" }}>
+                      <select value={a.assetType} onChange={e => { setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, assetType: e.target.value } : x)); updateTICAsset(a.id, { assetType: e.target.value }).catch(() => {}); }} style={{ ...s.select, flex: 1, fontSize: 12, padding: "4px 6px" }}>
                         <option value="savings">Savings</option><option value="checking">Checking</option><option value="cd">CD</option><option value="stocks">Stocks/Bonds</option><option value="real_estate">Real Estate</option><option value="retirement">Retirement</option><option value="life_insurance">Life Insurance</option><option value="other">Other</option>
                       </select>
-                      <input type="number" placeholder="Cash Value" value={a.cashValue || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, cashValue: parseFloat(e.target.value) || 0 } : x))} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
-                      <input type="number" placeholder="Annual Income" value={a.annualIncome || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, annualIncome: parseFloat(e.target.value) || 0 } : x))} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                      <input type="number" placeholder="Cash Value" value={a.cashValue || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, cashValue: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { cashValue: a.cashValue }).catch(() => {})} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                      <input type="number" placeholder="Annual Income" value={a.annualIncome || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, annualIncome: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { annualIncome: a.annualIncome }).catch(() => {})} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
                       <button onClick={async () => { try { await deleteTICAsset(a.id); setAssetEntries(prev => prev.filter(x => x.id !== a.id)); } catch {} }} style={{ ...s.btn("ghost"), color: T.danger, fontSize: 10, padding: "2px 6px" }}>✕</button>
                     </div>
                   ))}
@@ -1341,7 +1342,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc }) => {
             <div style={s.card}>
               <DetailRow label="Total Cash Value of Assets (H)" value={`$${totalAssetValue.toLocaleString()}`} />
               <DetailRow label="Total Annual Income from Assets (I)" value={`$${totalAssetIncome.toLocaleString()}`} />
-              {totalAssetValue > 5000 && <DetailRow label="Imputed Income (J) — $${totalAssetValue.toLocaleString()} × 0.06%" value={`$${imputedIncome.toFixed(2)}`} accent={T.warn} />}
+              {totalAssetValue > 5000 && <DetailRow label={`Imputed Income (J) — $${totalAssetValue.toLocaleString()} × 6%`} value={`$${imputedIncome.toLocaleString()}`} accent={T.warn} />}
               <DetailRow label="Total Income from Assets (K)" value={`$${applicableAssetIncome.toLocaleString()}`} accent={T.info} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
@@ -1437,6 +1438,43 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc }) => {
               <DetailRow label="Program" value={activeCert.programType || "9% LIHTC"} />
             </div>
 
+            {/* Supporting Documents */}
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Supporting Documents</div>
+              <p style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>Upload pay stubs, tax returns, Social Security award letters, bank statements, or other documents verifying income and assets.</p>
+
+              {(activeCert.supportingDocs || []).map(d => (
+                <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: T.bg, borderRadius: T.radiusSm, marginBottom: 6, border: `1px solid ${T.border}` }}>
+                  <span style={{ fontSize: 16 }}>📄</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{d.name}</div>
+                    <div style={{ fontSize: 11, color: T.muted }}>{formatFileSize(d.size)}</div>
+                  </div>
+                  <button onClick={() => setActiveCert(c => ({ ...c, supportingDocs: (c.supportingDocs || []).filter(doc => doc.id !== d.id) }))} style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", fontSize: 14 }}>✕</button>
+                </div>
+              ))}
+
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: mobile ? "16px 20px" : "14px 20px", background: T.bg, border: `2px dashed ${T.border}`, borderRadius: T.radiusSm, cursor: "pointer", fontSize: 13, fontWeight: 600, color: T.accent, marginTop: 8, minHeight: mobile ? 52 : undefined }}>
+                📎 Upload Documents
+                <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  const newDocs = [];
+                  for (const file of files) {
+                    try {
+                      const path = await uploadTICDocument(file, activeCert.id);
+                      newDocs.push({ id: `doc-${Date.now()}-${Math.random().toString(36).slice(2)}`, name: file.name, size: file.size, path, uploaded_at: new Date().toISOString() });
+                    } catch {
+                      newDocs.push({ id: `doc-${Date.now()}-${Math.random().toString(36).slice(2)}`, name: file.name, size: file.size, path: null, uploaded_at: new Date().toISOString() });
+                    }
+                  }
+                  setActiveCert(c => ({ ...c, supportingDocs: [...(c.supportingDocs || []), ...newDocs] }));
+                  e.target.value = "";
+                  if (newDocs.length) showSuccess(`${newDocs.length} document${newDocs.length > 1 ? "s" : ""} uploaded`);
+                }} style={{ display: "none" }} />
+              </label>
+              <p style={{ fontSize: 11, color: T.dim, marginTop: 6, textAlign: "center" }}>PDF, JPG, PNG, DOC accepted</p>
+            </div>
+
             <div style={s.card}>
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Household Certification & Signatures</div>
               <div style={{ fontSize: 12, color: T.muted, marginBottom: 16, lineHeight: 1.5 }}>
@@ -1477,6 +1515,17 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc }) => {
                       adminSignerName: activeCert.adminSignerName,
                     });
                     showSuccess(isAdmin ? "Certification approved!" : "Submitted for review!");
+                    // Notify admin when resident submits
+                    if (!isAdmin && pushNotif) {
+                      pushNotif({
+                        id: `N-${Date.now()}`,
+                        type: "recert",
+                        icon: "📋",
+                        message: `Income certification submitted by ${activeCert.residentName} (${activeCert.unit}) — $${incomeForDetermination.toLocaleString()}/yr. Review required.`,
+                        timestamp: new Date().toISOString(),
+                        roles: ["admin"],
+                      });
+                    }
                     setActiveCert(null);
                     fetchIncomeCertifications().then(setCerts).catch(() => {});
                   } catch (err) { showSuccess("Error: " + err.message); }
@@ -1501,7 +1550,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc }) => {
       </div>
       <SuccessMessage message={success} />
 
-      {isAdmin && (
+      {isAdmin ? (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Start New Certification</div>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
@@ -1512,6 +1561,35 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc }) => {
               </select>
             </div>
             <button disabled={!newResidentId} onClick={startNewCert} style={s.mBtn("primary", mobile)}>📋 Start Certification</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Annual Income Certification</div>
+              <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Complete your income recertification for housing compliance.</div>
+            </div>
+            <button onClick={async () => {
+              const me = rc ? LIVE_RESIDENTS.find(r => r.id === rc.id || r.name === rc.name) : LIVE_RESIDENTS[0];
+              if (!me) return;
+              try {
+                const cert = await insertIncomeCertification({ residentId: me._uuid, certType: "annual", effectiveDate: new Date().toISOString().slice(0, 10) });
+                const existing = await fetchHouseholdMembers(me._uuid);
+                const headMember = await insertTICMember({ certId: cert.id, name: me.name, relationship: "Head of Household", order: 0 });
+                const otherMembers = [];
+                for (let i = 0; i < (existing || []).length; i++) {
+                  const m = existing[i];
+                  const tm = await insertTICMember({ certId: cert.id, name: m.name, relationship: m.relationship, dob: m.date_of_birth, order: i + 1 });
+                  otherMembers.push(tm);
+                }
+                setHhMembers([{ ...headMember, name: me.name, relationship: "Head of Household", order: 0 }, ...otherMembers.map((tm, i) => ({ ...tm, name: existing[i].name, relationship: existing[i].relationship, order: i + 1 }))]);
+                setIncomeEntries([]); setAssetEntries([]);
+                setActiveCert({ ...cert, residentName: me.name, unit: me.unit, status: "draft" });
+                setStep(0);
+                showSuccess("Certification started!");
+              } catch (err) { showSuccess("Error: " + err.message); }
+            }} style={s.mBtn("primary", mobile)}>📋 Start My Certification</button>
           </div>
         </div>
       )}
@@ -5541,7 +5619,7 @@ export default function App() {
         case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
         case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={myMaint} onSubmit={addMaintenanceN} rc={rc} />;
         case "rent": return <RentPayments mobile={mobile} rc={rc} />;
-        case "recert": return <IncomeCertification role="resident" mobile={mobile} selectedProperty={selectedProperty} rc={rc} />;
+        case "recert": return <IncomeCertification role="resident" mobile={mobile} selectedProperty={selectedProperty} rc={rc} pushNotif={pushNotif} />;
         case "unit": return <UnitDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} rc={rc} />;
         case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} rc={rc} />;
         case "profile": return <ResidentProfile mobile={mobile} commPrefs={commPrefs} setCommPrefs={setCommPrefs} emergencyContacts={emergencyContacts} onUpdateEmergencyContacts={updateEmergencyContacts} rc={rc} />;
