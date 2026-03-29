@@ -5798,7 +5798,7 @@ export default function App() {
   };
   const addInspectionN = (insp) => {
     addInspection(insp);
-    pushNotif({ id: `N-${Date.now()}`, type: "inspection", icon: "🔍", message: `Inspection scheduled: ${insp.category} — ${insp.unit}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance", ...(insp.unit === (rc?.unit || "") ? ["resident"] : [])] });
+    pushNotif({ id: `N-${Date.now()}`, type: "inspection", icon: "🔍", message: `Inspection scheduled: ${insp.category} — ${insp.unit}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance", ...(insp.unit === (residentCtx?.unit || "") ? ["resident"] : [])] });
   };
 
   const nav = NAV[role] || [];
