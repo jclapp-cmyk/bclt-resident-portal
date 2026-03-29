@@ -1185,12 +1185,188 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
     } catch (err) { console.warn("Save totals failed:", err); }
   };
 
+  const printCertification = () => {
+    const ext = LIVE_RESIDENTS_EXTENDED[LIVE_RESIDENTS.find(r => r._uuid === activeCert.residentId || r.name === activeCert.residentName)?.id] || {};
+    const tenantRent = activeCert.tenantRent || ext.tenantPortion || 0;
+    const ua = activeCert.utilityAllowance || 0;
+    const grossRent = tenantRent + ua;
+    const hapPayment = activeCert.hapPayment || ext.hapPayment || 0;
+    const memberRows = hhMembers.map((m, i) => {
+      const mIncome = incomeEntries.filter(e => e.memberId === m.id);
+      const mAssets = assetEntries.filter(e => e.memberId === m.id);
+      const mIncomeTotal = mIncome.reduce((s, e) => s + (e.amount || 0), 0);
+      const mAssetValue = mAssets.reduce((s, e) => s + (e.cashValue || 0), 0);
+      const mAssetIncome = mAssets.reduce((s, e) => s + (e.annualIncome || 0), 0);
+      return `<tr>
+        <td style="padding:3px 6px;border:1px solid #ccc;font-size:10px">${i + 1}. ${m.name}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;font-size:10px">${m.relationship || ""}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;font-size:10px">${m.dob || ""}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;font-size:10px;text-align:right">$${mIncomeTotal.toLocaleString()}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;font-size:10px;text-align:right">$${mAssetValue.toLocaleString()}</td>
+        <td style="padding:3px 6px;border:1px solid #ccc;font-size:10px;text-align:right">$${mAssetIncome.toLocaleString()}</td>
+      </tr>`;
+    }).join("");
+    const incomeRows = incomeEntries.map(e => {
+      const member = hhMembers.find(m => m.id === e.memberId);
+      return `<tr>
+        <td style="padding:2px 6px;border:1px solid #ccc;font-size:9px">${member?.name || ""}</td>
+        <td style="padding:2px 6px;border:1px solid #ccc;font-size:9px">${(e.category || "").replace("_", " ")}</td>
+        <td style="padding:2px 6px;border:1px solid #ccc;font-size:9px">${e.source || ""}</td>
+        <td style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:right">$${(e.amount || 0).toLocaleString()}</td>
+      </tr>`;
+    }).join("");
+    const assetRows = assetEntries.map(e => {
+      const member = hhMembers.find(m => m.id === e.memberId);
+      return `<tr>
+        <td style="padding:2px 6px;border:1px solid #ccc;font-size:9px">${member?.name || ""}</td>
+        <td style="padding:2px 6px;border:1px solid #ccc;font-size:9px">${(e.assetType || "").replace("_", " ")}</td>
+        <td style="padding:2px 6px;border:1px solid #ccc;font-size:9px">${e.description || ""}</td>
+        <td style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:right">$${(e.cashValue || 0).toLocaleString()}</td>
+        <td style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:right">$${(e.annualIncome || 0).toLocaleString()}</td>
+      </tr>`;
+    }).join("");
+    const w = window.open("", "_blank");
+    w.document.write(`<!DOCTYPE html><html><head><title>Income Certification — ${activeCert.residentName}</title>
+    <style>
+      @page { size: letter; margin: 0.4in; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; line-height: 1.3; }
+      .header { text-align: center; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; margin-bottom: 8px; }
+      .header h1 { font-size: 15px; color: #1a3a5c; margin-bottom: 2px; }
+      .header p { font-size: 10px; color: #555; }
+      .section { margin-bottom: 8px; }
+      .section-title { font-size: 11px; font-weight: 700; color: #1a3a5c; border-bottom: 1px solid #1a3a5c; padding-bottom: 2px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+      table { width: 100%; border-collapse: collapse; }
+      .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px 16px; font-size: 11px; margin-bottom: 6px; }
+      .info-grid .label { color: #666; font-size: 9px; text-transform: uppercase; }
+      .info-grid .value { font-weight: 600; }
+      .totals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 24px; font-size: 11px; }
+      .totals-grid .row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dotted #ddd; }
+      .totals-grid .row.highlight { font-weight: 700; color: #1a3a5c; border-bottom: 1px solid #1a3a5c; }
+      .sig-line { border-bottom: 1px solid #333; min-width: 200px; padding: 2px 4px; font-family: Georgia, serif; font-style: italic; font-size: 13px; color: #1a3a5c; display: inline-block; min-height: 18px; }
+      .sig-row { display: flex; justify-content: space-between; gap: 24px; margin-top: 8px; }
+      .sig-block { flex: 1; }
+      .sig-label { font-size: 9px; color: #666; text-transform: uppercase; margin-top: 2px; }
+      .badge { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+      .eligible { background: #e6f4ea; color: #1e7e34; }
+      .ineligible { background: #fde8e8; color: #c62828; }
+    </style></head><body>
+    <div class="header">
+      <h1>Tenant Income Certification</h1>
+      <p>Bolinas Community Land Trust &middot; HUD Form 50059 / LIHTC Compliance</p>
+    </div>
+
+    <div class="section">
+      <div class="info-grid">
+        <div><span class="label">Resident</span><br/><span class="value">${activeCert.residentName}</span></div>
+        <div><span class="label">Unit</span><br/><span class="value">${activeCert.unit}</span></div>
+        <div><span class="label">Effective Date</span><br/><span class="value">${activeCert.effectiveDate || ""}</span></div>
+        <div><span class="label">Certification Type</span><br/><span class="value">${activeCert.certType === "annual" ? "Annual Recertification" : activeCert.certType || ""}</span></div>
+        <div><span class="label">Program</span><br/><span class="value">${activeCert.programType || "9% LIHTC"}</span></div>
+        <div><span class="label">Status</span><br/><span class="value">${(activeCert.status || "").replace("_", " ")}</span></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Part I — Household Composition</div>
+      <table>
+        <thead><tr style="background:#f0f4f8">
+          <th style="padding:3px 6px;border:1px solid #ccc;font-size:9px;text-align:left">Member</th>
+          <th style="padding:3px 6px;border:1px solid #ccc;font-size:9px;text-align:left">Relationship</th>
+          <th style="padding:3px 6px;border:1px solid #ccc;font-size:9px;text-align:left">DOB</th>
+          <th style="padding:3px 6px;border:1px solid #ccc;font-size:9px;text-align:right">Annual Income</th>
+          <th style="padding:3px 6px;border:1px solid #ccc;font-size:9px;text-align:right">Asset Value</th>
+          <th style="padding:3px 6px;border:1px solid #ccc;font-size:9px;text-align:right">Asset Income</th>
+        </tr></thead>
+        <tbody>${memberRows}</tbody>
+      </table>
+    </div>
+
+    ${incomeEntries.length > 0 ? `<div class="section">
+      <div class="section-title">Part II — Income Detail</div>
+      <table>
+        <thead><tr style="background:#f0f4f8">
+          <th style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:left">Member</th>
+          <th style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:left">Category</th>
+          <th style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:left">Source</th>
+          <th style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:right">Annual Amount</th>
+        </tr></thead>
+        <tbody>${incomeRows}</tbody>
+      </table>
+    </div>` : ""}
+
+    ${assetEntries.length > 0 ? `<div class="section">
+      <div class="section-title">Part III — Asset Detail</div>
+      <table>
+        <thead><tr style="background:#f0f4f8">
+          <th style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:left">Member</th>
+          <th style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:left">Type</th>
+          <th style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:left">Description</th>
+          <th style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:right">Cash Value</th>
+          <th style="padding:2px 6px;border:1px solid #ccc;font-size:9px;text-align:right">Annual Income</th>
+        </tr></thead>
+        <tbody>${assetRows}</tbody>
+      </table>
+    </div>` : ""}
+
+    <div class="section">
+      <div class="section-title">Part IV — Income Determination & Eligibility</div>
+      <div class="totals-grid">
+        <div>
+          <div class="row"><span>Total Annual Income (E)</span><span>$${totalAnnualIncome.toLocaleString()}</span></div>
+          <div class="row"><span>Total Asset Value</span><span>$${totalAssetValue.toLocaleString()}</span></div>
+          <div class="row"><span>Actual Asset Income (K)</span><span>$${totalAssetIncome.toLocaleString()}</span></div>
+          <div class="row"><span>Imputed Asset Income (6%)</span><span>$${imputedIncome.toLocaleString()}</span></div>
+          <div class="row"><span>Applicable Asset Income</span><span>$${applicableAssetIncome.toLocaleString()}</span></div>
+          <div class="row highlight"><span>Total Household Income (L)</span><span>$${incomeForDetermination.toLocaleString()}</span></div>
+        </div>
+        <div>
+          <div class="row"><span>Household Size</span><span>${hhMembers.length}</span></div>
+          <div class="row"><span>AMI Category</span><span>${eligibility.category}</span></div>
+          <div class="row"><span>AMI Percentage</span><span>${eligibility.pct}%</span></div>
+          <div class="row highlight"><span>Income Eligible</span><span class="badge ${eligibility.eligible ? "eligible" : "ineligible"}">${eligibility.eligible ? "YES" : "NO"}</span></div>
+          <div class="row"><span>Tenant Paid Rent</span><span>$${tenantRent.toLocaleString()}</span></div>
+          <div class="row"><span>Utility Allowance</span><span>$${ua.toLocaleString()}</span></div>
+          <div class="row"><span>Gross Rent</span><span>$${grossRent.toLocaleString()}</span></div>
+          ${hapPayment ? `<div class="row"><span>HAP / Rent Assistance</span><span>$${hapPayment.toLocaleString()}</span></div>` : ""}
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Part V — Certification & Signatures</div>
+      <p style="font-size:9px;color:#555;margin-bottom:8px;line-height:1.4">Under penalties of perjury, I/we certify that the information presented in this certification is true and accurate to the best of my/our knowledge and belief. The owner/management agent has reviewed the documentation and determined the household qualifies.</p>
+      <div class="sig-row">
+        <div class="sig-block">
+          <div class="sig-line">${activeCert.residentSignature || ""}</div>
+          <div class="sig-label">Resident Signature</div>
+          <div style="font-size:9px;color:#888;margin-top:1px">${activeCert.residentSignedAt ? new Date(activeCert.residentSignedAt).toLocaleDateString() : ""}</div>
+        </div>
+        <div class="sig-block">
+          <div class="sig-line">${activeCert.adminSignature || ""}</div>
+          <div class="sig-label">Owner/Representative Signature${activeCert.adminSignerName ? " — " + activeCert.adminSignerName : ""}</div>
+          <div style="font-size:9px;color:#888;margin-top:1px">${activeCert.adminSignedAt ? new Date(activeCert.adminSignedAt).toLocaleDateString() : ""}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:center;font-size:8px;color:#999;margin-top:8px;border-top:1px solid #ddd;padding-top:4px">
+      Generated ${new Date().toLocaleDateString()} &middot; Bolinas Community Land Trust Resident Portal
+    </div>
+    </body></html>`);
+    w.document.close();
+    setTimeout(() => w.print(), 300);
+  };
+
   // If editing a cert, show wizard
   if (activeCert) {
     const ext = LIVE_RESIDENTS_EXTENDED[LIVE_RESIDENTS.find(r => r._uuid === activeCert.residentId || r.name === activeCert.residentName)?.id] || {};
     return (
       <div>
-        <button onClick={() => { saveCertTotals(); setActiveCert(null); }} style={{ ...s.btn("ghost"), marginBottom: 16 }}>&larr; Back to Certifications</button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <button onClick={() => { saveCertTotals(); setActiveCert(null); }} style={s.btn("ghost")}>&larr; Back to Certifications</button>
+          <button onClick={printCertification} style={{ ...s.btn("ghost"), fontSize: 13 }}>🖨️ Print</button>
+        </div>
         <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Income Certification — {activeCert.residentName}</h1>
         <p style={s.sectionSub}>Unit {activeCert.unit} · {activeCert.certType === "annual" ? "Annual Recertification" : activeCert.certType} · {activeCert.status}</p>
 
