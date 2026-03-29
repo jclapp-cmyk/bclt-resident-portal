@@ -3582,20 +3582,24 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 };
 
 // --- INSPECTIONS (All Roles — Unified) ---
-const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
+const Inspections = ({ role, mobile, unitInspections, onSchedule, rc, selectedProperty }) => {
   const isResident = role === "resident";
   const isAdmin = role === "admin";
-  const tabs = isResident ? null : isAdmin ? ["All Inspections", "Unit History", "Categories", "Schedule"] : ["Unit History", "Categories", "My Assigned"];
+  const tabs = isResident ? null : isAdmin ? ["Schedule", "Unit History", "Regulatory", "Categories"] : ["Unit History", "Categories", "My Assigned"];
   const [tab, setTab] = useState(isResident ? null : tabs[0]);
   const [success, showSuccess] = useSuccess();
-  const [schedForm, setSchedForm] = useState({ category: "", unit: rc?.unit || "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
+  const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
 
   const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "")) : unitInspections;
-  // Derive property filter from unitInspections — if all same property, filter reg inspections too
-  const propIds = [...new Set(unitInspections.map(i => i.propertyId).filter(Boolean))];
-  const regInsp = propIds.length === 1 ? LIVE_REG_INSPECTIONS.filter(i => i.propertyId === propIds[0]) : LIVE_REG_INSPECTIONS;
+  const regInsp = selectedProperty && selectedProperty !== "all"
+    ? LIVE_REG_INSPECTIONS.filter(i => i.propertyId === selectedProperty)
+    : LIVE_REG_INSPECTIONS;
   const regDueSoon = regInsp.filter(i => new Date(i.nextDue) < new Date("2026-09-01")).length;
   const catNames = [...new Set(MOCK_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => c.name))];
+  const scheduled = unitInspections.filter(i => i.result === "Scheduled");
+  const availableResidents = selectedProperty && selectedProperty !== "all"
+    ? LIVE_RESIDENTS.filter(r => r.propertyId === selectedProperty)
+    : LIVE_RESIDENTS;
 
   return (
     <div>
@@ -3606,21 +3610,99 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
 
       {isAdmin && (
         <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-          <StatCard label="Tracked" value={regInsp.length} accent={T.accent} mobile={mobile} />
-          <StatCard label="Due Within 6mo" value={regDueSoon} accent={T.warn} mobile={mobile} />
-          <StatCard label="Last REAC Score" value="88" accent={T.success} mobile={mobile} />
-          <StatCard label="Unit Inspections" value={unitInspections.length} accent={T.info} mobile={mobile} />
+          <StatCard label="Scheduled" value={scheduled.length} accent={scheduled.length > 0 ? T.info : T.muted} mobile={mobile} />
+          <StatCard label="Unit Inspections" value={unitInspections.length} accent={T.accent} mobile={mobile} />
+          <StatCard label="Regulatory" value={regInsp.length} accent={T.info} mobile={mobile} />
+          <StatCard label="Due Within 6mo" value={regDueSoon} accent={regDueSoon > 0 ? T.warn : T.success} mobile={mobile} />
         </div>
       )}
 
       {tabs && <TabBar tabs={tabs} active={tab} onChange={setTab} mobile={mobile} />}
       <SuccessMessage message={success} />
 
-      {/* Regulatory — admin only */}
-      {tab === "All Inspections" && (
+      {/* Schedule — admin only (now first tab) */}
+      {tab === "Schedule" && isAdmin && (
+        <div>
+          <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Schedule New Inspection</div>
+            <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
+              <div><label style={s.label}>Category</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.category} onChange={e => setSchedForm(p => ({ ...p, category: e.target.value }))}><option value="">Select...</option>{MOCK_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
+              <div><label style={s.label}>Unit</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option value="">Select unit...</option>{availableResidents.map(r => <option key={r.id} value={r.unit}>{r.unit} — {r.name}</option>)}</select></div>
+              <div><label style={s.label}>Date</label><input style={s.mInput(mobile)} type="date" value={schedForm.date} onChange={e => setSchedForm(p => ({ ...p, date: e.target.value }))} /></div>
+            </div>
+            <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
+              <div><label style={s.label}>Inspector</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.inspector} onChange={e => setSchedForm(p => ({ ...p, inspector: e.target.value }))}><option>Mike R.</option><option>External Vendor</option></select></div>
+              <div><label style={s.label}>Notify Resident</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.notify} onChange={e => setSchedForm(p => ({ ...p, notify: e.target.value }))}><option>Yes — 48hr notice</option><option>Yes — 24hr notice</option><option>No notification</option></select></div>
+            </div>
+            <button style={s.btn()} onClick={() => {
+              if (!schedForm.category || !schedForm.date || !schedForm.unit) { showSuccess("Please select a category, unit, and date"); return; }
+              const schedResident = LIVE_RESIDENTS.find(r => r.unit === schedForm.unit);
+              onSchedule({
+                id: `UI-${Date.now()}`,
+                unit: schedForm.unit,
+                propertyId: schedResident?.propertyId || LIVE_PROPERTIES[0]?.id || "wharf",
+                category: schedForm.category,
+                date: schedForm.date,
+                inspector: schedForm.inspector,
+                result: "Scheduled",
+                score: null,
+                failedItems: [],
+                notes: `Notification: ${schedForm.notify}`,
+              });
+              setSchedForm({ category: "", unit: "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
+              showSuccess("Inspection scheduled!");
+            }}>Schedule Inspection</button>
+          </div>
+
+          {scheduled.length > 0 && (
+            <div style={{ ...s.card, marginTop: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Upcoming Scheduled</div>
+              <SortableTable
+                mobile={mobile}
+                columns={[
+                  { key: "date", label: "Date" },
+                  { key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+                  { key: "category", label: "Category", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span> },
+                  { key: "inspector", label: "Inspector" },
+                  { key: "notes", label: "Notification", render: v => <span style={{ fontSize: 12, color: T.muted }}>{v}</span>, filterable: false, sortable: false },
+                ]}
+                data={scheduled}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Unit History — admin/maintenance, or resident (default view) */}
+      {(tab === "Unit History" || isResident) && (
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Inspection Log</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{isResident ? `Inspection History — Unit ${rc?.unit || ""}` : "Unit Inspection History"}</div>
+            <ExportButton mobile={mobile} onClick={() => generateCSV(
+              [{ label: "Date", key: "date" }, { label: "Unit", key: "unit" }, { label: "Category", key: "category" }, { label: "Inspector", key: "inspector" }, { label: "Result", key: "result" }, { label: "Score", key: "score" }, { label: "Failed Items", key: "failedItems", exportValue: r => (r.failedItems || []).join("; ") }],
+              unitData, "unit_inspections"
+            )} />
+          </div>
+          <SortableTable
+            mobile={mobile}
+            columns={[
+              { key: "date", label: "Date" },
+              ...(isResident ? [] : [{ key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> }]),
+              { key: "category", label: "Category", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span>, filterOptions: catNames, filterValue: row => row.category },
+              { key: "inspector", label: "Inspector" },
+              { key: "result", label: "Result", render: (v, row) => <span style={s.badge(v === "Pass" ? T.successDim : v === "Scheduled" ? T.infoDim : T.dangerDim, v === "Pass" ? T.success : v === "Scheduled" ? T.info : T.danger)}>{v}{row.score ? ` (${row.score})` : ""}</span>, filterOptions: ["Pass", "Fail", "Scheduled"], filterValue: row => row.result },
+              { key: "failedItems", label: isResident ? "Notes" : "Failed Items", render: (v, row) => <span style={{ fontSize: 13, color: (v || []).length ? T.danger : T.dim }}>{(v || []).length ? v.join("; ") : (isResident ? row.notes : "None")}</span>, filterable: false, sortable: false },
+            ]}
+            data={unitData}
+          />
+        </div>
+      )}
+
+      {/* Regulatory — admin only */}
+      {tab === "Regulatory" && (
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Regulatory Inspection Log</div>
             <ExportButton mobile={mobile} onClick={() => generateCSV(
               [{ label: "Type", key: "type" }, { label: "Authority", key: "authority" }, { label: "Last Date", key: "date" }, { label: "Result", key: "result" }, { label: "Score", key: "score" }, { label: "Next Due", key: "nextDue" }, { label: "Deficiencies", key: "deficiencies" }],
               regInsp, "regulatory_inspections"
@@ -3638,31 +3720,6 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
               { key: "deficiencies", label: "Deficiencies", render: v => v > 0 ? <span style={s.badge(T.dangerDim, T.danger)}>{v}</span> : <span style={{ color: T.dim }}>0</span>, sortValue: row => row.deficiencies, filterable: false },
             ]}
             data={regInsp}
-          />
-        </div>
-      )}
-
-      {/* Unit History — admin/maintenance, or resident (default view) */}
-      {(tab === "Unit History" || isResident) && (
-        <div style={s.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>{isResident ? "Inspection History — Unit B-204" : "Unit Inspection History"}</div>
-            <ExportButton mobile={mobile} onClick={() => generateCSV(
-              [{ label: "Date", key: "date" }, { label: "Unit", key: "unit" }, { label: "Category", key: "category" }, { label: "Inspector", key: "inspector" }, { label: "Result", key: "result" }, { label: "Score", key: "score" }, { label: "Failed Items", key: "failedItems", exportValue: r => (r.failedItems || []).join("; ") }],
-              unitData, "unit_inspections"
-            )} />
-          </div>
-          <SortableTable
-            mobile={mobile}
-            columns={[
-              { key: "date", label: "Date" },
-              ...(isResident ? [] : [{ key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> }]),
-              { key: "category", label: "Category", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span>, filterOptions: catNames, filterValue: row => row.category },
-              { key: "inspector", label: "Inspector" },
-              { key: "result", label: "Result", render: (v, row) => <span style={s.badge(v === "Pass" ? T.successDim : T.dangerDim, v === "Pass" ? T.success : T.danger)}>{v}{row.score ? ` (${row.score})` : ""}</span>, filterOptions: ["Pass", "Fail"], filterValue: row => row.result },
-              { key: "failedItems", label: isResident ? "Notes" : "Failed Items", render: (v, row) => <span style={{ fontSize: 13, color: v.length ? T.danger : T.dim }}>{v.length ? v.join("; ") : (isResident ? row.notes : "None")}</span>, filterable: false, sortable: false },
-            ]}
-            data={unitData}
           />
         </div>
       )}
@@ -3686,47 +3743,13 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
                 </div>
                 {isAdmin && (
                   <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button style={s.btn("ghost")} onClick={() => { /* toggle active */ const idx = MOCK_UNIT_INSPECTION_CATEGORIES.findIndex(c => c.id === cat.id); if (idx >= 0) MOCK_UNIT_INSPECTION_CATEGORIES[idx].active = !cat.active; showSuccess(cat.active ? `${cat.name} deactivated` : `${cat.name} activated`); }}>{cat.active ? "Deactivate" : "Activate"}</button>
+                    <button style={s.btn("ghost")} onClick={() => { const idx = MOCK_UNIT_INSPECTION_CATEGORIES.findIndex(c => c.id === cat.id); if (idx >= 0) MOCK_UNIT_INSPECTION_CATEGORIES[idx].active = !cat.active; showSuccess(cat.active ? `${cat.name} deactivated` : `${cat.name} activated`); }}>{cat.active ? "Deactivate" : "Activate"}</button>
                     <button style={s.btn("ghost")} onClick={() => alert(`Checklist for ${cat.name}:\n\n${cat.checklist.map((c, i) => `${i + 1}. ${c}`).join("\n")}`)}> View Checklist</button>
                   </div>
                 )}
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* Schedule — admin only */}
-      {tab === "Schedule" && isAdmin && (
-        <div style={s.card}>
-          <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Schedule New Inspection</div>
-          <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
-            <div><label style={s.label}>Category</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.category} onChange={e => setSchedForm(p => ({ ...p, category: e.target.value }))}><option value="">Select...</option>{MOCK_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
-            <div><label style={s.label}>Unit(s)</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option value="">Select unit...</option>{LIVE_RESIDENTS.map(r => <option key={r.id} value={r.unit}>{r.unit} — {r.name}</option>)}<option value="all">All Units</option></select></div>
-            <div><label style={s.label}>Date</label><input style={s.mInput(mobile)} type="date" value={schedForm.date} onChange={e => setSchedForm(p => ({ ...p, date: e.target.value }))} /></div>
-          </div>
-          <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-            <div><label style={s.label}>Inspector</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.inspector} onChange={e => setSchedForm(p => ({ ...p, inspector: e.target.value }))}><option>Mike R.</option><option>External Vendor</option></select></div>
-            <div><label style={s.label}>Notify Resident</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.notify} onChange={e => setSchedForm(p => ({ ...p, notify: e.target.value }))}><option>Yes — 48hr notice</option><option>Yes — 24hr notice</option><option>No notification</option></select></div>
-          </div>
-          <button style={s.btn()} onClick={() => {
-            if (!schedForm.category || !schedForm.date) return;
-            const schedResident = LIVE_RESIDENTS.find(r => r.unit === schedForm.unit);
-            onSchedule({
-              id: `UI-${200 + unitInspections.length}`,
-              unit: schedForm.unit,
-              propertyId: schedResident?.propertyId || LIVE_PROPERTIES[0]?.id || "wharf",
-              category: schedForm.category,
-              date: schedForm.date,
-              inspector: schedForm.inspector,
-              result: "Scheduled",
-              score: null,
-              failedItems: [],
-              notes: `Notification: ${schedForm.notify}`,
-            });
-            setSchedForm({ category: "", unit: "B-204", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
-            showSuccess("Inspection scheduled!");
-          }}>Schedule Inspection</button>
         </div>
       )}
 
@@ -5871,7 +5894,7 @@ export default function App() {
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
-        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} />;
+        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} selectedProperty={sp} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
