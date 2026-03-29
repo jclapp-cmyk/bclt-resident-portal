@@ -679,6 +679,8 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
 
 // --- ADMIN DASHBOARD ---
 const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notifications, selectedProperty, onSelectProperty }) => {
+  const [dashCerts, setDashCerts] = useState([]);
+  useEffect(() => { fetchIncomeCertifications().then(c => setDashCerts(c || [])).catch(() => {}); }, []);
   const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
   const open = maintenance.filter(m => m.status !== "completed").length;
   const critical = maintenance.filter(m => m.priority === "critical" && m.status !== "completed").length;
@@ -691,13 +693,17 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Admin Dashboard</h1>
       <p style={s.sectionSub}>{propLabel} — {totalUnits} Units</p>
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-        <StatCard label="Open Work Orders" value={open} accent={T.warn} mobile={mobile} />
-        <StatCard label="Critical / Urgent" value={critical} accent={T.danger} mobile={mobile} />
+        <StatCard label="Open Work Orders" value={open} accent={open > 0 ? T.warn : T.success} mobile={mobile} />
+        <StatCard label="Critical / Urgent" value={critical} accent={critical > 0 ? T.danger : T.success} mobile={mobile} />
         {(() => {
           const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty);
           const certsDue = residents.filter(r => {
             const ext = LIVE_RESIDENTS_EXTENDED[r.id] || {};
-            const cs = getCertStatus(ext.moveIn || ext.leaseStart, null);
+            // Check if there's an approved cert for this resident
+            const approvedCert = dashCerts.find(c => (c.residentId === r._uuid || c.residentName === r.name) && c.status === "approved");
+            if (approvedCert) return false;
+            const lastCertDate = approvedCert ? approvedCert.updatedAt || approvedCert.createdAt : null;
+            const cs = getCertStatus(ext.moveIn || ext.leaseStart, lastCertDate);
             return ["overdue", "urgent", "due-soon"].includes(cs.status);
           }).length;
           return <StatCard label="Certs Due" value={certsDue} accent={certsDue > 0 ? T.danger : T.success} mobile={mobile} />;
