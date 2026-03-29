@@ -478,12 +478,17 @@ export async function fetchUnitInspections() {
 }
 
 export async function insertUnitInspection(insp) {
-  const { data: prop } = await supabase.from('properties').select('id').eq('slug', insp.propertyId || 'wharf').single();
-  const { data: unitRow } = await supabase.from('units').select('id').eq('number', insp.unit).single();
+  let { data: prop } = await supabase.from('properties').select('id').eq('slug', insp.propertyId || 'wharf').maybeSingle();
+  if (!prop) {
+    const { data: fallback } = await supabase.from('properties').select('id').limit(1).single();
+    if (!fallback) throw new Error('No properties found');
+    prop = fallback;
+  }
+  const { data: unitRow } = await supabase.from('units').select('id').eq('number', insp.unit).maybeSingle();
   const { count } = await supabase.from('unit_inspections').select('*', { count: 'exact', head: true });
   const code = `UI-${110 + (count || 0)}`;
   const { data, error } = await supabase.from('unit_inspections').insert({
-    code, property_id: prop?.id, unit_id: unitRow?.id || null,
+    code, property_id: prop.id, unit_id: unitRow?.id || null,
     category: insp.category, inspection_date: insp.date, inspector: insp.inspector || 'Mike R.',
     result: insp.result || 'Pass', score: insp.score || null,
     failed_items: JSON.stringify(insp.failedItems || []), notes: insp.notes || '',

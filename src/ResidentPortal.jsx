@@ -3711,9 +3711,11 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc }) => {
           </div>
           <button style={s.btn()} onClick={() => {
             if (!schedForm.category || !schedForm.date) return;
+            const schedResident = LIVE_RESIDENTS.find(r => r.unit === schedForm.unit);
             onSchedule({
               id: `UI-${200 + unitInspections.length}`,
               unit: schedForm.unit,
+              propertyId: schedResident?.propertyId || LIVE_PROPERTIES[0]?.id || "wharf",
               category: schedForm.category,
               date: schedForm.date,
               inspector: schedForm.inspector,
