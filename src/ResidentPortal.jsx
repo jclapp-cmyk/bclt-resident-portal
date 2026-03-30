@@ -933,10 +933,10 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
             {m.queuePos && m.status !== "completed" && <span style={{ color: T.accent }}>Queue position: #{m.queuePos}</span>}
             {m.projectedComplete && <span>Est. complete: {m.projectedComplete}</span>}
           </div>
-          {m.notes.length > 0 && (
+          {(Array.isArray(m.notes) ? m.notes : []).length > 0 && (
             <div style={{ marginTop: 12, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 6 }}>Updates</div>
-              {m.notes.map((n, i) => <div key={i} style={{ fontSize: 13, color: T.text, marginBottom: 4 }}><span style={{ fontWeight: 600 }}>{n.by}</span> <span style={{ color: T.dim }}>({n.date})</span>: {n.text}</div>)}
+              {(Array.isArray(m.notes) ? m.notes : []).map((n, i) => <div key={i} style={{ fontSize: 13, color: T.text, marginBottom: 4 }}><span style={{ fontWeight: 600 }}>{n.by}</span> <span style={{ color: T.dim }}>({n.date})</span>: {n.text}</div>)}
             </div>
           )}
         </div>
@@ -2637,9 +2637,9 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   <span>Submitted: {m.submitted}</span>
                   {m.assignedTo && <span>Assigned: {m.assignedTo}</span>}
                 </div>
-                {m.notes.length > 0 && (
+                {(Array.isArray(m.notes) ? m.notes : []).length > 0 && (
                   <div style={{ marginTop: 10, padding: 10, background: T.bg, borderRadius: T.radiusSm }}>
-                    {m.notes.map((n, i) => <div key={i} style={{ fontSize: 12, marginBottom: 4 }}><span style={{ fontWeight: 600 }}>{n.by}</span> ({n.date}): {n.text}</div>)}
+                    {(Array.isArray(m.notes) ? m.notes : []).map((n, i) => <div key={i} style={{ fontSize: 12, marginBottom: 4 }}><span style={{ fontWeight: 600 }}>{n.by}</span> ({n.date}): {n.text}</div>)}
                   </div>
                 )}
               </div>
@@ -4423,9 +4423,17 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
           data={maintenance}
         />
       </div>
-      {editingId && (
+      {editingId && (() => {
+        const editRow = maintenance.find(m => m.id === editingId);
+        const existingNotes = Array.isArray(editRow?.notes) ? editRow.notes : [];
+        return (
         <div style={{ ...s.card, borderColor: T.accent, marginTop: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Update {editingId}</div>
+          {editRow && (
+            <div style={{ fontSize: 13, color: T.muted, marginBottom: 14, padding: 10, background: T.bg, borderRadius: T.radiusSm }}>
+              <span style={{ fontWeight: 600, color: T.text }}>{editRow.unit}</span> — {editRow.category} — {editRow.description}
+            </div>
+          )}
           <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
             <div>
               <label style={s.label}>Status</label>
@@ -4444,6 +4452,16 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
               </select>
             </div>
           </div>
+          {existingNotes.length > 0 && (
+            <div style={{ marginBottom: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 8 }}>Notes History</div>
+              {existingNotes.map((n, i) => (
+                <div key={i} style={{ fontSize: 13, color: T.text, marginBottom: 6, paddingBottom: 6, borderBottom: i < existingNotes.length - 1 ? `1px solid ${T.border}` : "none" }}>
+                  <span style={{ fontWeight: 600 }}>{n.by}</span> <span style={{ color: T.dim }}>({n.date})</span>: {n.text}
+                </div>
+              ))}
+            </div>
+          )}
           <div style={{ marginBottom: 14 }}>
             <label style={s.label}>Add Note</label>
             <textarea style={{ ...s.input, minHeight: 60, resize: "vertical" }} placeholder="Add a note..." value={editData.notes} onChange={e => setEditData(p => ({ ...p, notes: e.target.value }))} />
@@ -4453,7 +4471,8 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
             <button style={s.btn("ghost")} onClick={() => setEditingId(null)}>Cancel</button>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

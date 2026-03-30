@@ -547,7 +547,7 @@ export async function fetchMaintenanceRequests() {
     queuePos: m.queue_pos,
     projectedComplete: m.projected_complete,
     completedDate: m.completed_date,
-    notes: m.notes || [],
+    notes: Array.isArray(m.notes) ? m.notes : (typeof m.notes === 'string' ? (() => { try { return JSON.parse(m.notes); } catch { return []; } })() : []),
   }));
 }
 
