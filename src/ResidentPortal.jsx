@@ -3669,6 +3669,10 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                   { key: "notes", label: "Notification", render: v => <span style={{ fontSize: 12, color: T.muted }}>{v}</span>, filterable: false, sortable: false },
                 ]}
                 data={scheduled}
+                onRowClick={row => {
+                  setSelectedInsp(row);
+                  setUpdateForm({ result: "Pass", score: "", failedItems: "", notes: "" });
+                }}
               />
             </div>
           )}
