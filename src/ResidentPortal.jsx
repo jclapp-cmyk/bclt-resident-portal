@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -3582,13 +3582,15 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 };
 
 // --- INSPECTIONS (All Roles — Unified) ---
-const Inspections = ({ role, mobile, unitInspections, onSchedule, rc, selectedProperty }) => {
+const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty }) => {
   const isResident = role === "resident";
   const isAdmin = role === "admin";
   const tabs = isResident ? null : isAdmin ? ["Schedule", "Unit History", "Regulatory", "Categories"] : ["Unit History", "Categories", "My Assigned"];
   const [tab, setTab] = useState(isResident ? null : tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
+  const [selectedInsp, setSelectedInsp] = useState(null);
+  const [updateForm, setUpdateForm] = useState({ result: "", score: "", failedItems: "", notes: "" });
 
   const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "")) : unitInspections;
   const regInsp = selectedProperty && selectedProperty !== "all"
@@ -3690,11 +3692,111 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, rc, selectedPr
               ...(isResident ? [] : [{ key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> }]),
               { key: "category", label: "Category", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span>, filterOptions: catNames, filterValue: row => row.category },
               { key: "inspector", label: "Inspector" },
-              { key: "result", label: "Result", render: (v, row) => <span style={s.badge(v === "Pass" ? T.successDim : v === "Scheduled" ? T.infoDim : T.dangerDim, v === "Pass" ? T.success : v === "Scheduled" ? T.info : T.danger)}>{v}{row.score ? ` (${row.score})` : ""}</span>, filterOptions: ["Pass", "Fail", "Scheduled"], filterValue: row => row.result },
+              { key: "result", label: "Result", render: (v, row) => {
+                const color = v === "Pass" ? T.success : v === "Scheduled" ? T.accent : T.danger;
+                const bg = v === "Pass" ? T.successDim : v === "Scheduled" ? (T.accentDim || "rgba(99,102,241,0.12)") : T.dangerDim;
+                return <span style={s.badge(bg, color)}>{v}{row.score ? ` (${row.score})` : ""}</span>;
+              }, filterOptions: ["Pass", "Fail", "Scheduled"], filterValue: row => row.result },
               { key: "failedItems", label: isResident ? "Notes" : "Failed Items", render: (v, row) => <span style={{ fontSize: 13, color: (v || []).length ? T.danger : T.dim }}>{(v || []).length ? v.join("; ") : (isResident ? row.notes : "None")}</span>, filterable: false, sortable: false },
+              ...(!isResident ? [{ key: "_action", label: "", render: (_, row) => row.result === "Scheduled" ? (
+                <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={e => { e.stopPropagation(); setSelectedInsp(row); setUpdateForm({ result: "Pass", score: "", failedItems: "", notes: "" }); }}>Update</button>
+              ) : (
+                <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={e => { e.stopPropagation(); setSelectedInsp(row); setUpdateForm({ result: row.result, score: row.score || "", failedItems: (row.failedItems || []).join(", "), notes: row.notes || "" }); }}>View</button>
+              ), sortable: false, filterable: false }] : []),
             ]}
             data={unitData}
           />
+        </div>
+      )}
+
+      {/* Inspection detail / update modal */}
+      {selectedInsp && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setSelectedInsp(null)}>
+          <div style={{ ...s.card, maxWidth: 520, width: "100%", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h2 style={{ margin: 0, fontSize: 18 }}>
+                {selectedInsp.result === "Scheduled" ? "Update Inspection" : "Inspection Details"}
+              </h2>
+              <button style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.text }} onClick={() => setSelectedInsp(null)}>×</button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16, fontSize: 14 }}>
+              <div><span style={{ color: T.dim }}>Unit:</span> <strong>{selectedInsp.unit}</strong></div>
+              <div><span style={{ color: T.dim }}>Category:</span> <strong>{selectedInsp.category}</strong></div>
+              <div><span style={{ color: T.dim }}>Date:</span> <strong>{selectedInsp.date}</strong></div>
+              <div><span style={{ color: T.dim }}>Inspector:</span> <strong>{selectedInsp.inspector}</strong></div>
+              <div><span style={{ color: T.dim }}>Current Status:</span> <span style={s.badge(
+                selectedInsp.result === "Pass" ? T.successDim : selectedInsp.result === "Scheduled" ? (T.accentDim || "rgba(99,102,241,0.12)") : T.dangerDim,
+                selectedInsp.result === "Pass" ? T.success : selectedInsp.result === "Scheduled" ? T.accent : T.danger
+              )}>{selectedInsp.result}</span></div>
+            </div>
+
+            {(selectedInsp.result === "Scheduled" || isAdmin) && onUpdate && (
+              <>
+                <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16, marginBottom: 12 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15 }}>
+                    {selectedInsp.result === "Scheduled" ? "Complete This Inspection" : "Update Inspection"}
+                  </div>
+                  <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 12 }}>
+                    <div>
+                      <label style={s.label}>Result</label>
+                      <select style={{ ...s.mSelect(mobile), width: "100%" }} value={updateForm.result} onChange={e => setUpdateForm(p => ({ ...p, result: e.target.value }))}>
+                        <option value="Pass">Pass</option>
+                        <option value="Fail">Fail</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={s.label}>Score (optional)</label>
+                      <input style={s.mInput(mobile)} placeholder="e.g. 14/15" value={updateForm.score} onChange={e => setUpdateForm(p => ({ ...p, score: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={s.label}>Failed Items (comma-separated)</label>
+                    <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} placeholder="e.g. Smoke detector - dead battery, Paint peeling" value={updateForm.failedItems} onChange={e => setUpdateForm(p => ({ ...p, failedItems: e.target.value }))} />
+                  </div>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={s.label}>Notes</label>
+                    <textarea style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box", minHeight: 60, fontFamily: "inherit", resize: "vertical" }} placeholder="Inspection notes..." value={updateForm.notes} onChange={e => setUpdateForm(p => ({ ...p, notes: e.target.value }))} />
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button style={s.btn()} onClick={() => {
+                      onUpdate(selectedInsp.id, {
+                        result: updateForm.result,
+                        score: updateForm.score || null,
+                        failedItems: updateForm.failedItems ? updateForm.failedItems.split(",").map(s => s.trim()).filter(Boolean) : [],
+                        notes: updateForm.notes,
+                        date: selectedInsp.result === "Scheduled" ? new Date().toISOString().split("T")[0] : selectedInsp.date,
+                      });
+                      setSelectedInsp(null);
+                      showSuccess(selectedInsp.result === "Scheduled" ? "Inspection completed!" : "Inspection updated!");
+                    }}>
+                      {selectedInsp.result === "Scheduled" ? "Mark Complete" : "Save Changes"}
+                    </button>
+                    <button style={s.btn("ghost")} onClick={() => setSelectedInsp(null)}>Cancel</button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {selectedInsp.result !== "Scheduled" && !isAdmin && (
+              <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
+                {selectedInsp.failedItems && selectedInsp.failedItems.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: T.danger, marginBottom: 6 }}>Failed Items</div>
+                    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                      {selectedInsp.failedItems.map((item, i) => <li key={i} style={{ marginBottom: 4 }}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {selectedInsp.notes && (
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: T.dim, marginBottom: 6 }}>Notes</div>
+                    <div style={{ fontSize: 13 }}>{selectedInsp.notes}</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -5741,6 +5843,10 @@ export default function App() {
     setUnitInspections(prev => [insp, ...prev]);
     try { await insertUnitInspection(insp); } catch (err) { console.warn('Supabase insert inspection failed:', err); }
   };
+  const updateInspection = async (id, changes) => {
+    setUnitInspections(prev => prev.map(i => i.id === id ? { ...i, ...changes } : i));
+    try { await updateUnitInspection(id, changes); } catch (err) { console.warn('Supabase update inspection failed:', err); }
+  };
   const updateEmergencyContacts = (residentId, contacts) => setEmergencyContacts(prev => ({ ...prev, [residentId]: contacts }));
   const addAdminNote = (residentId, note, replace = false) => setAdminNotes(prev => ({ ...prev, [residentId]: replace ? (Array.isArray(note) ? note : []) : [...(prev[residentId] || []), note] }));
   const resetAllState = async () => {
@@ -5825,6 +5931,13 @@ export default function App() {
     addInspection(insp);
     pushNotif({ id: `N-${Date.now()}`, type: "inspection", icon: "🔍", message: `Inspection scheduled: ${insp.category} — ${insp.unit}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance", ...(insp.unit === (residentCtx?.unit || "") ? ["resident"] : [])] });
   };
+  const updateInspectionN = (id, changes) => {
+    updateInspection(id, changes);
+    const insp = unitInspections.find(i => i.id === id);
+    if (changes.result) {
+      pushNotif({ id: `N-${Date.now()}`, type: "inspection", icon: "🔍", message: `Inspection ${changes.result === "Pass" ? "completed" : "updated"}: ${insp?.category || "Inspection"} — ${insp?.unit || ""}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance", ...(insp?.unit === (residentCtx?.unit || "") ? ["resident"] : [])] });
+    }
+  };
 
   const nav = NAV[role] || [];
   const navBadges = {};
@@ -5894,7 +6007,7 @@ export default function App() {
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
-        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} selectedProperty={sp} />;
+        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
@@ -5910,7 +6023,7 @@ export default function App() {
       switch (page) {
         case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} />;
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} />;
-        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} />;
+        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} />;

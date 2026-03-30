@@ -497,6 +497,18 @@ export async function insertUnitInspection(insp) {
   return { ...insp, id: code, _uuid: data.id };
 }
 
+export async function updateUnitInspection(code, changes) {
+  const mapped = {};
+  if (changes.result !== undefined) mapped.result = changes.result;
+  if (changes.score !== undefined) mapped.score = changes.score;
+  if (changes.failedItems !== undefined) mapped.failed_items = JSON.stringify(changes.failedItems);
+  if (changes.notes !== undefined) mapped.notes = changes.notes;
+  if (changes.date !== undefined) mapped.inspection_date = changes.date;
+  if (changes.inspector !== undefined) mapped.inspector = changes.inspector;
+  const { error } = await supabase.from('unit_inspections').update(mapped).eq('code', code);
+  if (error) throw error;
+}
+
 // ── REGULATORY INSPECTIONS ──
 
 export async function fetchRegInspections() {
