@@ -473,7 +473,9 @@ export async function fetchUnitInspections() {
   return (data || []).map(i => ({
     id: i.code, _uuid: i.id, propertyId: i.properties?.slug || '', unit: i.units?.number || '',
     category: i.category, date: i.inspection_date, inspector: i.inspector,
-    result: i.result, score: i.score, failedItems: i.failed_items || [], notes: i.notes || '',
+    result: i.result, score: i.score,
+    failedItems: Array.isArray(i.failed_items) ? i.failed_items : (typeof i.failed_items === 'string' ? (() => { try { return JSON.parse(i.failed_items); } catch { return []; } })() : []),
+    notes: i.notes || '',
   }));
 }
 
@@ -491,7 +493,7 @@ export async function insertUnitInspection(insp) {
     code, property_id: prop.id, unit_id: unitRow?.id || null,
     category: insp.category, inspection_date: insp.date, inspector: insp.inspector || 'Mike R.',
     result: insp.result || 'Pass', score: insp.score || null,
-    failed_items: JSON.stringify(insp.failedItems || []), notes: insp.notes || '',
+    failed_items: insp.failedItems || [], notes: insp.notes || '',
   }).select().single();
   if (error) throw error;
   return { ...insp, id: code, _uuid: data.id };
@@ -501,7 +503,7 @@ export async function updateUnitInspection(code, changes) {
   const mapped = {};
   if (changes.result !== undefined) mapped.result = changes.result;
   if (changes.score !== undefined) mapped.score = changes.score;
-  if (changes.failedItems !== undefined) mapped.failed_items = JSON.stringify(changes.failedItems);
+  if (changes.failedItems !== undefined) mapped.failed_items = changes.failedItems;
   if (changes.notes !== undefined) mapped.notes = changes.notes;
   if (changes.date !== undefined) mapped.inspection_date = changes.date;
   if (changes.inspector !== undefined) mapped.inspector = changes.inspector;

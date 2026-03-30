@@ -3697,14 +3697,14 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 const bg = v === "Pass" ? T.successDim : v === "Scheduled" ? (T.accentDim || "rgba(99,102,241,0.12)") : T.dangerDim;
                 return <span style={s.badge(bg, color)}>{v}{row.score ? ` (${row.score})` : ""}</span>;
               }, filterOptions: ["Pass", "Fail", "Scheduled"], filterValue: row => row.result },
-              { key: "failedItems", label: isResident ? "Notes" : "Failed Items", render: (v, row) => <span style={{ fontSize: 13, color: (v || []).length ? T.danger : T.dim }}>{(v || []).length ? v.join("; ") : (isResident ? row.notes : "None")}</span>, filterable: false, sortable: false },
+              { key: "failedItems", label: isResident ? "Notes" : "Failed Items", render: (v, row) => { const items = Array.isArray(v) ? v : []; return <span style={{ fontSize: 13, color: items.length ? T.danger : T.dim }}>{items.length ? items.join("; ") : (isResident ? row.notes : "None")}</span>; }, filterable: false, sortable: false },
             ]}
             data={unitData}
             onRowClick={row => {
               setSelectedInsp(row);
               setUpdateForm(row.result === "Scheduled"
                 ? { result: "Pass", score: "", failedItems: "", notes: "" }
-                : { result: row.result, score: row.score || "", failedItems: (row.failedItems || []).join(", "), notes: row.notes || "" });
+                : { result: row.result, score: row.score || "", failedItems: (Array.isArray(row.failedItems) ? row.failedItems : []).join(", "), notes: row.notes || "" });
             }}
           />
         </div>
@@ -3781,7 +3781,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
 
             {selectedInsp.result !== "Scheduled" && !isAdmin && (
               <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
-                {selectedInsp.failedItems && selectedInsp.failedItems.length > 0 && (
+                {Array.isArray(selectedInsp.failedItems) && selectedInsp.failedItems.length > 0 && (
                   <div style={{ marginBottom: 12 }}>
                     <div style={{ fontWeight: 600, fontSize: 13, color: T.danger, marginBottom: 6 }}>Failed Items</div>
                     <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
