@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -3698,13 +3698,14 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 return <span style={s.badge(bg, color)}>{v}{row.score ? ` (${row.score})` : ""}</span>;
               }, filterOptions: ["Pass", "Fail", "Scheduled"], filterValue: row => row.result },
               { key: "failedItems", label: isResident ? "Notes" : "Failed Items", render: (v, row) => <span style={{ fontSize: 13, color: (v || []).length ? T.danger : T.dim }}>{(v || []).length ? v.join("; ") : (isResident ? row.notes : "None")}</span>, filterable: false, sortable: false },
-              ...(!isResident ? [{ key: "_action", label: "", render: (_, row) => row.result === "Scheduled" ? (
-                <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={e => { e.stopPropagation(); setSelectedInsp(row); setUpdateForm({ result: "Pass", score: "", failedItems: "", notes: "" }); }}>Update</button>
-              ) : (
-                <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={e => { e.stopPropagation(); setSelectedInsp(row); setUpdateForm({ result: row.result, score: row.score || "", failedItems: (row.failedItems || []).join(", "), notes: row.notes || "" }); }}>View</button>
-              ), sortable: false, filterable: false }] : []),
             ]}
             data={unitData}
+            onRowClick={row => {
+              setSelectedInsp(row);
+              setUpdateForm(row.result === "Scheduled"
+                ? { result: "Pass", score: "", failedItems: "", notes: "" }
+                : { result: row.result, score: row.score || "", failedItems: (row.failedItems || []).join(", "), notes: row.notes || "" });
+            }}
           />
         </div>
       )}
@@ -4417,7 +4418,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
             { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["submitted", "in-progress", "completed"], filterValue: row => row.status },
             { key: "submitted", label: "Submitted" },
             { key: "assignedTo", label: "Assigned", render: v => v || <span style={{ color: T.danger }}>Unassigned</span>, filterValue: row => row.assignedTo || "Unassigned" },
-            { key: "_actions", label: "", sortable: false, filterable: false, render: (_, row) => <button style={s.btn("ghost")} onClick={() => startEdit(row)}>{row.assignedTo ? "Reassign" : "Assign"}</button> },
+            { key: "_actions", label: "", sortable: false, filterable: false, render: (_, row) => <button style={s.btn("ghost")} onClick={() => startEdit(row)}>Update</button> },
           ]}
           data={maintenance}
         />
@@ -5738,11 +5739,11 @@ export default function App() {
   const reloadData = useCallback(async () => {
     try {
       const safe = (fn) => fn().catch(err => { console.warn('Fetch failed:', err.message); return null; });
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff] = await Promise.all([
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes] = await Promise.all([
         safe(fetchProperties), safe(fetchResidents), safe(fetchResidentsExtended), safe(fetchLeaseDocsByResident),
         safe(fetchRentLedger), safe(fetchMaintenanceRequests), safe(fetchVendors),
         safe(fetchUnitInspections), safe(fetchRegInspections), safe(fetchThreads), safe(fetchMessages),
-        safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers),
+        safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers), safe(fetchAdminNotes),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
@@ -5757,6 +5758,16 @@ export default function App() {
       setThreads(thr || []);
       setMessages(msgs || []);
       setOnboardingData(onboard || []);
+      // Map notes from UUID-keyed to slug-keyed using resident lookup
+      if (notes && (props || LIVE_PROPERTIES).length) {
+        const mapped = {};
+        const allRes = res || LIVE_RESIDENTS;
+        for (const [uuid, noteList] of Object.entries(notes)) {
+          const r = allRes.find(r => r._uuid === uuid);
+          if (r) mapped[r.id] = noteList;
+        }
+        setAdminNotes(mapped);
+      }
       setDataReady(true);
     } catch (err) {
       console.warn('Supabase load failed:', err);
@@ -5848,7 +5859,30 @@ export default function App() {
     try { await updateUnitInspection(id, changes); } catch (err) { console.warn('Supabase update inspection failed:', err); }
   };
   const updateEmergencyContacts = (residentId, contacts) => setEmergencyContacts(prev => ({ ...prev, [residentId]: contacts }));
-  const addAdminNote = (residentId, note, replace = false) => setAdminNotes(prev => ({ ...prev, [residentId]: replace ? (Array.isArray(note) ? note : []) : [...(prev[residentId] || []), note] }));
+  const addAdminNote = async (residentId, note, replace = false) => {
+    if (replace) {
+      // Deletion — find removed notes and delete from Supabase
+      const prev = adminNotes[residentId] || [];
+      const kept = Array.isArray(note) ? note : [];
+      const removed = prev.filter(n => !kept.find(k => k.id === n.id));
+      setAdminNotes(p => ({ ...p, [residentId]: kept }));
+      for (const r of removed) {
+        try { await deleteAdminNote(r.id); } catch (err) { console.warn('Delete note failed:', err); }
+      }
+    } else {
+      // Add new note
+      const resident = LIVE_RESIDENTS.find(r => r.id === residentId);
+      const uuid = resident?._uuid;
+      setAdminNotes(p => ({ ...p, [residentId]: [...(p[residentId] || []), note] }));
+      if (uuid) {
+        try {
+          const saved = await insertAdminNote(uuid, note);
+          // Update the note's id with the Supabase UUID
+          setAdminNotes(p => ({ ...p, [residentId]: (p[residentId] || []).map(n => n.id === note.id ? { ...n, id: saved.id } : n) }));
+        } catch (err) { console.warn('Insert note failed:', err); }
+      }
+    }
+  };
   const resetAllState = async () => {
     // Re-fetch Supabase data for core tables
     try {

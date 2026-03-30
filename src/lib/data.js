@@ -991,3 +991,37 @@ export function getTICDocumentUrl(path) {
   const { data } = supabase.storage.from('tic-documents').getPublicUrl(path);
   return data?.publicUrl || null;
 }
+
+// ── ADMIN NOTES ──
+
+export async function fetchAdminNotes() {
+  const { data, error } = await supabase
+    .from('admin_notes')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  // Group by resident_id
+  const grouped = {};
+  (data || []).forEach(n => {
+    const rid = n.resident_id;
+    if (!grouped[rid]) grouped[rid] = [];
+    grouped[rid].push({ id: n.id, date: n.note_date, by: n.author, text: n.text });
+  });
+  return grouped;
+}
+
+export async function insertAdminNote(residentUuid, note) {
+  const { data, error } = await supabase.from('admin_notes').insert({
+    resident_id: residentUuid,
+    author: note.by || 'Admin',
+    note_date: note.date || new Date().toISOString().slice(0, 10),
+    text: note.text,
+  }).select().single();
+  if (error) throw error;
+  return { id: data.id, date: data.note_date, by: data.author, text: data.text };
+}
+
+export async function deleteAdminNote(noteUuid) {
+  const { error } = await supabase.from('admin_notes').delete().eq('id', noteUuid);
+  if (error) throw error;
+}
