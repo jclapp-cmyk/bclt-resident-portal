@@ -4424,13 +4424,13 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
   const [confirmReset, setConfirmReset] = useState(false);
   const [userProfiles, setUserProfiles] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: "", role: "resident", residentId: "", displayName: "" });
+  const [inviteForm, setInviteForm] = useState({ email: "", role: "resident", residentId: "", firstName: "", lastName: "" });
   const [inviting, setInviting] = useState(false);
   const [auditEntries, setAuditEntries] = useState([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
   const [staffList, setStaffList] = useState([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
-  const [staffForm, setStaffForm] = useState({ name: "", role: "maintenance", email: "", phone: "", propertyId: "" });
+  const [staffForm, setStaffForm] = useState({ firstName: "", lastName: "", role: "maintenance", email: "", phone: "", propertyId: "" });
   const [editingStaff, setEditingStaff] = useState(null);
   const [editStaffForm, setEditStaffForm] = useState({});
 
@@ -4456,9 +4456,10 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
     if (!inviteForm.email) return;
     setInviting(true);
     try {
-      await inviteUser(inviteForm.email, inviteForm.role, inviteForm.residentId || null, inviteForm.displayName || null);
+      const displayName = [inviteForm.firstName, inviteForm.lastName].filter(Boolean).join(" ") || null;
+      await inviteUser(inviteForm.email, inviteForm.role, inviteForm.residentId || null, displayName);
       showSuccess(`Invited ${inviteForm.email} as ${inviteForm.role}`);
-      setInviteForm({ email: "", role: "resident", residentId: "", displayName: "" });
+      setInviteForm({ email: "", role: "resident", residentId: "", firstName: "", lastName: "" });
       // Refresh user list
       const data = await fetchUserProfiles();
       setUserProfiles(data || []);
@@ -4488,8 +4489,13 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                   style={{ ...s.mInput(mobile), width: "100%" }} />
               </div>
               <div>
-                <label style={s.label}>Display Name</label>
-                <input type="text" placeholder="First Last" value={inviteForm.displayName} onChange={e => setInviteForm(p => ({ ...p, displayName: e.target.value }))}
+                <label style={s.label}>First Name</label>
+                <input type="text" placeholder="First" value={inviteForm.firstName} onChange={e => setInviteForm(p => ({ ...p, firstName: e.target.value }))}
+                  style={{ ...s.mInput(mobile), width: "100%" }} />
+              </div>
+              <div>
+                <label style={s.label}>Last Name</label>
+                <input type="text" placeholder="Last" value={inviteForm.lastName} onChange={e => setInviteForm(p => ({ ...p, lastName: e.target.value }))}
                   style={{ ...s.mInput(mobile), width: "100%" }} />
               </div>
               <div>
@@ -4525,11 +4531,16 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               <EmptyState icon="👥" text="No users yet. Invite your first user above." />
             ) : (
               <table style={s.table}>
-                <thead><tr>{["Name", "Email", "Role", "Linked Resident", "Created", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{["First Name", "Last Name", "Email", "Role", "Linked Resident", "Created", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {userProfiles.map(u => (
+                  {userProfiles.map(u => {
+                    const nameParts = (u.display_name || "").trim().split(/\s+/);
+                    const firstName = nameParts[0] || "—";
+                    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "—";
+                    return (
                     <tr key={u.id}>
-                      <td style={s.td}><span style={{ fontWeight: 600 }}>{u.display_name || "—"}</span></td>
+                      <td style={s.td}><span style={{ fontWeight: 600 }}>{firstName}</span></td>
+                      <td style={s.td}><span style={{ fontWeight: 600 }}>{lastName}</span></td>
                       <td style={s.td}>{u.email}</td>
                       <td style={s.td}>
                         <select value={u.role} style={{ ...s.select, fontSize: 12, padding: "2px 6px", background: u.role === "admin" ? T.accentDim : u.role === "maintenance" ? T.warnDim : T.successDim, color: u.role === "admin" ? T.accent : u.role === "maintenance" ? T.warn : T.success, fontWeight: 600, border: "none", borderRadius: 4 }}
@@ -4559,7 +4570,8 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                         }}>Remove</button>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             )}
@@ -4572,17 +4584,19 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
           <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Add Staff Member</div>
             <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
-              <div><label style={s.label}>Full Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. Mike Rodriguez" value={staffForm.name} onChange={e => setStaffForm(f => ({ ...f, name: e.target.value }))} /></div>
+              <div><label style={s.label}>First Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. Mike" value={staffForm.firstName} onChange={e => setStaffForm(f => ({ ...f, firstName: e.target.value }))} /></div>
+              <div><label style={s.label}>Last Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. Rodriguez" value={staffForm.lastName} onChange={e => setStaffForm(f => ({ ...f, lastName: e.target.value }))} /></div>
               <div><label style={s.label}>Role</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={staffForm.role} onChange={e => setStaffForm(f => ({ ...f, role: e.target.value }))}><option value="maintenance">Maintenance Staff</option><option value="property_manager">Property Manager</option><option value="admin">Admin</option></select></div>
               <div><label style={s.label}>Property</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={staffForm.propertyId} onChange={e => setStaffForm(f => ({ ...f, propertyId: e.target.value }))}><option value="">All Properties</option>{LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}</select></div>
               <div><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} placeholder="email@example.com" value={staffForm.email} onChange={e => setStaffForm(f => ({ ...f, email: e.target.value }))} /></div>
               <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="(415) 555-0000" value={staffForm.phone} onChange={e => setStaffForm(f => ({ ...f, phone: e.target.value }))} /></div>
             </div>
-            <button disabled={!staffForm.name.trim()} onClick={async () => {
+            <button disabled={!staffForm.firstName.trim() || !staffForm.lastName.trim()} onClick={async () => {
               try {
-                await insertStaffMember(staffForm);
-                showSuccess(`${staffForm.name} added as ${staffForm.role.replace("_", " ")}`);
-                setStaffForm({ name: "", role: "maintenance", email: "", phone: "", propertyId: "" });
+                const fullName = `${staffForm.firstName.trim()} ${staffForm.lastName.trim()}`;
+                await insertStaffMember({ ...staffForm, name: fullName });
+                showSuccess(`${fullName} added as ${staffForm.role.replace("_", " ")}`);
+                setStaffForm({ firstName: "", lastName: "", role: "maintenance", email: "", phone: "", propertyId: "" });
                 fetchStaffMembers().then(setStaffList).catch(() => {});
               } catch (err) { showSuccess("Error: " + err.message); }
             }} style={{ ...s.mBtn("primary", mobile) }}>Add Staff Member</button>
@@ -4591,11 +4605,16 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
             <div style={s.card}>
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Staff Directory ({staffList.length})</div>
               <table style={s.table}>
-                <thead><tr>{["Name", "Role", "Property", "Phone", "Email", "Status", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{["First Name", "Last Name", "Role", "Property", "Phone", "Email", "Status", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {staffList.map(st => (
+                  {staffList.map(st => {
+                    const stNameParts = (st.name || "").trim().split(/\s+/);
+                    const stFirst = stNameParts[0] || "—";
+                    const stLast = stNameParts.length > 1 ? stNameParts.slice(1).join(" ") : "—";
+                    return (
                     <tr key={st.id}>
-                      <td style={s.td}><span style={{ fontWeight: 600 }}>{st.name}</span></td>
+                      <td style={s.td}><span style={{ fontWeight: 600 }}>{stFirst}</span></td>
+                      <td style={s.td}><span style={{ fontWeight: 600 }}>{stLast}</span></td>
                       <td style={s.td}><span style={s.badge(st.role === "property_manager" ? T.infoDim : st.role === "admin" ? T.warnDim : T.accentDim, st.role === "property_manager" ? T.info : st.role === "admin" ? T.warn : T.accent)}>{st.role === "property_manager" ? "Property Manager" : st.role === "admin" ? "Admin" : "Maintenance"}</span></td>
                       <td style={s.td}>{st.propertyName || "All"}</td>
                       <td style={s.td}>{st.phone || "—"}</td>
@@ -4608,7 +4627,8 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
