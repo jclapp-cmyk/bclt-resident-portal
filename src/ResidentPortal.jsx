@@ -4588,14 +4588,23 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               <div><label style={s.label}>Last Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. Rodriguez" value={staffForm.lastName} onChange={e => setStaffForm(f => ({ ...f, lastName: e.target.value }))} /></div>
               <div><label style={s.label}>Role</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={staffForm.role} onChange={e => setStaffForm(f => ({ ...f, role: e.target.value }))}><option value="maintenance">Maintenance Staff</option><option value="property_manager">Property Manager</option><option value="admin">Admin</option></select></div>
               <div><label style={s.label}>Property</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={staffForm.propertyId} onChange={e => setStaffForm(f => ({ ...f, propertyId: e.target.value }))}><option value="">All Properties</option>{LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}</select></div>
-              <div><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} placeholder="email@example.com" value={staffForm.email} onChange={e => setStaffForm(f => ({ ...f, email: e.target.value }))} /></div>
+              <div><label style={s.label}>Email *</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} placeholder="email@example.com" value={staffForm.email} onChange={e => setStaffForm(f => ({ ...f, email: e.target.value }))} /></div>
               <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="(415) 555-0000" value={staffForm.phone} onChange={e => setStaffForm(f => ({ ...f, phone: e.target.value }))} /></div>
             </div>
             <button disabled={!staffForm.firstName.trim() || !staffForm.lastName.trim()} onClick={async () => {
               try {
                 const fullName = `${staffForm.firstName.trim()} ${staffForm.lastName.trim()}`;
                 await insertStaffMember({ ...staffForm, name: fullName });
-                showSuccess(`${fullName} added as ${staffForm.role.replace("_", " ")}`);
+                if (staffForm.email) {
+                  try {
+                    await inviteUser(staffForm.email, staffForm.role === "property_manager" ? "admin" : staffForm.role, null, fullName);
+                    showSuccess(`${fullName} added and invite sent to ${staffForm.email}`);
+                  } catch (invErr) {
+                    showSuccess(`${fullName} added but invite failed: ${invErr.message}`);
+                  }
+                } else {
+                  showSuccess(`${fullName} added as ${staffForm.role.replace("_", " ")} (no email — invite not sent)`);
+                }
                 setStaffForm({ firstName: "", lastName: "", role: "maintenance", email: "", phone: "", propertyId: "" });
                 fetchStaffMembers().then(setStaffList).catch(() => {});
               } catch (err) { showSuccess("Error: " + err.message); }
