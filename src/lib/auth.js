@@ -105,4 +105,12 @@ export async function inviteUser(email, role, residentId, displayName) {
     display_name: displayName || email.split('@')[0],
   });
   if (insertErr) throw insertErr;
+
+  // Send magic link invite email so the user can sign in
+  const redirectTo = window.location.origin;
+  const { error: otpErr } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: redirectTo },
+  });
+  if (otpErr) console.warn('Invite email failed:', otpErr.message);
 }
