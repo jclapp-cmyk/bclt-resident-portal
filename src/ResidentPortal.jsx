@@ -3714,7 +3714,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty }) => {
   const isResident = role === "resident";
   const isAdmin = role === "admin";
-  const tabs = isResident ? null : isAdmin ? ["Schedule", "Unit History", "Regulatory", "Categories"] : ["Unit History", "Categories", "My Assigned"];
+  const tabs = isResident ? null : isAdmin ? ["Schedule", "Unit History", "Procedures", "Regulatory", "Categories"] : ["Unit History", "Procedures", "Categories", "My Assigned"];
   const [tab, setTab] = useState(isResident ? null : tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
@@ -3933,6 +3933,190 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
           </div>
         </div>
       )}
+
+      {/* Procedures tab */}
+      {tab === "Procedures" && (() => {
+        const RV_PROCEDURE = {
+          id: "PROC-RV-2025",
+          name: "Annual RV Inspection Form",
+          nameSp: "Inspección de RVS",
+          year: 2025,
+          sections: [
+            { name: "Exterior", items: [
+              { text: "Exterior door closes correctly", type: "yesNoNa" },
+              { text: "General Appearance - Detail Issues", type: "text" },
+              { text: "Images: Front, Sides, Back, Note issues", type: "photo" },
+              { text: "Appearance of Logos, Decals & Panels", type: "text" },
+              { text: "No structural problems apparent", type: "yesNoNa" },
+              { text: "Bumpers Ok", type: "yesNoNa" },
+              { text: "Door, screen door and latches work", type: "yesNoNa" },
+              { text: "Door Images", type: "photo" },
+              { text: "Compartments close and seal", type: "text" },
+              { text: "Compartment Images", type: "photo" },
+              { text: "Rubber roofing condition", type: "text" },
+              { text: "Roof condition Details", type: "text" },
+              { text: "Roof + joint sealants ok, skylight cover", type: "yesNoNa" },
+              { text: "Antenna and AC cover Ok", type: "yesNoNa" },
+              { text: "Stair, bumpers, caps", type: "text" },
+              { text: "Status of Stair up and down", type: "photo" },
+              { text: "Slide-out leak test", type: "text" },
+            ]},
+            { name: "Chassis", items: [
+              { text: "Lights, blinkers, plate lights", type: "text" },
+              { text: "Tire condition & Side Wall", type: "text" },
+              { text: "Tire pressure adjusted to (psi)", type: "text" },
+              { text: "Visual Inspection Axle", type: "text" },
+              { text: "Bolts tightened to spec", type: "yesNoNa" },
+              { text: "Spare tire condition", type: "text" },
+              { text: "Stabilizer Jack Condition", type: "text" },
+              { text: "Underbelly in good shape, no missing parts", type: "yesNoNa" },
+              { text: "Tow plug", type: "text" },
+            ]},
+            { name: "Gas", items: [
+              { text: "Complete gas line leak test", type: "text" },
+              { text: "Gas Regulator checked & adjusted", type: "yesNoNa" },
+              { text: "Purged tanks", type: "yesNoNa" },
+              { text: "Pilots work correctly", type: "yesNoNa" },
+              { text: "Gas leak detector works correctly", type: "yesNoNa" },
+              { text: "Heat, Fan & Thermostat working condition", type: "text" },
+              { text: "Water heater, stove, oven, refrigerator working on gas mode", type: "text" },
+              { text: "Exterior grill works, hose in place", type: "yesNoNa" },
+            ]},
+            { name: "12V Systems", items: [
+              { text: "Batteries present, clean & tight connections", type: "yesNoNa" },
+              { text: "Battery charge test passed", type: "text" },
+              { text: "Interior & Exterior Light Condition", type: "text" },
+              { text: "Stove overhead fan working properly", type: "yesNoNa" },
+              { text: "Interior fan working properly", type: "yesNoNa" },
+              { text: "Refrigerator works on 12V", type: "yesNoNa" },
+              { text: "Inverter, Fuses, Breakers working properly", type: "text" },
+              { text: "Monitor panel working correctly", type: "text" },
+            ]},
+            { name: "110V Systems", items: [
+              { text: "Inverter, Fuses, Breakers in good condition", type: "text" },
+              { text: "Powers AC, TV, Fridge, Microwave, Outlets correctly", type: "text" },
+              { text: "Interior & Exterior Lights", type: "text" },
+              { text: "Connector & Adaptor", type: "yesNoNa" },
+              { text: "Power Inverter", type: "yesNoNa" },
+            ]},
+            { name: "Entertainment", items: [
+              { text: "TVs working, remote present & working", type: "text" },
+              { text: "DVD/Stereo & Speakers working correctly", type: "text" },
+              { text: "Radio/CD player", type: "yesNoNa" },
+              { text: "Exterior: stereo, satellite port ok", type: "yesNoNa" },
+              { text: "Antenna works correctly", type: "yesNoNa" },
+              { text: "Awning in correct working order", type: "yesNoNa" },
+            ]},
+            { name: "Plumbing", items: [
+              { text: "Pressurize fresh water system, check valve", type: "yesNoNa" },
+              { text: "Black and Grey Water tanks clean and empty", type: "text" },
+              { text: "Freshwater Tank full", type: "yesNoNa" },
+              { text: "Black & Greywater tank valves in working order", type: "yesNoNa" },
+              { text: "Water pump working correctly", type: "yesNoNa" },
+              { text: "Shower, Sink, shower pan - no leaks", type: "yesNoNa" },
+              { text: "Faucets, showers, sinks working", type: "text" },
+              { text: "Low-point drain works", type: "yesNoNa" },
+              { text: "Toilet works properly, no leaks", type: "text" },
+              { text: "P-trap and plumbing vent ok", type: "yesNoNa" },
+              { text: "Water filter ok", type: "yesNoNa" },
+            ]},
+            { name: "Interior", items: [
+              { text: "Condition in walls, flooring, ceiling", type: "text" },
+              { text: "No leaks in slide-out, windows, or bedroom", type: "text" },
+              { text: "Key set complete", type: "yesNoNa" },
+              { text: "Manual in unit", type: "yesNoNa" },
+              { text: "Kitchen counter condition", type: "text" },
+              { text: "Curtains work properly", type: "yesNoNa" },
+              { text: "Bedroom closet doors, panels work properly", type: "text" },
+              { text: "Cabinets and closets close well", type: "text" },
+              { text: "Slide-out works and seals room correctly", type: "text" },
+              { text: "Windows and screens work correctly", type: "text" },
+              { text: "All vents work correctly", type: "yesNoNa" },
+              { text: "Emergency Exit works correctly", type: "yesNoNa" },
+              { text: "Smoke detector, CO detector, gas leak detector work properly", type: "text" },
+              { text: "Extinguisher ok", type: "text" },
+              { text: "Bunks, beds and sofas in working order", type: "text" },
+              { text: "Beds structurally sound", type: "text" },
+              { text: "Drawers (alignment and latches work)", type: "text" },
+              { text: "Bed and Table kit works", type: "text" },
+              { text: "Bed supports", type: "yesNoNa" },
+              { text: "Wall condensation", type: "text" },
+              { text: "Under mattress humidity ok", type: "text" },
+              { text: "Mold inspection", type: "text" },
+              { text: "Screws in windows and outlets", type: "yesNoNa" },
+              { text: "Outlets in good condition", type: "yesNoNa" },
+            ]},
+          ],
+        };
+
+        const totalItems = RV_PROCEDURE.sections.reduce((sum, sec) => sum + sec.items.length, 0);
+        const yesNoItems = RV_PROCEDURE.sections.reduce((sum, sec) => sum + sec.items.filter(i => i.type === "yesNoNa").length, 0);
+        const photoItems = RV_PROCEDURE.sections.reduce((sum, sec) => sum + sec.items.filter(i => i.type === "photo").length, 0);
+
+        return (
+          <div>
+            {isAdmin && (
+              <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                <button style={s.btn()}>+ Add Procedure</button>
+              </div>
+            )}
+
+            <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 17 }}>{RV_PROCEDURE.name}</div>
+                  <div style={{ color: T.muted, fontSize: 13, fontStyle: "italic" }}>{RV_PROCEDURE.nameSp}</div>
+                </div>
+                <span style={s.badge(T.successDim, T.success)}>Active</span>
+              </div>
+
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16, fontSize: 13 }}>
+                <span style={{ color: T.dim }}>Year: <strong style={{ color: T.text }}>{RV_PROCEDURE.year}</strong></span>
+                <span style={{ color: T.dim }}>Sections: <strong style={{ color: T.text }}>{RV_PROCEDURE.sections.length}</strong></span>
+                <span style={{ color: T.dim }}>Total Items: <strong style={{ color: T.text }}>{totalItems}</strong></span>
+                <span style={{ color: T.dim }}>Yes/No/N/A: <strong style={{ color: T.text }}>{yesNoItems}</strong></span>
+                <span style={{ color: T.dim }}>Photo Required: <strong style={{ color: T.text }}>{photoItems}</strong></span>
+              </div>
+
+              {RV_PROCEDURE.sections.map((sec, si) => (
+                <details key={si} style={{ marginBottom: 8, borderRadius: T.radiusSm, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+                  <summary style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 600, fontSize: 14, background: T.cardBg, display: "flex", justifyContent: "space-between", alignItems: "center", listStyle: "none" }}>
+                    <span>{sec.name}</span>
+                    <span style={{ fontSize: 12, color: T.muted, fontWeight: 400 }}>{sec.items.length} items</span>
+                  </summary>
+                  <div style={{ padding: "8px 14px 14px" }}>
+                    <table style={{ ...s.table, fontSize: 13 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...s.th, width: 30 }}>#</th>
+                          <th style={s.th}>Item</th>
+                          <th style={{ ...s.th, width: 100 }}>Type</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sec.items.map((item, ii) => (
+                          <tr key={ii}>
+                            <td style={{ ...s.td, color: T.dim }}>{ii + 1}</td>
+                            <td style={s.td}>{item.text}</td>
+                            <td style={s.td}>
+                              <span style={s.badge(
+                                item.type === "yesNoNa" ? T.successDim : item.type === "photo" ? T.infoDim : T.warnDim,
+                                item.type === "yesNoNa" ? T.success : item.type === "photo" ? T.info : T.warn
+                              )}>
+                                {item.type === "yesNoNa" ? "Yes/No/N/A" : item.type === "photo" ? "Photo" : "Detail"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Regulatory — admin only */}
       {tab === "Regulatory" && (
