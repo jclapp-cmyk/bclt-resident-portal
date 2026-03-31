@@ -550,7 +550,6 @@ const NAV = {
     { id: "recert", label: "Income Certification", icon: "📋" },
     { id: "inspections", label: "Inspections", icon: "🔍" },
     { id: "communications", label: "Communications", icon: "💬" },
-    { id: "compliance", label: "Compliance", icon: "✅" },
     { id: "reports", label: "Reports", icon: "📊" },
     { id: "calendar", label: "Calendar", icon: "📅" },
     { id: "settings", label: "Settings", icon: "⚙️" },
@@ -3263,7 +3262,7 @@ const ONBOARDING_STATUS = {
 };
 
 const AdminDocuments = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty }) => {
-  const tabs = ["All Documents", "By Resident", "Property", "Compliance"];
+  const tabs = ["All Documents", "By Resident", "Property"];
   const [tab, setTab] = useState(tabs[0]);
   const filteredResidents = filterByProperty(LIVE_RESIDENTS, selectedProperty);
   const [selectedResident, setSelectedResident] = useState(filteredResidents[0]?.id || LIVE_RESIDENTS[0].id);
@@ -3373,37 +3372,13 @@ const AdminDocuments = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty }) =
         </div>
       )}
 
-      {tab === "Compliance" && (
-        <div>
-          <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 20 }}>
-            <StatCard label="Total Required" value={compDocsF.length} mobile={mobile} />
-            <StatCard label="Current" value={compCurrent} accent={T.success} mobile={mobile} />
-            <StatCard label="Expired" value={compExpired} accent={T.danger} mobile={mobile} />
-            <StatCard label="Missing" value={compMissing} accent={T.muted} mobile={mobile} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
-            <ExportButton mobile={mobile} onClick={() => generateCSV(
-              [{ label: "Resident", key: "residentId", exportValue: r => LIVE_RESIDENTS.find(res => res.id === r.residentId)?.name || r.residentId }, { label: "Unit", key: "unit" }, { label: "Document Type", key: "docType", exportValue: r => LEASE_DOC_TYPES[r.docType] || r.docType }, { label: "Status", key: "status" }, { label: "Expires", key: "expires", exportValue: r => r.expires || "N/A" }, { label: "Last Uploaded", key: "lastUploaded", exportValue: r => r.lastUploaded || "Never" }],
-              compDocsF, "compliance_documents"
-            )} />
-          </div>
-          <SortableTable mobile={mobile} columns={[
-            { key: "residentId", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{LIVE_RESIDENTS.find(r => r.id === v)?.name || v}</span>, sortValue: r => LIVE_RESIDENTS.find(res => res.id === r.residentId)?.name || "", filterValue: r => LIVE_RESIDENTS.find(res => res.id === r.residentId)?.name || "" },
-            { key: "unit", label: "Unit" },
-            { key: "docType", label: "Document", render: v => LEASE_DOC_TYPES[v] || v, filterOptions: [...new Set(compDocsF.map(d => d.docType))] },
-            { key: "status", label: "Status", render: v => { const c = COMPLIANCE_STATUS[v] || COMPLIANCE_STATUS.missing; return <span style={s.badge(c.bg, c.text)}>{v.charAt(0).toUpperCase() + v.slice(1)}</span>; }, filterOptions: ["current", "expired", "missing"] },
-            { key: "expires", label: "Expires", render: v => v || "—" },
-            { key: "lastUploaded", label: "Last Uploaded", render: v => v || "Never" },
-          ]} data={compDocsF.map((d, i) => ({ ...d, _idx: i }))} keyField="_idx" />
-        </div>
-      )}
     </div>
   );
 };
 
 // --- ADMIN REPORTS (Analytics Dashboard) ---
 const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedProperty }) => {
-  const tabs = ["Maintenance", "Financial", "Compliance"];
+  const tabs = ["Maintenance", "Financial"];
   const [tab, setTab] = useState(tabs[0]);
   const [dateRange, setDateRange] = useState({ preset: "all", from: null, to: null });
 
@@ -3536,47 +3511,6 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
         </div>
       )}
 
-      {tab === "Compliance" && (
-        <div>
-          <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 20 }}>
-            <StatCard label="Units Inspected" value={uniqueUnitsInspected} mobile={mobile} />
-            <StatCard label="Pass Rate" value={`${passRate}%`} accent={passRate >= 80 ? T.success : T.warn} mobile={mobile} />
-            <StatCard label="Overdue Inspections" value={overdueInsp} accent={overdueInsp > 0 ? T.danger : T.success} mobile={mobile} />
-            <StatCard label="Active Vendors" value={`${activeVendors}/${vendors.length}`} accent={T.info} mobile={mobile} />
-          </div>
-          <div style={s.card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>Upcoming Inspections</div>
-              <ExportButton mobile={mobile} onClick={() => generateCSV(
-                [{ label: "Type", key: "type" }, { label: "Authority", key: "authority" }, { label: "Last Date", key: "date" }, { label: "Result", key: "result" }, { label: "Next Due", key: "nextDue" }, { label: "Deficiencies", key: "deficiencies" }],
-                regInsp, "regulatory_inspections"
-              )} />
-            </div>
-            {[...regInsp].sort((a, b) => new Date(a.nextDue) - new Date(b.nextDue)).map(i => (
-              <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}` }}>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{i.type}</div>
-                  <div style={{ fontSize: 12, color: T.muted }}>{i.authority}{selectedProperty === "all" ? ` — ${getProperty(i.propertyId)?.name?.split(" ")[0]}` : ""}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: new Date(i.nextDue) < new Date() ? T.danger : T.text }}>Due: {i.nextDue}</div>
-                  <div style={{ fontSize: 12, color: T.muted }}>Last: {i.result}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Vendor Compliance</div>
-            <SortableTable mobile={mobile} columns={[
-              { key: "company", label: "Vendor", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
-              { key: "trade", label: "Trade" },
-              { key: "licenseExp", label: "License Exp", render: v => <span style={{ color: new Date(v) < new Date() ? T.danger : T.text, fontWeight: new Date(v) < new Date() ? 600 : 400 }}>{v}{new Date(v) < new Date() ? " !" : ""}</span> },
-              { key: "insured", label: "Insured", render: (_, row) => <span style={s.badge(row.insured ? T.successDim : T.dangerDim, row.insured ? T.success : T.danger)}>{row.insured ? "Yes" : "No"}</span> },
-              { key: "active", label: "Active", render: (_, row) => <span style={s.badge(row.active ? T.successDim : T.dangerDim, row.active ? T.success : T.danger)}>{row.active ? "Yes" : "No"}</span> },
-            ]} data={vendors} keyField="id" />
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -3607,7 +3541,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
     <div>
       <h1 style={s.sectionTitle}>{isResident ? "My Inspections" : "Inspections"}</h1>
       <p style={s.sectionSub}>
-        {isResident ? "Inspection history for your unit" : isAdmin ? "Track regulatory compliance and manage unit inspections" : "View assigned inspections and complete checklists"}
+        {isResident ? "Inspection history for your unit" : isAdmin ? "Schedule and manage unit inspections" : "View assigned inspections and complete checklists"}
       </p>
 
       {isAdmin && (
@@ -5016,132 +4950,6 @@ const CalendarView = ({ mobile, maintenance, vendors, unitInspections, onNavigat
 };
 
 // --- COMPLIANCE & AUDIT DASHBOARD (Admin) ---
-const ComplianceDashboard = ({ mobile, vendors, unitInspections, selectedProperty }) => {
-  const tabs = ["Overview", "Documents", "Regulatory"];
-  const [tab, setTab] = useState(tabs[0]);
-  const [docFilter, setDocFilter] = useState("all");
-
-  const compDocs = filterByProperty(LIVE_COMPLIANCE_DOCS, selectedProperty);
-  const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
-  // Compute metrics
-  const totalDocs = compDocs.length;
-  const currentDocs = compDocs.filter(d => d.status === "current").length;
-  const docPct = totalDocs ? Math.round((currentDocs / totalDocs) * 100) : 0;
-  const regPassing = regInsp.filter(i => i.result === "Pass").length;
-  const regPassRate = regInsp.length ? Math.round((regPassing / regInsp.length) * 100) : 0;
-  const now = new Date();
-  const compliantVendors = vendors.filter(v => v.active && v.insured && new Date(v.licenseExp) > now).length;
-  const vendorPct = vendors.length ? Math.round((compliantVendors / vendors.length) * 100) : 0;
-  const recertSteps = Object.values(MOCK_RECERT.stepsCompleted || {});
-  const recertDone = recertSteps.filter(Boolean).length;
-  const recertPct = Math.round((recertDone / recertSteps.length) * 100);
-  const auditScore = Math.round((docPct + regPassRate + vendorPct + recertPct) / 4);
-  const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
-
-  // Risk items
-  const risks = [];
-  compDocs.filter(d => d.status === "expired").forEach(d => {
-    const name = LIVE_RESIDENTS.find(r => r.id === d.residentId)?.name || d.residentId;
-    risks.push({ icon: "📄", text: `${name} — ${LEASE_DOC_TYPES[d.docType] || d.docType} expired`, color: T.danger });
-  });
-  compDocs.filter(d => d.status === "missing").forEach(d => {
-    const name = LIVE_RESIDENTS.find(r => r.id === d.residentId)?.name || d.residentId;
-    risks.push({ icon: "⚠️", text: `${name} — ${LEASE_DOC_TYPES[d.docType] || d.docType} missing`, color: T.warn });
-  });
-  regInsp.forEach(i => {
-    const days = Math.ceil((new Date(i.nextDue) - now) / 86400000);
-    if (days < 90) risks.push({ icon: "🔍", text: `${i.type} inspection due in ${days < 0 ? "OVERDUE" : days + " days"}`, color: days < 0 ? T.danger : T.warn });
-  });
-  vendors.filter(v => v.active).forEach(v => {
-    const days = Math.ceil((new Date(v.licenseExp) - now) / 86400000);
-    if (days < 90) risks.push({ icon: "📇", text: `${v.company} license ${days < 0 ? "EXPIRED" : "expires in " + days + " days"}`, color: days < 0 ? T.danger : T.warn });
-  });
-
-  const filteredDocs = docFilter === "all" ? compDocs : compDocs.filter(d => d.status === docFilter);
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-        <div><h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Compliance & Audit</h1><p style={s.sectionSub}>{propLabel} — HUD, LIHTC, and regulatory compliance</p></div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Resident", key: "residentId", exportValue: r => LIVE_RESIDENTS.find(res => res.id === r.residentId)?.name || r.residentId }, { label: "Unit", key: "unit" }, { label: "Doc Type", key: "docType", exportValue: r => LEASE_DOC_TYPES[r.docType] || r.docType }, { label: "Status", key: "status" }, { label: "Expires", key: "expires", exportValue: r => r.expires || "N/A" }, { label: "Last Uploaded", key: "lastUploaded", exportValue: r => r.lastUploaded || "Never" }], compDocs, "compliance_docs")} />
-          <PrintButton mobile={mobile} />
-        </div>
-      </div>
-      <TabBar tabs={tabs} active={tab} onChange={setTab} mobile={mobile} />
-
-      {tab === "Overview" && (
-        <div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
-            <ProgressRing value={auditScore} max={100} color={auditScore >= 80 ? T.success : auditScore >= 60 ? T.warn : T.danger} size={120} label="Audit Ready" mobile={mobile} />
-          </div>
-          <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 20 }}>
-            <StatCard label="Docs Current" value={`${currentDocs}/${totalDocs}`} accent={currentDocs === totalDocs ? T.success : T.warn} mobile={mobile} />
-            <StatCard label="Inspections Passing" value={`${regPassing}/${regInsp.length}`} accent={T.success} mobile={mobile} />
-            <StatCard label="Vendors Compliant" value={`${compliantVendors}/${vendors.length}`} accent={compliantVendors === vendors.length ? T.success : T.warn} mobile={mobile} />
-            <StatCard label="Recert Progress" value={`${recertDone}/${recertSteps.length}`} accent={recertPct === 100 ? T.success : T.info} mobile={mobile} />
-          </div>
-          {risks.length > 0 && (
-            <div style={s.card}>
-              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15, color: T.danger }}>⚠️ Risk Items ({risks.length})</div>
-              {risks.map((r, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < risks.length - 1 ? `1px solid ${T.borderLight}` : "none" }}>
-                  <span style={{ fontSize: 16 }}>{r.icon}</span>
-                  <span style={{ fontSize: 13, color: r.color, fontWeight: 500 }}>{r.text}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === "Documents" && (
-        <div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-            {["all", "current", "expired", "missing"].map(f => (
-              <button key={f} onClick={() => setDocFilter(f)} style={{ ...s.btn(docFilter === f ? "primary" : "ghost"), textTransform: "capitalize", fontSize: 12 }}>{f} {f !== "all" ? `(${compDocs.filter(d => d.status === f).length})` : `(${totalDocs})`}</button>
-            ))}
-          </div>
-          <SortableTable mobile={mobile} columns={[
-            { key: "residentId", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{LIVE_RESIDENTS.find(r => r.id === v)?.name || v}</span> },
-            { key: "unit", label: "Unit" },
-            { key: "docType", label: "Document", render: v => LEASE_DOC_TYPES[v] || v },
-            { key: "status", label: "Status", render: v => { const c = COMPLIANCE_STATUS[v] || COMPLIANCE_STATUS.missing; return <span style={s.badge(c.bg, c.text)}>{v.charAt(0).toUpperCase() + v.slice(1)}</span>; }, filterOptions: ["current", "expired", "missing"] },
-            { key: "expires", label: "Expires", render: v => v || "—" },
-            { key: "lastUploaded", label: "Last Uploaded", render: v => v || "Never" },
-          ]} data={filteredDocs.map((d, i) => ({ ...d, _idx: i }))} keyField="_idx" />
-        </div>
-      )}
-
-      {tab === "All Inspections" && (
-        <div>
-          {[...regInsp].sort((a, b) => new Date(a.nextDue) - new Date(b.nextDue)).map(i => {
-            const days = Math.ceil((new Date(i.nextDue) - now) / 86400000);
-            const urgColor = days < 0 ? T.danger : days < 90 ? T.danger : days < 180 ? T.warn : T.success;
-            return (
-              <div key={i.id} style={{ ...s.card, borderLeft: `3px solid ${urgColor}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>{i.type}</div>
-                    <div style={{ color: T.muted, fontSize: 13 }}>{i.authority}</div>
-                    {i.score !== null && <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>Score: {i.score}/100</div>}
-                    {i.deficiencies > 0 && <div style={{ fontSize: 12, color: T.warn, marginTop: 2 }}>{i.deficiencies} deficienc{i.deficiencies === 1 ? "y" : "ies"} noted</div>}
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: urgColor }}>{days < 0 ? "OVERDUE" : `${days} days`}</div>
-                    <div style={{ fontSize: 12, color: T.muted }}>Due: {i.nextDue}</div>
-                    <div style={{ marginTop: 6 }}><span style={s.badge(T.successDim, T.success)}>{i.result}</span></div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12, color: T.dim, marginTop: 8 }}>Last inspected: {i.date} · {i.units ? `${i.units} units` : "Property-wide"}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
 
 // --- FINANCIAL OVERVIEW (Admin) ---
 const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
@@ -6068,7 +5876,6 @@ export default function App() {
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
-        case "compliance": return <ComplianceDashboard mobile={mobile} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} />;
