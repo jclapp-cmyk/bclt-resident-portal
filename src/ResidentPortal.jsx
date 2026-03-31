@@ -4114,6 +4114,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   const [tab, setTab] = useState(tabs[0]);
   const [selectedThread, setSelectedThread] = useState(null);
   const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
+  const [sending, setSending] = useState(false);
   const [success, showSuccess] = useSuccess();
 
   const getInitials = (name) => name.split(" ").map(w => w[0]).join("").slice(0, 2);
@@ -4259,8 +4260,9 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             </div>
           )}
           <div style={{ display: "flex", gap: 10 }}>
-            <button style={s.btn()} onClick={async () => {
-              if (!composeData.subject.trim() || !composeData.body.trim()) return;
+            <button disabled={sending} style={s.btn()} onClick={async () => {
+              if (!composeData.subject.trim() || !composeData.body.trim() || sending) return;
+              setSending(true);
               const threadId = `THR-${Date.now()}`;
               const ch = composeData.channel === "auto" ? "email" : composeData.channel;
               // Save thread + message to database
@@ -4306,9 +4308,10 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 }
               } catch (err) { console.warn("Send delivery failed:", err); }
               setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
+              setSending(false);
               setTab("Inbox");
               showSuccess("Message sent!");
-            }}>Send Message</button>
+            }}>{sending ? "Sending..." : "Send Message"}</button>
             <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" })}>Clear</button>
           </div>
         </div>
