@@ -1022,46 +1022,174 @@ const WorkOrders = ({ mobile, maintenance, onUpdate }) => {
 // --- RENT & PAYMENTS ---
 const RentPayments = ({ mobile, rc }) => {
   const _ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
+  const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id) || {};
+  const balance = ledgerEntry.balance || 0;
   const [showPay, setShowPay] = useState(false);
+  const [payForm, setPayForm] = useState({ amount: "", method: "ach", payType: "rent" });
+  const [payHistory, setPayHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, showSuccess] = useSuccess();
+  const [autopay, setAutopay] = useState(false);
+
+  useEffect(() => {
+    setLoadingHistory(true);
+    fetchRentPayments().then(all => {
+      const mine = all.filter(p => p.residentId === rc?.id).sort((a, b) => (b.paymentDate || "").localeCompare(a.paymentDate || ""));
+      setPayHistory(mine);
+      setLoadingHistory(false);
+    }).catch(() => setLoadingHistory(false));
+  }, [rc?.id]);
+
+  const FEE_INFO = { ach: { label: "ACH / Bank Transfer", fee: 0, feeLabel: "Free" }, debit: { label: "Debit Card", fee: 1.50, feeLabel: "$1.50 fee" }, credit: { label: "Credit Card", fee: 0.0275, feeLabel: "2.75% fee", pct: true } };
+  const calcFee = () => {
+    const amt = parseFloat(payForm.amount) || 0;
+    const info = FEE_INFO[payForm.method] || FEE_INFO.ach;
+    return info.pct ? Math.round(amt * info.fee * 100) / 100 : info.fee;
+  };
+  const calcTotal = () => (parseFloat(payForm.amount) || 0) + (payForm.method === "ach" ? 0 : calcFee());
+
+  const PAY_TYPES = [
+    { value: "rent", label: "Rent" },
+    { value: "late_fee", label: "Late Fee" },
+    { value: "deposit", label: "Security Deposit" },
+    { value: "utility", label: "Utility" },
+    { value: "other", label: "Other" },
+  ];
+
+  const handleSubmit = async () => {
+    if (!payForm.amount || submitting) return;
+    setSubmitting(true);
+    try {
+      await recordPayment({
+        residentSlug: rc?.id,
+        amount: parseFloat(payForm.amount),
+        method: payForm.method,
+        paymentDate: new Date().toISOString().slice(0, 10),
+        month: new Date().toISOString().slice(0, 7),
+        note: `${PAY_TYPES.find(t => t.value === payForm.payType)?.label || "Rent"} — online payment`,
+      });
+      const fresh = await fetchRentLedger();
+      if (fresh?.length) LIVE_RENT_LEDGER.splice(0, LIVE_RENT_LEDGER.length, ...fresh);
+      const allPay = await fetchRentPayments();
+      setPayHistory(allPay.filter(p => p.residentId === rc?.id).sort((a, b) => (b.paymentDate || "").localeCompare(a.paymentDate || "")));
+      showSuccess(`Payment of $${parseFloat(payForm.amount).toFixed(2)} submitted successfully`);
+      setPayForm({ amount: "", method: "ach", payType: "rent" });
+      setShowPay(false);
+    } catch (err) {
+      showSuccess("Error: " + (err.message || "Payment failed"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Rent & Payments</h1>
-      <p style={s.sectionSub}>View your ledger and make payments</p>
+      <p style={s.sectionSub}>View your balance, make payments, and manage autopay</p>
+      <SuccessMessage message={success} />
+
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-        <StatCard label="Current Balance" value="$0.00" accent={T.success} mobile={mobile} />
-        <StatCard label="Monthly Rent" value={`$${_ext.rentAmount || 0}`} accent={T.accent} mobile={mobile} />
-        <StatCard label="Your Portion" value={`$${_ext.tenantPortion || 0}`} accent={T.accent} mobile={mobile} />
-        <StatCard label="HAP Payment" value={`$${_ext.hapPayment || 0}`} accent={T.info} mobile={mobile} />
+        <StatCard label="Current Balance" value={balance > 0 ? `$${balance.toLocaleString()}` : "$0.00"} accent={balance > 0 ? T.danger : T.success} mobile={mobile} />
+        <StatCard label="Monthly Rent" value={`$${(_ext.rentAmount || 0).toLocaleString()}`} accent={T.accent} mobile={mobile} />
+        <StatCard label="Your Portion" value={`$${(_ext.tenantPortion || 0).toLocaleString()}`} accent={T.accent} mobile={mobile} />
+        <StatCard label="HAP Payment" value={`$${(_ext.hapPayment || 0).toLocaleString()}`} accent={T.info} mobile={mobile} />
       </div>
-      <button style={{ ...s.btn(), marginBottom: 20 }} onClick={() => setShowPay(!showPay)}>Make a Payment</button>
-      {showPay && (
-        <div style={{ ...s.card, borderColor: T.accent }}>
-          <div style={{ fontWeight: 700, marginBottom: 16 }}>Make Payment</div>
-          <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-            <div><label style={s.label}>Amount</label><input style={s.mInput(mobile)} type="text" defaultValue="485.00" /></div>
-            <div><label style={s.label}>Payment Method</label><select style={{ ...s.mSelect(mobile), width: "100%" }}><option>ACH / Bank Transfer (Free)</option><option>Debit Card ($1.50 fee)</option><option>Credit Card (2.75% fee)</option></select></div>
+
+      {/* Autopay Card */}
+      <div style={{ ...s.card, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Autopay</div>
+            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+              {autopay
+                ? `$${(_ext.tenantPortion || 0).toLocaleString()} via ACH on the 1st of each month`
+                : "Automatically pay your rent each month — never miss a payment"}
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 10 }}><button style={s.btn()} onClick={() => setShowPay(false)}>Submit Payment</button><button style={s.btn("ghost")} onClick={() => setShowPay(false)}>Cancel</button></div>
+          <Toggle label="" checked={autopay} onChange={() => {
+            setAutopay(!autopay);
+            showSuccess(autopay ? "Autopay disabled" : "Autopay enabled — payment will process on the 1st of each month");
+          }} />
+        </div>
+        {autopay && (
+          <div style={{ marginTop: 12, padding: "10px 14px", background: T.successDim, borderRadius: 8, fontSize: 12, color: T.success, fontWeight: 600 }}>
+            Autopay is active. Your tenant portion of ${(_ext.tenantPortion || 0).toLocaleString()} will be drafted via ACH on the 1st. A payment processor must be connected to process payments.
+          </div>
+        )}
+      </div>
+
+      {/* Make Payment */}
+      <button style={{ ...s.btn(), marginBottom: 20 }} onClick={() => { setShowPay(!showPay); if (!showPay) setPayForm(f => ({ ...f, amount: String(_ext.tenantPortion || "") })); }}>
+        {showPay ? "Cancel" : "Make a Payment"}
+      </button>
+      {showPay && (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Make a Payment</div>
+          <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={s.label}>Payment Type</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.payType} onChange={e => setPayForm(p => ({ ...p, payType: e.target.value }))}>
+                {PAY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={s.label}>Amount ($)</label>
+              <input style={{ ...s.mInput(mobile), width: "100%" }} type="number" min="0" step="0.01" placeholder="0.00" value={payForm.amount} onChange={e => setPayForm(p => ({ ...p, amount: e.target.value }))} />
+            </div>
+            <div>
+              <label style={s.label}>Payment Method</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.method} onChange={e => setPayForm(p => ({ ...p, method: e.target.value }))}>
+                {Object.entries(FEE_INFO).map(([k, v]) => <option key={k} value={k}>{v.label} ({v.feeLabel})</option>)}
+              </select>
+            </div>
+          </div>
+          {payForm.amount && payForm.method !== "ach" && (
+            <div style={{ padding: "10px 14px", background: T.warnDim, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>
+              <span style={{ fontWeight: 600 }}>Processing fee:</span> ${calcFee().toFixed(2)} · <span style={{ fontWeight: 600 }}>Total:</span> ${calcTotal().toFixed(2)}
+            </div>
+          )}
+          <div style={{ padding: "10px 14px", background: T.infoDim, borderRadius: 8, fontSize: 12, color: T.info, marginBottom: 14 }}>
+            Online payments require a payment processor (Stripe). Contact your property manager to enable online payments. Manual payments (check, money order) can be recorded by your admin.
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button disabled={!payForm.amount || submitting} style={s.btn()} onClick={handleSubmit}>{submitting ? "Processing..." : `Pay $${calcTotal().toFixed(2)}`}</button>
+            <button style={s.btn("ghost")} onClick={() => setShowPay(false)}>Cancel</button>
+          </div>
         </div>
       )}
+
+      {/* Payment History */}
       <div style={s.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Payment Ledger</div>
-          <ExportButton onClick={() => generateCSV([{ label: "Date", key: "date" }, { label: "Description", key: "description" }, { label: "Amount", key: "amount", exportValue: r => r.amount.toFixed(2) }, { label: "Balance", key: "balance", exportValue: r => r.balance.toFixed(2) }, { label: "Type", key: "type" }], MOCK_PAYMENTS, "payment_ledger")} />
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Payment History</div>
+          <ExportButton onClick={() => generateCSV([
+            { label: "Date", key: "paymentDate" },
+            { label: "Method", key: "method" },
+            { label: "Amount", key: "amount", exportValue: r => r.amount.toFixed(2) },
+            { label: "Note", key: "note" },
+          ], payHistory, "payment_history")} />
         </div>
-        <table style={s.table}>
-          <thead><tr>{["Date", "Description", "Amount", "Balance"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-          <tbody>
-            {MOCK_PAYMENTS.map((p, i) => (
-              <tr key={i}>
-                <td style={s.td}>{p.date}</td>
-                <td style={s.td}>{p.description}</td>
-                <td style={{ ...s.td, color: p.amount < 0 ? T.success : T.text, fontWeight: 600 }}>{p.amount < 0 ? `-$${Math.abs(p.amount).toFixed(2)}` : `$${p.amount.toFixed(2)}`}</td>
-                <td style={s.td}>${p.balance.toFixed(2)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {loadingHistory ? (
+          <div style={{ padding: 20, textAlign: "center", color: T.muted }}>Loading...</div>
+        ) : payHistory.length === 0 ? (
+          <EmptyState icon="💳" text="No payment history yet." />
+        ) : (
+          <table style={s.table}>
+            <thead><tr>{["Date", "Type", "Method", "Amount", "Note"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {payHistory.map((p, i) => (
+                <tr key={p.id || i}>
+                  <td style={s.td}>{p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : "—"}</td>
+                  <td style={s.td}><span style={s.badge(T.accentDim, T.accent)}>{(p.note || "Rent").split(" — ")[0]}</span></td>
+                  <td style={s.td}><span style={{ textTransform: "capitalize" }}>{(p.method || "").replace("_", " ")}</span></td>
+                  <td style={{ ...s.td, fontWeight: 600, color: T.success }}>${p.amount.toFixed(2)}</td>
+                  <td style={s.td}><span style={{ fontSize: 12, color: T.muted }}>{p.note || "—"}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
@@ -2680,7 +2808,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 try {
                   await recordPayment({ residentSlug: selectedResident.id, amount: amt, method: payForm.method, paymentDate: payForm.date, note: payForm.note });
                   showSuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment`);
-                  setPayForm({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+                  setPayForm({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
                   loadResidentExtra(); // refresh payments locally
                   if (onDataChanged) onDataChanged();
                 } catch (err) { showSuccess("Error: " + err.message); }
@@ -4649,18 +4777,72 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
       )}
 
       {tab === "Rent & Lease" && (
-        <div style={s.card}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Rent & Lease Defaults</div>
-          <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-            <div><label style={s.label}>Rent Due Day</label><select style={s.mSelect(mobile)} value={settings.rent.dueDay} onChange={e => upd("rent", "dueDay", e.target.value)}>{["1", "5", "10", "15"].map(d => <option key={d} value={d}>{d === "1" ? "1st" : d === "5" ? "5th" : d === "10" ? "10th" : "15th"}</option>)}</select></div>
-            <div><label style={s.label}>Grace Period</label><select style={s.mSelect(mobile)} value={settings.rent.gracePeriodDays} onChange={e => upd("rent", "gracePeriodDays", e.target.value)}>{["3", "5", "7", "10"].map(d => <option key={d} value={d}>{d} days</option>)}</select></div>
-            <div><label style={s.label}>Late Fee Amount ($)</label><input type="number" style={s.mInput(mobile)} value={settings.rent.lateFeeAmount} onChange={e => upd("rent", "lateFeeAmount", e.target.value)} /></div>
-            <div><label style={s.label}>Default Lease Term</label><select style={s.mSelect(mobile)} value={settings.rent.leaseTermDefault} onChange={e => upd("rent", "leaseTermDefault", e.target.value)}>{["6", "12", "24"].map(d => <option key={d} value={d}>{d} months</option>)}</select></div>
+        <div>
+          <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Rent & Lease Defaults</div>
+            <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
+              <div><label style={s.label}>Rent Due Day</label><select style={s.mSelect(mobile)} value={settings.rent.dueDay} onChange={e => upd("rent", "dueDay", e.target.value)}>{["1", "5", "10", "15"].map(d => <option key={d} value={d}>{d === "1" ? "1st" : d === "5" ? "5th" : d === "10" ? "10th" : "15th"}</option>)}</select></div>
+              <div><label style={s.label}>Grace Period</label><select style={s.mSelect(mobile)} value={settings.rent.gracePeriodDays} onChange={e => upd("rent", "gracePeriodDays", e.target.value)}>{["3", "5", "7", "10"].map(d => <option key={d} value={d}>{d} days</option>)}</select></div>
+              <div><label style={s.label}>Late Fee Amount ($)</label><input type="number" style={s.mInput(mobile)} value={settings.rent.lateFeeAmount} onChange={e => upd("rent", "lateFeeAmount", e.target.value)} /></div>
+              <div><label style={s.label}>Default Lease Term</label><select style={s.mSelect(mobile)} value={settings.rent.leaseTermDefault} onChange={e => upd("rent", "leaseTermDefault", e.target.value)}>{["6", "12", "24"].map(d => <option key={d} value={d}>{d} months</option>)}</select></div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <Toggle label="Auto-Renewal Default" description="Automatically renew leases unless tenant opts out" checked={settings.rent.autoRenewal} onChange={v => upd("rent", "autoRenewal", v)} />
+            </div>
+            <button style={s.btn()} onClick={() => showSuccess("Rent & lease settings saved")}>Save Changes</button>
           </div>
-          <div style={{ marginBottom: 16 }}>
-            <Toggle label="Auto-Renewal Default" description="Automatically renew leases unless tenant opts out" checked={settings.rent.autoRenewal} onChange={v => upd("rent", "autoRenewal", v)} />
+
+          <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
+            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Property Bank Accounts</div>
+            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Map each property to its bank account so payments are routed correctly. When Stripe Connect is enabled, each property will use its own connected account.</div>
+            <table style={s.table}>
+              <thead><tr>{["Property", "Bank Name", "Account (last 4)", "Routing", "Status"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {LIVE_PROPERTIES.map(p => {
+                  const bankInfo = settings.rent?.bankAccounts?.[p.id] || {};
+                  return (
+                    <tr key={p.id}>
+                      <td style={s.td}><span style={{ fontWeight: 600 }}>{p.name}</span></td>
+                      <td style={s.td}>
+                        <input type="text" placeholder="e.g. Chase" value={bankInfo.bankName || ""} onChange={e => {
+                          const updated = { ...(settings.rent?.bankAccounts || {}), [p.id]: { ...bankInfo, bankName: e.target.value } };
+                          upd("rent", "bankAccounts", updated);
+                        }} style={{ ...s.mInput(mobile), width: "100%", fontSize: 12 }} />
+                      </td>
+                      <td style={s.td}>
+                        <input type="text" placeholder="1234" maxLength={4} value={bankInfo.lastFour || ""} onChange={e => {
+                          const updated = { ...(settings.rent?.bankAccounts || {}), [p.id]: { ...bankInfo, lastFour: e.target.value.replace(/\D/g, "").slice(0, 4) } };
+                          upd("rent", "bankAccounts", updated);
+                        }} style={{ ...s.mInput(mobile), width: 80, fontSize: 12 }} />
+                      </td>
+                      <td style={s.td}>
+                        <input type="text" placeholder="Routing #" value={bankInfo.routing || ""} onChange={e => {
+                          const updated = { ...(settings.rent?.bankAccounts || {}), [p.id]: { ...bankInfo, routing: e.target.value.replace(/\D/g, "").slice(0, 9) } };
+                          upd("rent", "bankAccounts", updated);
+                        }} style={{ ...s.mInput(mobile), width: 110, fontSize: 12 }} />
+                      </td>
+                      <td style={s.td}>
+                        {bankInfo.bankName && bankInfo.lastFour
+                          ? <span style={s.badge(T.successDim, T.success)}>Configured</span>
+                          : <span style={s.badge(T.warnDim, T.warn)}>Not Set</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <button style={{ ...s.btn(), marginTop: 14 }} onClick={() => showSuccess("Bank account settings saved")}>Save Bank Accounts</button>
           </div>
-          <button style={s.btn()} onClick={() => showSuccess("Rent & lease settings saved")}>Save Changes</button>
+
+          <div style={{ ...s.card, borderLeft: `3px solid ${T.info}` }}>
+            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Payment Processing</div>
+            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Connect Stripe to accept online rent payments via ACH, debit, and credit card.</div>
+            <div style={{ padding: "14px 18px", background: T.infoDim, borderRadius: 8, marginBottom: 14 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: T.info, marginBottom: 4 }}>Stripe Connect — Not Connected</div>
+              <div style={{ fontSize: 12, color: T.muted }}>Each property will have its own Stripe connected account so payments route to the correct bank. ACH transfers have the lowest fees (~0.8%).</div>
+            </div>
+            <button style={{ ...s.btn(), opacity: 0.6, cursor: "not-allowed" }} disabled>Connect Stripe (Coming Soon)</button>
+          </div>
         </div>
       )}
 
@@ -4942,7 +5124,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const [tab, setTab] = useState(tabs[0]);
   const [dateRange, setDateRange] = useState({ preset: "all", from: null, to: null });
   const [showRecordPayment, setShowRecordPayment] = useState(false);
-  const [payForm, setPayForm] = useState({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+  const [payForm, setPayForm] = useState({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
   const [paySuccess, showPaySuccess] = useSuccess();
 
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
@@ -5102,11 +5284,24 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                     style={{ ...s.mInput(mobile), width: "100%" }} />
                 </div>
                 <div>
+                  <label style={s.label}>Payment Type</label>
+                  <select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.payType} onChange={e => setPayForm(p => ({ ...p, payType: e.target.value }))}>
+                    <option value="rent">Rent</option>
+                    <option value="late_fee">Late Fee</option>
+                    <option value="deposit">Security Deposit</option>
+                    <option value="utility">Utility</option>
+                    <option value="hap">HAP Payment</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
                   <label style={s.label}>Method</label>
                   <select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.method} onChange={e => setPayForm(p => ({ ...p, method: e.target.value }))}>
                     <option value="cash">Cash</option>
                     <option value="check">Check</option>
                     <option value="money_order">Money Order</option>
+                    <option value="ach">ACH / Bank Transfer</option>
+                    <option value="hap">HAP Direct</option>
                   </select>
                 </div>
                 <div>
@@ -5131,7 +5326,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                     method: payForm.method,
                     paymentDate: payForm.date,
                     month: payForm.date?.slice(0, 7),
-                    note: payForm.note,
+                    note: payForm.note || (payForm.payType !== "rent" ? payForm.payType.replace("_", " ") : ""),
                   });
                   // Refresh ledger from Supabase
                   const fresh = await fetchRentLedger();
@@ -5156,7 +5351,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                   }
                   showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} (offline — will sync later)`);
                 }
-                setPayForm({ residentId: "", amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+                setPayForm({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
                 setShowRecordPayment(false);
               }} style={{ ...s.mBtn("primary", mobile) }}>Record Payment</button>
             </div>
