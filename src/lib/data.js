@@ -63,16 +63,19 @@ export async function insertProperty(prop) {
 }
 
 export async function insertUnit(unit, propertyUuid) {
-  const { data, error } = await supabase.from('units').insert({
+  const row = {
     property_id: propertyUuid,
     number: unit.number,
     bedrooms: unit.bedrooms || 1,
     bathrooms: unit.bathrooms || 1,
     sqft: unit.sqft || 0,
     floor_plan: unit.floorPlan || '',
-  }).select().single();
+  };
+  if (unit.is_rv !== undefined) row.is_rv = unit.is_rv;
+  if (unit.rv_info !== undefined) row.rv_info = unit.rv_info;
+  const { data, error } = await supabase.from('units').insert(row).select().single();
   if (error) throw error;
-  return { _uuid: data.id, number: data.number, bedrooms: data.bedrooms, bathrooms: data.bathrooms, sqft: data.sqft };
+  return { _uuid: data.id, number: data.number, bedrooms: data.bedrooms, bathrooms: data.bathrooms, sqft: data.sqft, is_rv: data.is_rv || false, rv_info: data.rv_info || {} };
 }
 
 export async function updateProperty(propUuid, changes) {
@@ -107,6 +110,8 @@ export async function updateUnit(unitUuid, changes) {
   if (changes.bathrooms !== undefined) mapped.bathrooms = changes.bathrooms;
   if (changes.sqft !== undefined) mapped.sqft = changes.sqft;
   if (changes.floorPlan !== undefined) mapped.floor_plan = changes.floorPlan;
+  if (changes.is_rv !== undefined) mapped.is_rv = changes.is_rv;
+  if (changes.rv_info !== undefined) mapped.rv_info = changes.rv_info;
   const { error } = await supabase.from('units').update(mapped).eq('id', unitUuid);
   if (error) throw error;
 }

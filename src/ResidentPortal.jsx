@@ -55,6 +55,16 @@ const DEFAULT_SETTINGS = {
   },
   rent: { dueDay: "1", gracePeriodDays: "5", lateFeeAmount: "50", leaseTermDefault: "12", autoRenewal: true },
   maint: { categories: ["Plumbing", "Electrical", "HVAC", "Appliance", "Structural", "Pest", "Other"], defaultPriority: "routine", autoAssign: false, emergencyPhone: "(415) 555-0199" },
+  rvFields: [
+    { key: "rvMake", label: "RV Make", type: "text", placeholder: "e.g. Winnebago" },
+    { key: "rvModel", label: "RV Model", type: "text", placeholder: "e.g. Vista 31BE" },
+    { key: "rvYear", label: "RV Year", type: "text", placeholder: "e.g. 2020" },
+    { key: "rvLength", label: "RV Length (ft)", type: "text", placeholder: "e.g. 32" },
+    { key: "rvLicensePlate", label: "License Plate", type: "text", placeholder: "e.g. 8ABC123" },
+    { key: "rvSlideOuts", label: "Slide-Outs", type: "text", placeholder: "e.g. 2" },
+    { key: "rvHookups", label: "Hookup Type", type: "select", options: ["Full (Water/Electric/Sewer)", "Partial (Water/Electric)", "Electric Only", "None"] },
+    { key: "rvCondition", label: "Condition", type: "select", options: ["Excellent", "Good", "Fair", "Needs Repair"] },
+  ],
 };
 
 // Live data bindings — start as mock, updated by Supabase fetch in App
@@ -3128,7 +3138,7 @@ const PropertySingleView = ({ p, mobile }) => (
   </>
 );
 
-const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty, onDataRefresh }) => {
+const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty, onDataRefresh, settings }) => {
   const isAll = !selectedProperty || selectedProperty === "all";
   const totalUnits = LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0);
   const totalResidents = LIVE_RESIDENTS.length;
@@ -3137,7 +3147,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const [propForm, setPropForm] = useState({ name: "", address: "", type: "", totalUnits: "", totalSF: "" });
   const [propSuccess, showPropSuccess] = useSuccess();
   const [showAddUnit, setShowAddUnit] = useState(false);
-  const [unitForm, setUnitForm] = useState({ number: "", bedrooms: "1", bathrooms: "1", sqft: "" });
+  const [unitForm, setUnitForm] = useState({ number: "", bedrooms: "1", bathrooms: "1", sqft: "", isRv: false, rvInfo: {} });
   const [unitSuccess, showUnitSuccess] = useSuccess();
   const [unitList, setUnitList] = useState([]);
   const [editingUnit, setEditingUnit] = useState(null);
@@ -3262,12 +3272,38 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
             <div><label style={s.label}>Bathrooms</label><input type="number" min="0" style={{ ...s.mInput(mobile), width: "100%" }} value={unitForm.bathrooms} onChange={e => setUnitForm(u => ({ ...u, bathrooms: e.target.value }))} /></div>
             <div><label style={s.label}>Sqft</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={unitForm.sqft} onChange={e => setUnitForm(u => ({ ...u, sqft: e.target.value }))} /></div>
           </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
+              <input type="checkbox" checked={unitForm.isRv} onChange={e => setUnitForm(u => ({ ...u, isRv: e.target.checked, rvInfo: e.target.checked ? u.rvInfo : {} }))} />
+              Is RV Unit
+            </label>
+          </div>
+          {unitForm.isRv && (
+            <div style={{ background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14, marginBottom: 14 }}>
+              <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13, color: T.accent }}>RV Information</div>
+              <div style={{ ...s.grid("1fr 1fr 1fr 1fr", mobile), gap: 14 }}>
+                {(settings.rvFields || []).map(f => (
+                  <div key={f.key}>
+                    <label style={s.label}>{f.label}</label>
+                    {f.type === "select" ? (
+                      <select style={{ ...s.mSelect(mobile), width: "100%" }} value={unitForm.rvInfo[f.key] || ""} onChange={e => setUnitForm(u => ({ ...u, rvInfo: { ...u.rvInfo, [f.key]: e.target.value } }))}>
+                        <option value="">Select...</option>
+                        {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder={f.placeholder || ""} value={unitForm.rvInfo[f.key] || ""} onChange={e => setUnitForm(u => ({ ...u, rvInfo: { ...u.rvInfo, [f.key]: e.target.value } }))} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <button disabled={!unitForm.number.trim()} onClick={async () => {
             try {
-              const newUnit = await insertUnit({ ...unitForm, bedrooms: parseInt(unitForm.bedrooms) || 1, bathrooms: parseInt(unitForm.bathrooms) || 1, sqft: parseInt(unitForm.sqft) || 0 }, p._uuid);
+              const newUnit = await insertUnit({ ...unitForm, bedrooms: parseInt(unitForm.bedrooms) || 1, bathrooms: parseInt(unitForm.bathrooms) || 1, sqft: parseInt(unitForm.sqft) || 0, is_rv: unitForm.isRv, rv_info: unitForm.isRv ? unitForm.rvInfo : null }, p._uuid);
               showUnitSuccess(`Unit ${unitForm.number} added!`);
               setUnitList(prev => [...prev, newUnit]);
-              setUnitForm({ number: "", bedrooms: "1", bathrooms: "1", sqft: "" });
+              setUnitForm({ number: "", bedrooms: "1", bathrooms: "1", sqft: "", isRv: false, rvInfo: {} });
             } catch (err) { showUnitSuccess("Error: " + err.message); }
           }} style={{ ...s.mBtn("primary", mobile) }}>Add Unit</button>
         </div>
@@ -3277,12 +3313,12 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Units ({unitList.length})</div>
           <SuccessMessage message={unitSuccess} />
           <table style={s.table}>
-            <thead><tr>{["Unit", "Resident", "BR", "BA", "Sqft", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+            <thead><tr>{["Unit", "Resident", "BR", "BA", "Sqft", "Type", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
             <tbody>
               {unitList.map(u => {
                 const uid = u._uuid || u.id;
                 if (editingUnit === uid) {
-                  return (
+                  return ([
                     <tr key={uid}>
                       <td style={s.td}><input style={{ ...s.input, width: 80, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.number || ""} onChange={e => setEditUnitForm(f => ({ ...f, number: e.target.value }))} /></td>
                       <td style={s.td}><span style={{ color: T.dim, fontSize: 12 }}>—</span></td>
@@ -3290,11 +3326,17 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                       <td style={s.td}><input type="number" style={{ ...s.input, width: 50, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.bathrooms || ""} onChange={e => setEditUnitForm(f => ({ ...f, bathrooms: e.target.value }))} /></td>
                       <td style={s.td}><input type="number" style={{ ...s.input, width: 70, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.sqft || ""} onChange={e => setEditUnitForm(f => ({ ...f, sqft: e.target.value }))} /></td>
                       <td style={s.td}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
+                          <input type="checkbox" checked={editUnitForm.isRv || false} onChange={e => setEditUnitForm(f => ({ ...f, isRv: e.target.checked, rvInfo: e.target.checked ? (f.rvInfo || {}) : {} }))} />
+                          RV
+                        </label>
+                      </td>
+                      <td style={s.td}>
                         <div style={{ display: "flex", gap: 4 }}>
                           <button style={{ ...s.btn("primary"), fontSize: 11, padding: "4px 8px" }} onClick={async () => {
                             try {
-                              await updateUnit(uid, { number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0 });
-                              setUnitList(prev => prev.map(x => (x._uuid || x.id) === uid ? { ...x, number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0 } : x));
+                              await updateUnit(uid, { number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0, is_rv: editUnitForm.isRv || false, rv_info: editUnitForm.isRv ? (editUnitForm.rvInfo || {}) : null });
+                              setUnitList(prev => prev.map(x => (x._uuid || x.id) === uid ? { ...x, number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0, is_rv: editUnitForm.isRv || false, rv_info: editUnitForm.isRv ? (editUnitForm.rvInfo || {}) : null } : x));
                               setEditingUnit(null);
                               showUnitSuccess("Unit updated");
                             } catch (err) { showUnitSuccess("Error: " + err.message); }
@@ -3302,8 +3344,32 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                           <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingUnit(null)}>Cancel</button>
                         </div>
                       </td>
-                    </tr>
-                  );
+                    </tr>,
+                    editUnitForm.isRv && (
+                      <tr key={`${uid}-rv`}>
+                        <td colSpan={7} style={{ ...s.td, padding: 0 }}>
+                          <div style={{ background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14, margin: "4px 8px 8px" }}>
+                            <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13, color: T.accent }}>RV Information</div>
+                            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr 1fr 1fr", gap: 10 }}>
+                              {(settings.rvFields || []).map(f => (
+                                <div key={f.key}>
+                                  <label style={{ ...s.label, fontSize: 11 }}>{f.label}</label>
+                                  {f.type === "select" ? (
+                                    <select style={{ ...s.select, fontSize: 12, padding: "4px 6px", width: "100%" }} value={(editUnitForm.rvInfo || {})[f.key] || ""} onChange={e => setEditUnitForm(prev => ({ ...prev, rvInfo: { ...(prev.rvInfo || {}), [f.key]: e.target.value } }))}>
+                                      <option value="">Select...</option>
+                                      {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  ) : (
+                                    <input style={{ ...s.input, fontSize: 12, padding: "4px 6px", width: "100%" }} placeholder={f.placeholder || ""} value={(editUnitForm.rvInfo || {})[f.key] || ""} onChange={e => setEditUnitForm(prev => ({ ...prev, rvInfo: { ...(prev.rvInfo || {}), [f.key]: e.target.value } }))} />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ),
+                  ]);
                 }
                 const unitResident = propResidents.find(r => r.unit === u.number);
                 return (
@@ -3317,9 +3383,10 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                     <td style={s.td}>{u.bedrooms}</td>
                     <td style={s.td}>{u.bathrooms}</td>
                     <td style={s.td}>{u.sqft || "—"}</td>
+                    <td style={s.td}>{u.is_rv ? <span style={s.badge(T.warnDim, T.warn)}>RV</span> : <span style={{ color: T.dim, fontSize: 12 }}>Standard</span>}</td>
                     <td style={s.td}>
                       <div style={{ display: "flex", gap: 4 }}>
-                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || "") }); }}>Edit</button>
+                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); }}>Edit</button>
                         <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px", color: T.danger }} onClick={async () => {
                           if (!confirm(`Delete unit ${u.number}?`)) return;
                           try { await deleteUnit(uid); setUnitList(prev => prev.filter(x => (x._uuid || x.id) !== uid)); showUnitSuccess(`Unit ${u.number} deleted`); } catch (err) { showUnitSuccess("Error: " + err.message); }
@@ -4752,6 +4819,55 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
             </div>
             <button style={s.btn()} onClick={() => showSuccess("Property settings saved")}>Save Changes</button>
           </div>
+
+          <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>RV Unit Fields</div>
+            <p style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>Customize the fields that appear when a unit is marked as an RV. These fields are shown in Add/Edit unit forms.</p>
+            {(settings.rvFields || []).map((f, idx) => (
+              <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>{f.label}</span>
+                <span style={{ fontSize: 12, color: T.muted }}>{f.type === "select" ? `Dropdown (${(f.options || []).length} options)` : "Text"}</span>
+                <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "2px 8px", color: T.danger }} onClick={() => {
+                  setSettings(prev => ({ ...prev, rvFields: prev.rvFields.filter((_, i) => i !== idx) }));
+                  showSuccess(`Removed "${f.label}"`);
+                }}>Remove</button>
+              </div>
+            ))}
+            <div style={{ marginTop: 14, padding: 14, background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm }}>
+              <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13 }}>Add Custom RV Field</div>
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div>
+                  <label style={{ ...s.label, fontSize: 11 }}>Field Label</label>
+                  <input id="rv-new-label" style={{ ...s.input, fontSize: 12, padding: "4px 8px", width: 160 }} placeholder="e.g. VIN Number" />
+                </div>
+                <div>
+                  <label style={{ ...s.label, fontSize: 11 }}>Type</label>
+                  <select id="rv-new-type" style={{ ...s.select, fontSize: 12, padding: "4px 8px" }}>
+                    <option value="text">Text</option>
+                    <option value="select">Dropdown</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ ...s.label, fontSize: 11 }}>Placeholder / Options (comma-separated for dropdown)</label>
+                  <input id="rv-new-opts" style={{ ...s.input, fontSize: 12, padding: "4px 8px", width: 220 }} placeholder="e.g. Option A, Option B" />
+                </div>
+                <button style={{ ...s.btn(), fontSize: 12, padding: "6px 12px" }} onClick={() => {
+                  const label = document.getElementById("rv-new-label").value.trim();
+                  const type = document.getElementById("rv-new-type").value;
+                  const optsRaw = document.getElementById("rv-new-opts").value.trim();
+                  if (!label) return;
+                  const key = "rv" + label.replace(/[^a-zA-Z0-9]/g, "");
+                  const newField = { key, label, type };
+                  if (type === "text") newField.placeholder = optsRaw;
+                  else newField.options = optsRaw.split(",").map(o => o.trim()).filter(Boolean);
+                  setSettings(prev => ({ ...prev, rvFields: [...(prev.rvFields || []), newField] }));
+                  document.getElementById("rv-new-label").value = "";
+                  document.getElementById("rv-new-opts").value = "";
+                  showSuccess(`Added "${label}" field`);
+                }}>Add Field</button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -6056,7 +6172,7 @@ export default function App() {
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} />;
-        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} />;
+        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
