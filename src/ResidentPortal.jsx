@@ -884,6 +884,7 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications }) => {
 // --- MAINTENANCE PAGE (Resident) ---
 const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
   const [showForm, setShowForm] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [success, showSuccess] = useSuccess();
   const [formData, setFormData] = useState({ category: "Plumbing", urgency: "routine", description: "", permission: "Yes, enter anytime" });
   const myRequests = maintenance.filter(m => m.unit === (rc?.unit || ""));
@@ -916,6 +917,31 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
         <button style={s.btn()} onClick={() => setShowForm(!showForm)}>{showForm ? "Cancel" : "+ New Request"}</button>
       </div>
       <p style={s.sectionSub}>Submit and track maintenance issues for your unit</p>
+      <div style={{ marginBottom: 12 }}>
+        <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => setShowQr(!showQr)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><rect x="19" y="14" width="2" height="2"/><rect x="14" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
+          {showQr ? "Hide QR Code" : "Share QR Code"}
+        </button>
+      </div>
+      {showQr && rc?.unit && (
+        <div style={{ ...s.card, textAlign: "center", marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{rc.property || ""} — Unit {rc.unit}</div>
+          <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Anyone can scan this to submit a maintenance request for your unit</div>
+          <QRCodeCanvas
+            id="resident-qr"
+            value={window.location.origin + window.location.pathname + "?maintenance=" + encodeURIComponent(rc.unit)}
+            size={180}
+            level="M"
+            includeMargin
+          />
+          <div style={{ marginTop: 10 }}>
+            <button style={{ ...s.btn("ghost"), fontSize: 12 }} onClick={() => {
+              const canvas = document.getElementById("resident-qr");
+              if (canvas) { const a = document.createElement("a"); a.download = `QR-Unit-${rc.unit}.png`; a.href = canvas.toDataURL(); a.click(); }
+            }}>Download PNG</button>
+          </div>
+        </div>
+      )}
       <SuccessMessage message={success} />
       {showForm && (
         <div style={{ ...s.card, borderColor: T.accent, borderWidth: 1 }}>
