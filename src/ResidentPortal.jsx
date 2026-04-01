@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -3711,7 +3711,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 };
 
 // --- INSPECTIONS (All Roles — Unified) ---
-const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty }) => {
+const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [] }) => {
   const isResident = role === "resident";
   const isAdmin = role === "admin";
   const tabs = isResident ? null : isAdmin ? ["Schedule", "Unit History", "Procedures", "Regulatory", "Categories"] : ["Unit History", "Procedures", "Categories", "My Assigned"];
@@ -3734,6 +3734,20 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   const availableResidents = selectedProperty && selectedProperty !== "all"
     ? LIVE_RESIDENTS.filter(r => r.propertyId === selectedProperty)
     : LIVE_RESIDENTS;
+  // Build unit options from allUnits (includes vacant) + residents
+  const filteredUnits = selectedProperty && selectedProperty !== "all"
+    ? allUnits.filter(u => u.propertyId === selectedProperty)
+    : allUnits;
+  const unitOptions = filteredUnits.map(u => {
+    const resident = LIVE_RESIDENTS.find(r => r.unit === u.number);
+    return { value: u.number, label: `${u.number}${u.propertyName ? ` (${u.propertyName})` : ""}${resident ? ` — ${resident.name}` : " — Vacant"}` };
+  });
+  // Also add any resident units not in allUnits
+  availableResidents.forEach(r => {
+    if (!unitOptions.find(o => o.value === r.unit)) {
+      unitOptions.push({ value: r.unit, label: `${r.unit} — ${r.name}` });
+    }
+  });
 
   return (
     <div>
@@ -3761,7 +3775,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
             <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Schedule New Inspection</div>
             <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
               <div><label style={s.label}>Category</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.category} onChange={e => setSchedForm(p => ({ ...p, category: e.target.value }))}><option value="">Select...</option>{MOCK_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
-              <div><label style={s.label}>Unit</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option value="">Select unit...</option>{availableResidents.map(r => <option key={r.id} value={r.unit}>{r.unit} — {r.name}</option>)}</select></div>
+              <div><label style={s.label}>Unit</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option value="">Select unit...</option>{unitOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
               <div><label style={s.label}>Date</label><input style={s.mInput(mobile)} type="date" value={schedForm.date} onChange={e => setSchedForm(p => ({ ...p, date: e.target.value }))} /></div>
             </div>
             <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
@@ -4078,7 +4092,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                         <label style={s.label}>Unit</label>
                         <select id="proc-unit" style={{ ...s.mSelect(mobile), width: "100%" }}>
                           <option value="">Select unit...</option>
-                          {availableResidents.map(r => <option key={r.id} value={r.unit}>{r.unit} — {r.name}</option>)}
+                          {unitOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                       </div>
                       <div style={{ flex: 1, minWidth: 150 }}>
@@ -6235,6 +6249,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [unitInspections, setUnitInspections] = useState([]);
+  const [allUnits, setAllUnits] = useState([]);
   const [staffMembers, setStaffMembers] = useState([]);
   const [emergencyContacts, setEmergencyContacts] = useState({});
   const [adminNotes, setAdminNotes] = useState({});
@@ -6260,11 +6275,11 @@ export default function App() {
   const reloadData = useCallback(async () => {
     try {
       const safe = (fn) => fn().catch(err => { console.warn('Fetch failed:', err.message); return null; });
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes] = await Promise.all([
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes, aUnits] = await Promise.all([
         safe(fetchProperties), safe(fetchResidents), safe(fetchResidentsExtended), safe(fetchLeaseDocsByResident),
         safe(fetchRentLedger), safe(fetchMaintenanceRequests), safe(fetchVendors),
         safe(fetchUnitInspections), safe(fetchRegInspections), safe(fetchThreads), safe(fetchMessages),
-        safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers), safe(fetchAdminNotes),
+        safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers), safe(fetchAdminNotes), safe(fetchAllUnits),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
@@ -6275,6 +6290,7 @@ export default function App() {
       setMaintenance(maint || []);
       setVendors(vend || []);
       setUnitInspections(uInsp || []);
+      setAllUnits(aUnits || []);
       setStaffMembers(staff || []);
       setThreads(thr || []);
       setMessages(msgs || []);
@@ -6562,7 +6578,7 @@ export default function App() {
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
-        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} />;
+        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
@@ -6577,7 +6593,7 @@ export default function App() {
       switch (page) {
         case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} />;
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} />;
-        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} />;
+        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} />;

@@ -141,6 +141,24 @@ export async function fetchUnits(propertyUuid) {
   return data;
 }
 
+export async function fetchAllUnits() {
+  const { data, error } = await supabase
+    .from('units')
+    .select('*, properties(slug, name)')
+    .order('number');
+  if (error) throw error;
+  return (data || []).map(u => ({
+    _uuid: u.id,
+    number: u.number,
+    propertyId: u.properties?.slug || '',
+    propertyName: u.properties?.name || '',
+    bedrooms: u.bedrooms,
+    bathrooms: u.bathrooms,
+    sqft: u.sqft,
+    is_rv: u.is_rv || false,
+  }));
+}
+
 // ── RESIDENTS (with property slug + unit number) ──
 
 export async function fetchResidents() {
