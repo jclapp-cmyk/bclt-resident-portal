@@ -580,11 +580,23 @@ export async function fetchMaintenanceRequests() {
 }
 
 export async function insertMaintenanceRequest({ unit, category, priority, description, propertySlug }) {
-  // Look up property and unit UUIDs
-  const { data: prop } = await supabase.from('properties').select('id').eq('slug', propertySlug || 'wharf').single();
-  const { data: unitRow } = await supabase.from('units').select('id').eq('number', unit).single();
+  // Look up unit row (includes property_id)
+  const { data: unitRow } = await supabase.from('units').select('id, property_id').eq('number', unit).limit(1).single();
+
+  // Look up property — prefer unit's property_id, fall back to slug lookup
+  let propertyId = unitRow?.property_id || null;
+  if (!propertyId && propertySlug) {
+    const { data: prop } = await supabase.from('properties').select('id').eq('slug', propertySlug).single();
+    propertyId = prop?.id || null;
+  }
+  if (!propertyId) {
+    // Last resort: grab first property
+    const { data: firstProp } = await supabase.from('properties').select('id').limit(1).single();
+    propertyId = firstProp?.id || null;
+  }
+
   // Look up resident by unit
-  const { data: resident } = await supabase.from('residents').select('id').eq('unit_id', unitRow?.id).single();
+  const { data: resident } = await supabase.from('residents').select('id').eq('unit_id', unitRow?.id).limit(1).single();
 
   // Generate code
   const { count } = await supabase.from('maintenance_requests').select('*', { count: 'exact', head: true });
@@ -593,7 +605,7 @@ export async function insertMaintenanceRequest({ unit, category, priority, descr
   const { data, error } = await supabase.from('maintenance_requests').insert({
     code,
     resident_id: resident?.id || null,
-    property_id: prop?.id,
+    property_id: propertyId,
     unit_id: unitRow?.id || null,
     category,
     priority,
