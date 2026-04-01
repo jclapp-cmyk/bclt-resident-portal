@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { QRCodeCanvas } from "qrcode.react";
 import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
@@ -5381,6 +5382,107 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                 }}>Add Field</button>
               </div>
             </div>
+          </div>
+
+          {/* QR Codes for Units */}
+          <div style={s.card}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>Unit QR Codes</div>
+                <p style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Generate QR codes for each unit so residents can access the portal</p>
+              </div>
+              <button style={s.btn()} onClick={() => {
+                const printWindow = window.open("", "_blank");
+                const baseUrl = window.location.origin + window.location.pathname;
+                let html = `<html><head><title>BCLT Unit QR Codes</title><style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; }
+                  .qr-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
+                  .qr-card { text-align: center; border: 2px solid #e0e0e0; border-radius: 12px; padding: 20px; page-break-inside: avoid; }
+                  .qr-card h3 { margin: 0 0 4px; font-size: 16px; }
+                  .qr-card p { margin: 0 0 12px; color: #666; font-size: 12px; }
+                  .qr-card .url { font-size: 10px; color: #999; margin-top: 8px; word-break: break-all; }
+                  @media print { .no-print { display: none; } .qr-grid { gap: 20px; } }
+                </style></head><body>
+                <h1>BCLT Portal — Unit QR Codes</h1>
+                <p class="no-print">Print this page or save as PDF. Each resident can scan their unit's code to access the portal.</p>
+                <button class="no-print" onclick="window.print()" style="padding:8px 20px;margin:10px 0 20px;font-size:14px;cursor:pointer;">Print All</button>
+                <div class="qr-grid">`;
+                const allUnits = [];
+                LIVE_PROPERTIES.forEach(prop => {
+                  (prop.units || []).forEach(u => {
+                    allUnits.push({ unit: u.number || u.name, property: prop.name, id: u._uuid || u.id });
+                  });
+                });
+                LIVE_RESIDENTS.forEach(r => {
+                  if (!allUnits.find(u => u.unit === r.unit)) {
+                    allUnits.push({ unit: r.unit, property: r.property || "—", id: r._uuid || r.id });
+                  }
+                });
+                allUnits.forEach(u => {
+                  const url = baseUrl + "?unit=" + encodeURIComponent(u.unit);
+                  const canvas = document.createElement("canvas");
+                  const size = 180;
+                  // Use a simple inline QR generation via the existing QRCodeCanvas
+                  const qrEl = document.getElementById("qr-gen-" + CSS.escape(u.unit));
+                  const dataUrl = qrEl ? qrEl.toDataURL() : "";
+                  html += `<div class="qr-card">
+                    <h3>${u.unit}</h3>
+                    <p>${u.property}</p>
+                    <img src="${dataUrl}" width="180" height="180" />
+                    <div class="url">${url}</div>
+                  </div>`;
+                });
+                html += `</div></body></html>`;
+                printWindow.document.write(html);
+                printWindow.document.close();
+              }}>🖨️ Print All QR Codes</button>
+            </div>
+            {(() => {
+              const allUnits = [];
+              LIVE_PROPERTIES.forEach(prop => {
+                (prop.units || []).forEach(u => {
+                  allUnits.push({ unit: u.number || u.name, property: prop.name, id: u._uuid || u.id });
+                });
+              });
+              LIVE_RESIDENTS.forEach(r => {
+                if (!allUnits.find(u => u.unit === r.unit)) {
+                  allUnits.push({ unit: r.unit, property: r.property || "—", id: r._uuid || r.id });
+                }
+              });
+              const baseUrl = window.location.origin + window.location.pathname;
+              if (allUnits.length === 0) return <EmptyState icon="📱" text="No units found. Add properties and units first." />;
+              return (
+                <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(3, 1fr)", gap: 16 }}>
+                  {allUnits.map(u => {
+                    const url = baseUrl + "?unit=" + encodeURIComponent(u.unit);
+                    return (
+                      <div key={u.unit + u.property} style={{ textAlign: "center", border: `2px solid ${T.border}`, borderRadius: T.radius, padding: 16 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{u.unit}</div>
+                        <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>{u.property}</div>
+                        <QRCodeCanvas
+                          id={"qr-gen-" + u.unit}
+                          value={url}
+                          size={160}
+                          level="M"
+                          includeMargin
+                          style={{ borderRadius: 8 }}
+                        />
+                        <div style={{ fontSize: 10, color: T.dim, marginTop: 8, wordBreak: "break-all" }}>{url}</div>
+                        <button style={{ ...s.btn("ghost"), fontSize: 11, marginTop: 8 }} onClick={() => {
+                          const canvas = document.getElementById("qr-gen-" + CSS.escape(u.unit));
+                          if (canvas) {
+                            const link = document.createElement("a");
+                            link.download = `QR-${u.property}-${u.unit}.png`;
+                            link.href = canvas.toDataURL();
+                            link.click();
+                          }
+                        }}>Download PNG</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
