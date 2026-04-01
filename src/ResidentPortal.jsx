@@ -4976,7 +4976,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
 
 // ── ADMIN MAINTENANCE (with assignment) ────────────────────
 const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers = [] }) => {
-  const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin"));
+  const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin" || s.role === "property_manager")).filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i);
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ status: "", assignedTo: "", notes: "" });
   const [success, showSuccess] = useSuccess();
