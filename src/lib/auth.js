@@ -1,14 +1,10 @@
 import { supabase } from './supabase';
 
 export async function signInWithMagicLink(email) {
-  // Check if email exists in user_profiles before sending magic link
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('id')
-    .eq('email', email)
-    .single();
+  // Check if email exists using secure server-side function (no table data exposed)
+  const { data: exists, error: checkErr } = await supabase.rpc('check_email_exists', { lookup_email: email });
 
-  if (!profile) {
+  if (checkErr || !exists) {
     throw new Error("No account found for this email address. Contact your property manager.");
   }
 
