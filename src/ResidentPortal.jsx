@@ -3720,6 +3720,8 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
   const [selectedInsp, setSelectedInsp] = useState(null);
   const [updateForm, setUpdateForm] = useState({ result: "", score: "", failedItems: "", notes: "" });
+  const [activeChecklist, setActiveChecklist] = useState(null); // { unit, inspector, date, responses: { "sectionIdx-itemIdx": { value, notes } } }
+  const [checklistHistory, setChecklistHistory] = useState([]); // completed checklists
 
   const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "")) : unitInspections;
   const regInsp = selectedProperty && selectedProperty !== "all"
@@ -4050,70 +4052,277 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
         };
 
         const totalItems = RV_PROCEDURE.sections.reduce((sum, sec) => sum + sec.items.length, 0);
-        const yesNoItems = RV_PROCEDURE.sections.reduce((sum, sec) => sum + sec.items.filter(i => i.type === "yesNoNa").length, 0);
-        const photoItems = RV_PROCEDURE.sections.reduce((sum, sec) => sum + sec.items.filter(i => i.type === "photo").length, 0);
+        const resp = activeChecklist?.responses || {};
+        const answeredCount = Object.keys(resp).filter(k => resp[k]?.value).length;
+        const failedCount = Object.values(resp).filter(r => r.value === "No" || r.value === "Fail").length;
+        const progressPct = totalItems > 0 ? Math.round((answeredCount / totalItems) * 100) : 0;
+
+        const setResp = (key, field, val) => {
+          setActiveChecklist(prev => ({
+            ...prev,
+            responses: { ...prev.responses, [key]: { ...(prev.responses[key] || {}), [field]: val } }
+          }));
+        };
+
+        // View a completed checklist
+        const [viewingChecklist, setViewingChecklist] = useState(null);
 
         return (
           <div>
-            {isAdmin && (
-              <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-                <button style={s.btn()}>+ Add Procedure</button>
-              </div>
-            )}
+            {/* Start new checklist or show active */}
+            {!activeChecklist && !viewingChecklist && (
+              <div>
+                {isAdmin && (
+                  <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Start New Inspection Checklist</div>
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+                      <div style={{ flex: 1, minWidth: 150 }}>
+                        <label style={s.label}>Unit</label>
+                        <select id="proc-unit" style={{ ...s.mSelect(mobile), width: "100%" }}>
+                          <option value="">Select unit...</option>
+                          {availableResidents.map(r => <option key={r.id} value={r.unit}>{r.unit} — {r.name}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 150 }}>
+                        <label style={s.label}>Inspector</label>
+                        <select id="proc-inspector" style={{ ...s.mSelect(mobile), width: "100%" }}>
+                          <option>Mike R.</option>
+                          <option>External Vendor</option>
+                        </select>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 150 }}>
+                        <label style={s.label}>Date</label>
+                        <input id="proc-date" type="date" defaultValue={new Date().toISOString().split("T")[0]} style={{ ...s.mInput(mobile), width: "100%" }} />
+                      </div>
+                    </div>
+                    <button style={s.btn()} onClick={() => {
+                      const unit = document.getElementById("proc-unit").value;
+                      const inspector = document.getElementById("proc-inspector").value;
+                      const date = document.getElementById("proc-date").value;
+                      if (!unit) { showSuccess("Please select a unit"); return; }
+                      setActiveChecklist({ id: `CL-${Date.now()}`, unit, inspector, date, procedure: RV_PROCEDURE.name, responses: {} });
+                    }}>Start Checklist</button>
+                  </div>
+                )}
 
-            <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 17 }}>{RV_PROCEDURE.name}</div>
-                  <div style={{ color: T.muted, fontSize: 13, fontStyle: "italic" }}>{RV_PROCEDURE.nameSp}</div>
+                {/* Procedure overview card */}
+                <div style={{ ...s.card, marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 17 }}>{RV_PROCEDURE.name}</div>
+                      <div style={{ color: T.muted, fontSize: 13, fontStyle: "italic" }}>{RV_PROCEDURE.nameSp}</div>
+                    </div>
+                    <span style={s.badge(T.successDim, T.success)}>Active</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8, fontSize: 13 }}>
+                    <span style={{ color: T.dim }}>Sections: <strong style={{ color: T.text }}>{RV_PROCEDURE.sections.length}</strong></span>
+                    <span style={{ color: T.dim }}>Total Items: <strong style={{ color: T.text }}>{totalItems}</strong></span>
+                  </div>
                 </div>
-                <span style={s.badge(T.successDim, T.success)}>Active</span>
-              </div>
 
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16, fontSize: 13 }}>
-                <span style={{ color: T.dim }}>Year: <strong style={{ color: T.text }}>{RV_PROCEDURE.year}</strong></span>
-                <span style={{ color: T.dim }}>Sections: <strong style={{ color: T.text }}>{RV_PROCEDURE.sections.length}</strong></span>
-                <span style={{ color: T.dim }}>Total Items: <strong style={{ color: T.text }}>{totalItems}</strong></span>
-                <span style={{ color: T.dim }}>Yes/No/N/A: <strong style={{ color: T.text }}>{yesNoItems}</strong></span>
-                <span style={{ color: T.dim }}>Photo Required: <strong style={{ color: T.text }}>{photoItems}</strong></span>
-              </div>
-
-              {RV_PROCEDURE.sections.map((sec, si) => (
-                <details key={si} style={{ marginBottom: 8, borderRadius: T.radiusSm, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-                  <summary style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 600, fontSize: 14, background: T.cardBg, display: "flex", justifyContent: "space-between", alignItems: "center", listStyle: "none" }}>
-                    <span>{sec.name}</span>
-                    <span style={{ fontSize: 12, color: T.muted, fontWeight: 400 }}>{sec.items.length} items</span>
-                  </summary>
-                  <div style={{ padding: "8px 14px 14px" }}>
-                    <table style={{ ...s.table, fontSize: 13 }}>
-                      <thead>
-                        <tr>
-                          <th style={{ ...s.th, width: 30 }}>#</th>
-                          <th style={s.th}>Item</th>
-                          <th style={{ ...s.th, width: 100 }}>Type</th>
-                        </tr>
-                      </thead>
+                {/* Completed checklists history */}
+                {checklistHistory.length > 0 && (
+                  <div style={s.card}>
+                    <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Completed Checklists ({checklistHistory.length})</div>
+                    <table style={s.table}>
+                      <thead><tr>{["Date", "Unit", "Inspector", "Items", "Passed", "Failed", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                       <tbody>
-                        {sec.items.map((item, ii) => (
-                          <tr key={ii}>
-                            <td style={{ ...s.td, color: T.dim }}>{ii + 1}</td>
-                            <td style={s.td}>{item.text}</td>
-                            <td style={s.td}>
-                              <span style={s.badge(
-                                item.type === "yesNoNa" ? T.successDim : item.type === "photo" ? T.infoDim : T.warnDim,
-                                item.type === "yesNoNa" ? T.success : item.type === "photo" ? T.info : T.warn
-                              )}>
-                                {item.type === "yesNoNa" ? "Yes/No/N/A" : item.type === "photo" ? "Photo" : "Detail"}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
+                        {checklistHistory.map(cl => {
+                          const rKeys = Object.keys(cl.responses);
+                          const passed = Object.values(cl.responses).filter(r => r.value === "Yes" || r.value === "Pass" || r.value === "Ok").length;
+                          const failed = Object.values(cl.responses).filter(r => r.value === "No" || r.value === "Fail").length;
+                          return (
+                            <tr key={cl.id} style={{ cursor: "pointer" }} onClick={() => setViewingChecklist(cl)}>
+                              <td style={s.td}>{cl.date}</td>
+                              <td style={s.td}><strong>{cl.unit}</strong></td>
+                              <td style={s.td}>{cl.inspector}</td>
+                              <td style={s.td}>{rKeys.length}/{totalItems}</td>
+                              <td style={s.td}><span style={s.badge(T.successDim, T.success)}>{passed}</span></td>
+                              <td style={s.td}>{failed > 0 ? <span style={s.badge(T.dangerDim, T.danger)}>{failed}</span> : <span style={{ color: T.dim }}>0</span>}</td>
+                              <td style={s.td}><button style={s.btn("ghost")}>View</button></td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
-                </details>
-              ))}
-            </div>
+                )}
+              </div>
+            )}
+
+            {/* View completed checklist */}
+            {viewingChecklist && (
+              <div>
+                <button style={{ ...s.btn("ghost"), marginBottom: 16 }} onClick={() => setViewingChecklist(null)}>&larr; Back to Procedures</button>
+                <div style={s.card}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 17 }}>Completed: {viewingChecklist.procedure}</div>
+                      <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Unit {viewingChecklist.unit} &middot; {viewingChecklist.inspector} &middot; {viewingChecklist.date}</div>
+                    </div>
+                    <span style={s.badge(T.successDim, T.success)}>Complete</span>
+                  </div>
+                  {RV_PROCEDURE.sections.map((sec, si) => {
+                    const secItems = sec.items.map((item, ii) => ({ ...item, key: `${si}-${ii}`, response: viewingChecklist.responses[`${si}-${ii}`] }));
+                    const secFailed = secItems.filter(i => i.response?.value === "No" || i.response?.value === "Fail").length;
+                    return (
+                      <details key={si} open={secFailed > 0} style={{ marginBottom: 8, borderRadius: T.radiusSm, border: `1px solid ${secFailed > 0 ? T.danger : T.border}`, overflow: "hidden" }}>
+                        <summary style={{ padding: "10px 14px", cursor: "pointer", fontWeight: 600, fontSize: 14, background: T.cardBg, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span>{sec.name}</span>
+                          <span style={{ fontSize: 12 }}>
+                            {secFailed > 0 && <span style={{ ...s.badge(T.dangerDim, T.danger), marginRight: 8 }}>{secFailed} failed</span>}
+                            <span style={{ color: T.muted }}>{sec.items.length} items</span>
+                          </span>
+                        </summary>
+                        <div style={{ padding: "8px 0" }}>
+                          {secItems.map(item => (
+                            <div key={item.key} style={{ padding: "8px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, background: item.response?.value === "No" || item.response?.value === "Fail" ? T.dangerDim : "transparent" }}>
+                              <div style={{ flex: 1, fontSize: 13 }}>{item.text}</div>
+                              <div style={{ textAlign: "right", minWidth: 80 }}>
+                                {item.response?.value ? (
+                                  <span style={s.badge(
+                                    item.response.value === "Yes" || item.response.value === "Ok" ? T.successDim : item.response.value === "N/A" ? T.warnDim : T.dangerDim,
+                                    item.response.value === "Yes" || item.response.value === "Ok" ? T.success : item.response.value === "N/A" ? T.warn : T.danger
+                                  )}>{item.response.value}</span>
+                                ) : <span style={{ fontSize: 12, color: T.dim }}>--</span>}
+                                {item.response?.notes && <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{item.response.notes}</div>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Active checklist — fill it out */}
+            {activeChecklist && (
+              <div>
+                {/* Progress header */}
+                <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{RV_PROCEDURE.name}</div>
+                      <div style={{ fontSize: 13, color: T.muted }}>Unit {activeChecklist.unit} &middot; {activeChecklist.inspector} &middot; {activeChecklist.date}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 700, fontSize: 20, color: progressPct === 100 ? T.success : T.accent }}>{progressPct}%</div>
+                      <div style={{ fontSize: 12, color: T.muted }}>{answeredCount}/{totalItems} items</div>
+                    </div>
+                  </div>
+                  <div style={{ background: T.border, borderRadius: 4, height: 8, overflow: "hidden" }}>
+                    <div style={{ background: progressPct === 100 ? T.success : T.accent, height: "100%", width: `${progressPct}%`, transition: "width 0.3s", borderRadius: 4 }} />
+                  </div>
+                  {failedCount > 0 && <div style={{ fontSize: 12, color: T.danger, marginTop: 6, fontWeight: 600 }}>{failedCount} item{failedCount !== 1 ? "s" : ""} failed</div>}
+                </div>
+
+                {/* Sections */}
+                {RV_PROCEDURE.sections.map((sec, si) => {
+                  const secAnswered = sec.items.filter((_, ii) => resp[`${si}-${ii}`]?.value).length;
+                  const secFailed = sec.items.filter((_, ii) => resp[`${si}-${ii}`]?.value === "No" || resp[`${si}-${ii}`]?.value === "Fail").length;
+                  return (
+                    <details key={si} style={{ marginBottom: 8, borderRadius: T.radiusSm, border: `1px solid ${secFailed > 0 ? T.danger : secAnswered === sec.items.length ? T.success : T.border}`, overflow: "hidden" }}>
+                      <summary style={{ padding: "12px 14px", cursor: "pointer", fontWeight: 600, fontSize: 14, background: T.cardBg, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>{sec.name}</span>
+                        <span style={{ fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}>
+                          {secFailed > 0 && <span style={s.badge(T.dangerDim, T.danger)}>{secFailed} failed</span>}
+                          <span style={{ color: secAnswered === sec.items.length ? T.success : T.muted, fontWeight: secAnswered === sec.items.length ? 700 : 400 }}>
+                            {secAnswered}/{sec.items.length}
+                          </span>
+                        </span>
+                      </summary>
+                      <div style={{ padding: 0 }}>
+                        {sec.items.map((item, ii) => {
+                          const key = `${si}-${ii}`;
+                          const r = resp[key] || {};
+                          const isFailed = r.value === "No" || r.value === "Fail";
+                          return (
+                            <div key={ii} style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, background: isFailed ? T.dangerDim : r.value ? "transparent" : "transparent" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: r.value || item.type === "text" || item.type === "photo" ? 8 : 0 }}>
+                                <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>
+                                  <span style={{ color: T.dim, marginRight: 6 }}>{ii + 1}.</span>
+                                  {item.text}
+                                  <span style={{ marginLeft: 6, fontSize: 11, color: T.muted }}>
+                                    ({item.type === "yesNoNa" ? "Yes/No/N/A" : item.type === "photo" ? "Photo" : "Detail"})
+                                  </span>
+                                </div>
+                                {item.type === "yesNoNa" && (
+                                  <div style={{ display: "flex", gap: 4 }}>
+                                    {["Yes", "No", "N/A"].map(opt => (
+                                      <button key={opt} onClick={() => setResp(key, "value", opt)} style={{
+                                        padding: "4px 10px", fontSize: 12, fontWeight: 600, borderRadius: 4, border: `1px solid ${T.border}`, cursor: "pointer",
+                                        background: r.value === opt ? (opt === "Yes" ? T.success : opt === "No" ? T.danger : T.warn) : T.cardBg,
+                                        color: r.value === opt ? "#fff" : T.text,
+                                      }}>{opt}</button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              {item.type === "text" && (
+                                <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box", fontSize: 12 }}
+                                  placeholder="Enter details..."
+                                  value={r.value || ""}
+                                  onChange={e => setResp(key, "value", e.target.value)}
+                                />
+                              )}
+                              {item.type === "photo" && (
+                                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                  <select style={{ ...s.mSelect(mobile), fontSize: 12 }} value={r.value || ""} onChange={e => setResp(key, "value", e.target.value)}>
+                                    <option value="">Photo status...</option>
+                                    <option value="Ok">Photo captured - Ok</option>
+                                    <option value="Issues noted">Photo captured - Issues noted</option>
+                                    <option value="N/A">N/A</option>
+                                  </select>
+                                </div>
+                              )}
+                              {/* Notes field for every item */}
+                              <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box", fontSize: 11, marginTop: 6, color: T.muted }}
+                                placeholder="Add notes (optional)..."
+                                value={r.notes || ""}
+                                onChange={e => setResp(key, "notes", e.target.value)}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  );
+                })}
+
+                {/* Actions */}
+                <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                  <button style={s.btn()} onClick={() => {
+                    const result = failedCount > 0 ? "Fail" : "Pass";
+                    // Save to history
+                    setChecklistHistory(prev => [{ ...activeChecklist, completedAt: new Date().toISOString(), overallResult: result }, ...prev]);
+                    // Also create an inspection record if onSchedule exists
+                    if (onSchedule) {
+                      const resident = LIVE_RESIDENTS.find(r => r.unit === activeChecklist.unit);
+                      onSchedule({
+                        id: `UI-${Date.now()}`,
+                        unit: activeChecklist.unit,
+                        propertyId: resident?.propertyId || LIVE_PROPERTIES[0]?.id || "wharf",
+                        category: "Annual RV Inspection",
+                        date: activeChecklist.date,
+                        inspector: activeChecklist.inspector,
+                        result,
+                        score: `${answeredCount}/${totalItems}`,
+                        failedItems: Object.entries(resp).filter(([, r]) => r.value === "No" || r.value === "Fail").map(([k]) => {
+                          const [si2, ii2] = k.split("-").map(Number);
+                          return RV_PROCEDURE.sections[si2]?.items[ii2]?.text || k;
+                        }),
+                        notes: `Checklist ${activeChecklist.id}: ${answeredCount}/${totalItems} items completed, ${failedCount} failed`,
+                      });
+                    }
+                    setActiveChecklist(null);
+                    showSuccess(`Inspection checklist completed — ${result}`);
+                  }}>Complete & Save ({progressPct}% done)</button>
+                  <button style={s.btn("ghost")} onClick={() => { if (confirm("Discard this checklist? All responses will be lost.")) setActiveChecklist(null); }}>Discard</button>
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
