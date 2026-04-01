@@ -5504,8 +5504,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                   const qrEl = document.getElementById("qr-gen-" + CSS.escape(u.unit));
                   const dataUrl = qrEl ? qrEl.toDataURL() : "";
                   html += `<div class="qr-card">
-                    <h3>${u.unit}</h3>
-                    <p>${u.property}</p>
+                    <h3>${u.property} — Unit ${u.unit}</h3>
                     <img src="${dataUrl}" width="180" height="180" />
                     <div class="url">${url}</div>
                   </div>`;
@@ -5535,8 +5534,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                     const url = baseUrl + "?maintenance=" + encodeURIComponent(u.unit);
                     return (
                       <div key={u.unit + u.property} style={{ textAlign: "center", border: `2px solid ${T.border}`, borderRadius: T.radius, padding: 16 }}>
-                        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{u.unit}</div>
-                        <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>{u.property}</div>
+                        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{u.property} — Unit {u.unit}</div>
                         <QRCodeCanvas
                           id={"qr-gen-" + u.unit}
                           value={url}
@@ -5550,7 +5548,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                           const canvas = document.getElementById("qr-gen-" + CSS.escape(u.unit));
                           if (canvas) {
                             const link = document.createElement("a");
-                            link.download = `QR-${u.property}-${u.unit}.png`;
+                            link.download = `QR-${(u.property || "Property").replace(/\s+/g, "_")}-Unit_${u.unit}.png`;
                             link.href = canvas.toDataURL();
                             link.click();
                           }
