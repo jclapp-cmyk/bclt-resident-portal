@@ -5188,7 +5188,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
 };
 
 // --- ADMIN SETTINGS ---
-const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers }) => {
+const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers, allUnits: parentAllUnits }) => {
   const tabs = ["Users", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
@@ -5485,17 +5485,11 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                 <p class="no-print">Print this page or save as PDF. Each resident can scan their unit's code to access the portal.</p>
                 <button class="no-print" onclick="window.print()" style="padding:8px 20px;margin:10px 0 20px;font-size:14px;cursor:pointer;">Print All</button>
                 <div class="qr-grid">`;
-                const allUnits = [];
-                LIVE_PROPERTIES.forEach(prop => {
-                  (prop.units || []).forEach(u => {
-                    allUnits.push({ unit: u.number || u.name, property: prop.name, id: u._uuid || u.id });
-                  });
-                });
-                LIVE_RESIDENTS.forEach(r => {
-                  if (!allUnits.find(u => u.unit === r.unit)) {
-                    allUnits.push({ unit: r.unit, property: r.property || "—", id: r._uuid || r.id });
-                  }
-                });
+                const allUnits = (parentAllUnits || []).map(u => ({
+                  unit: u.number,
+                  property: u.propertyName || "—",
+                  id: u._uuid || u.id,
+                }));
                 allUnits.forEach(u => {
                   const url = baseUrl + "?maintenance=" + encodeURIComponent(u.unit);
                   const canvas = document.createElement("canvas");
@@ -5515,17 +5509,11 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               }}>🖨️ Print All QR Codes</button>
             </div>
             {(() => {
-              const allUnits = [];
-              LIVE_PROPERTIES.forEach(prop => {
-                (prop.units || []).forEach(u => {
-                  allUnits.push({ unit: u.number || u.name, property: prop.name, id: u._uuid || u.id });
-                });
-              });
-              LIVE_RESIDENTS.forEach(r => {
-                if (!allUnits.find(u => u.unit === r.unit)) {
-                  allUnits.push({ unit: r.unit, property: r.property || "—", id: r._uuid || r.id });
-                }
-              });
+              const allUnits = (parentAllUnits || []).map(u => ({
+                unit: u.number,
+                property: u.propertyName || "—",
+                id: u._uuid || u.id,
+              }));
               const baseUrl = window.location.origin + window.location.pathname;
               if (allUnits.length === 0) return <EmptyState icon="📱" text="No units found. Add properties and units first." />;
               return (
@@ -7013,7 +7001,7 @@ export default function App() {
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} />;
-        case "settings": return <AdminSettings mobile={mobile} settings={settings} setSettings={setSettings} darkMode={darkMode} setDarkMode={setDarkMode} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onReset={resetAllState} staffMembers={staffMembers} />;
+        case "settings": return <AdminSettings mobile={mobile} settings={settings} setSettings={setSettings} darkMode={darkMode} setDarkMode={setDarkMode} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onReset={resetAllState} staffMembers={staffMembers} allUnits={allUnits} />;
         default: return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} />;
       }
     }
