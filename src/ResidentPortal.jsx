@@ -6694,6 +6694,7 @@ export default function App() {
   const [sbResidentsExt, setSbResidentsExt] = useState(null);
   const [sbRentLedger, setSbRentLedger] = useState(null);
   const [dataReady, setDataReady] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
   const mobile = useIsMobile();
 
   const [onboardingData, setOnboardingData] = useState(null);
@@ -6734,6 +6735,7 @@ export default function App() {
         setAdminNotes(mapped);
       }
       setDataReady(true);
+      setDataVersion(v => v + 1);
     } catch (err) {
       console.warn('Supabase load failed:', err);
       setDataReady(true);
