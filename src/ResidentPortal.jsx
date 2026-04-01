@@ -4066,7 +4066,70 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
           ],
         };
 
-        const totalItems = RV_PROCEDURE.sections.reduce((sum, sec) => sum + sec.items.length, 0);
+        const QUARTERLY_PROCEDURE = {
+          id: "PROC-QPM-2025",
+          name: "Quarterly Preventive Maintenance",
+          nameSp: "Mantenimiento Preventivo - Quarterly",
+          year: 2025,
+          sections: [
+            { name: "RV Leveling", items: [
+              { text: "Level the RV for proper operation", type: "passFlagFail" },
+            ]},
+            { name: "Roof & Seals Inspection", items: [
+              { text: "Check roof for water leaks", type: "passFlagFail" },
+              { text: "Check slide-out for water leaks", type: "passFlagFail" },
+              { text: "Check windows for water leaks", type: "passFlagFail" },
+              { text: "Inspect seals and gaskets for water leaks", type: "passFlagFail" },
+              { text: "Check storage compartment for water leaks", type: "passFlagFail" },
+            ]},
+            { name: "Lubrication", items: [
+              { text: "Door lubrication", type: "passFlagFail" },
+              { text: "Lock lubrication", type: "passFlagFail" },
+            ]},
+            { name: "LP Gas System", items: [
+              { text: "Propane tank check and leak inspection", type: "passFlagFail" },
+              { text: "Gas regulator checked and adjusted", type: "passFlagFail" },
+              { text: "Stove/oven - pilots work correctly", type: "passFlagFail" },
+              { text: "Heating works correctly", type: "passFlagFail" },
+              { text: "Water heater works correctly", type: "passFlagFail" },
+              { text: "Refrigerator works on gas, 110V, 12V", type: "passFlagFail" },
+            ]},
+            { name: "Water System", items: [
+              { text: "Check city water pressure", type: "passFlagFail" },
+              { text: "Check cold water lines", type: "passFlagFail" },
+              { text: "Check hot water lines", type: "passFlagFail" },
+              { text: "Sink works properly", type: "passFlagFail" },
+              { text: "Shower works properly", type: "passFlagFail" },
+              { text: "Toilet works properly", type: "passFlagFail" },
+            ]},
+            { name: "Plumbing", items: [
+              { text: "Clean black tank", type: "passFlagFail" },
+              { text: "Grey and black water outlet valves work properly", type: "passFlagFail" },
+              { text: "Sink drain works properly", type: "passFlagFail" },
+              { text: "Bathtub drain works properly", type: "passFlagFail" },
+              { text: "Kitchen sink drain works properly", type: "passFlagFail" },
+            ]},
+            { name: "Safety & First Aid", items: [
+              { text: "Smoke detector works properly", type: "passFlagFail" },
+              { text: "Fire extinguisher is in good condition", type: "passFlagFail" },
+              { text: "Carbon monoxide detector works properly", type: "passFlagFail" },
+              { text: "Check walls for mold", type: "passFlagFail" },
+            ]},
+            { name: "Electrical Systems", items: [
+              { text: "110V systems work correctly: microwave, TV, AC, outlets", type: "passFlagFail" },
+              { text: "Check converter, fuses, breakers", type: "passFlagFail" },
+              { text: "110V connector and adapter", type: "passFlagFail" },
+            ]},
+          ],
+        };
+
+        const ALL_PROCEDURES = [RV_PROCEDURE, QUARTERLY_PROCEDURE];
+        const activeProcedure = activeChecklist?.procedureId
+          ? ALL_PROCEDURES.find(p => p.id === activeChecklist.procedureId) || RV_PROCEDURE
+          : null;
+        const currentProc = activeProcedure || RV_PROCEDURE;
+
+        const totalItems = currentProc.sections.reduce((sum, sec) => sum + sec.items.length, 0);
         const resp = activeChecklist?.responses || {};
         const answeredCount = Object.keys(resp).filter(k => resp[k]?.value).length;
         const failedCount = Object.values(resp).filter(r => r.value === "No" || r.value === "Fail").length;
@@ -4089,6 +4152,12 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                     <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Start New Inspection Checklist</div>
                     <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
                       <div style={{ flex: 1, minWidth: 150 }}>
+                        <label style={s.label}>Procedure</label>
+                        <select id="proc-type" style={{ ...s.mSelect(mobile), width: "100%" }}>
+                          {ALL_PROCEDURES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 150 }}>
                         <label style={s.label}>Unit</label>
                         <select id="proc-unit" style={{ ...s.mSelect(mobile), width: "100%" }}>
                           <option value="">Select unit...</option>
@@ -4108,29 +4177,37 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                       </div>
                     </div>
                     <button style={s.btn()} onClick={() => {
+                      const procedureId = document.getElementById("proc-type").value;
                       const unit = document.getElementById("proc-unit").value;
                       const inspector = document.getElementById("proc-inspector").value;
                       const date = document.getElementById("proc-date").value;
                       if (!unit) { showSuccess("Please select a unit"); return; }
-                      setActiveChecklist({ id: `CL-${Date.now()}`, unit, inspector, date, procedure: RV_PROCEDURE.name, responses: {} });
+                      const proc = ALL_PROCEDURES.find(p => p.id === procedureId) || ALL_PROCEDURES[0];
+                      setActiveChecklist({ id: `CL-${Date.now()}`, unit, inspector, date, procedure: proc.name, procedureId: proc.id, responses: {} });
                     }}>Start Checklist</button>
                   </div>
                 )}
 
-                {/* Procedure overview card */}
-                <div style={{ ...s.card, marginBottom: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 17 }}>{RV_PROCEDURE.name}</div>
-                      <div style={{ color: T.muted, fontSize: 13, fontStyle: "italic" }}>{RV_PROCEDURE.nameSp}</div>
+                {/* Procedure overview cards */}
+                {ALL_PROCEDURES.map(proc => {
+                  const procItems = proc.sections.reduce((sum, sec) => sum + sec.items.length, 0);
+                  return (
+                    <div key={proc.id} style={{ ...s.card, marginBottom: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 17 }}>{proc.name}</div>
+                          <div style={{ color: T.muted, fontSize: 13, fontStyle: "italic" }}>{proc.nameSp}</div>
+                        </div>
+                        <span style={s.badge(T.successDim, T.success)}>Active</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8, fontSize: 13 }}>
+                        <span style={{ color: T.dim }}>Sections: <strong style={{ color: T.text }}>{proc.sections.length}</strong></span>
+                        <span style={{ color: T.dim }}>Total Items: <strong style={{ color: T.text }}>{procItems}</strong></span>
+                        <span style={{ color: T.dim }}>Frequency: <strong style={{ color: T.text }}>{proc.id.includes("QPM") ? "Quarterly" : "Annual"}</strong></span>
+                      </div>
                     </div>
-                    <span style={s.badge(T.successDim, T.success)}>Active</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8, fontSize: 13 }}>
-                    <span style={{ color: T.dim }}>Sections: <strong style={{ color: T.text }}>{RV_PROCEDURE.sections.length}</strong></span>
-                    <span style={{ color: T.dim }}>Total Items: <strong style={{ color: T.text }}>{totalItems}</strong></span>
-                  </div>
-                </div>
+                  );
+                })}
 
                 {/* Completed checklists history */}
                 {checklistHistory.length > 0 && (
@@ -4174,7 +4251,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                     </div>
                     <span style={s.badge(T.successDim, T.success)}>Complete</span>
                   </div>
-                  {RV_PROCEDURE.sections.map((sec, si) => {
+                  {currentProc.sections.map((sec, si) => {
                     const secItems = sec.items.map((item, ii) => ({ ...item, key: `${si}-${ii}`, response: viewingChecklist.responses[`${si}-${ii}`] }));
                     const secFailed = secItems.filter(i => i.response?.value === "No" || i.response?.value === "Fail").length;
                     return (
@@ -4193,8 +4270,8 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                               <div style={{ textAlign: "right", minWidth: 80 }}>
                                 {item.response?.value ? (
                                   <span style={s.badge(
-                                    item.response.value === "Yes" || item.response.value === "Ok" ? T.successDim : item.response.value === "N/A" ? T.warnDim : T.dangerDim,
-                                    item.response.value === "Yes" || item.response.value === "Ok" ? T.success : item.response.value === "N/A" ? T.warn : T.danger
+                                    item.response.value === "Yes" || item.response.value === "Ok" || item.response.value === "Pass" ? T.successDim : item.response.value === "N/A" || item.response.value === "Flag" ? T.warnDim : T.dangerDim,
+                                    item.response.value === "Yes" || item.response.value === "Ok" || item.response.value === "Pass" ? T.success : item.response.value === "N/A" || item.response.value === "Flag" ? T.warn : T.danger
                                   )}>{item.response.value}</span>
                                 ) : <span style={{ fontSize: 12, color: T.dim }}>--</span>}
                                 {item.response?.notes && <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{item.response.notes}</div>}
@@ -4216,7 +4293,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{RV_PROCEDURE.name}</div>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{currentProc.name}</div>
                       <div style={{ fontSize: 13, color: T.muted }}>Unit {activeChecklist.unit} &middot; {activeChecklist.inspector} &middot; {activeChecklist.date}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
@@ -4231,7 +4308,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 </div>
 
                 {/* Sections */}
-                {RV_PROCEDURE.sections.map((sec, si) => {
+                {currentProc.sections.map((sec, si) => {
                   const secAnswered = sec.items.filter((_, ii) => resp[`${si}-${ii}`]?.value).length;
                   const secFailed = sec.items.filter((_, ii) => resp[`${si}-${ii}`]?.value === "No" || resp[`${si}-${ii}`]?.value === "Fail").length;
                   return (
@@ -4249,7 +4326,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                         {sec.items.map((item, ii) => {
                           const key = `${si}-${ii}`;
                           const r = resp[key] || {};
-                          const isFailed = r.value === "No" || r.value === "Fail";
+                          const isFailed = r.value === "No" || r.value === "Fail" || r.value === "Flag";
                           return (
                             <div key={ii} style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}`, background: isFailed ? T.dangerDim : r.value ? "transparent" : "transparent" }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: r.value || item.type === "text" || item.type === "photo" ? 8 : 0 }}>
@@ -4257,15 +4334,15 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                                   <span style={{ color: T.dim, marginRight: 6 }}>{ii + 1}.</span>
                                   {item.text}
                                   <span style={{ marginLeft: 6, fontSize: 11, color: T.muted }}>
-                                    ({item.type === "yesNoNa" ? "Yes/No/N/A" : item.type === "photo" ? "Photo" : "Detail"})
+                                    ({item.type === "yesNoNa" ? "Yes/No/N/A" : item.type === "passFlagFail" ? "Pass/Flag/Fail" : item.type === "photo" ? "Photo" : "Detail"})
                                   </span>
                                 </div>
-                                {item.type === "yesNoNa" && (
+                                {(item.type === "yesNoNa" || item.type === "passFlagFail") && (
                                   <div style={{ display: "flex", gap: 4 }}>
-                                    {["Yes", "No", "N/A"].map(opt => (
+                                    {(item.type === "passFlagFail" ? ["Pass", "Flag", "Fail"] : ["Yes", "No", "N/A"]).map(opt => (
                                       <button key={opt} onClick={() => setResp(key, "value", opt)} style={{
                                         padding: "4px 10px", fontSize: 12, fontWeight: 600, borderRadius: 4, border: `1px solid ${T.border}`, cursor: "pointer",
-                                        background: r.value === opt ? (opt === "Yes" ? T.success : opt === "No" ? T.danger : T.warn) : T.cardBg,
+                                        background: r.value === opt ? (opt === "Yes" || opt === "Pass" ? T.success : opt === "No" || opt === "Fail" ? T.danger : T.warn) : T.cardBg,
                                         color: r.value === opt ? "#fff" : T.text,
                                       }}>{opt}</button>
                                     ))}
@@ -4316,14 +4393,14 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                         id: `UI-${Date.now()}`,
                         unit: activeChecklist.unit,
                         propertyId: resident?.propertyId || LIVE_PROPERTIES[0]?.id || "wharf",
-                        category: "Annual RV Inspection",
+                        category: currentProc.name,
                         date: activeChecklist.date,
                         inspector: activeChecklist.inspector,
                         result,
                         score: `${answeredCount}/${totalItems}`,
-                        failedItems: Object.entries(resp).filter(([, r]) => r.value === "No" || r.value === "Fail").map(([k]) => {
+                        failedItems: Object.entries(resp).filter(([, r]) => r.value === "No" || r.value === "Fail" || r.value === "Flag").map(([k]) => {
                           const [si2, ii2] = k.split("-").map(Number);
-                          return RV_PROCEDURE.sections[si2]?.items[ii2]?.text || k;
+                          return currentProc.sections[si2]?.items[ii2]?.text || k;
                         }),
                         notes: `Checklist ${activeChecklist.id}: ${answeredCount}/${totalItems} items completed, ${failedCount} failed`,
                       });
