@@ -5419,7 +5419,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                   }
                 });
                 allUnits.forEach(u => {
-                  const url = baseUrl + "?unit=" + encodeURIComponent(u.unit);
+                  const url = baseUrl + "?maintenance=" + encodeURIComponent(u.unit);
                   const canvas = document.createElement("canvas");
                   const size = 180;
                   // Use a simple inline QR generation via the existing QRCodeCanvas
@@ -5454,7 +5454,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               return (
                 <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "repeat(3, 1fr)", gap: 16 }}>
                   {allUnits.map(u => {
-                    const url = baseUrl + "?unit=" + encodeURIComponent(u.unit);
+                    const url = baseUrl + "?maintenance=" + encodeURIComponent(u.unit);
                     return (
                       <div key={u.unit + u.property} style={{ textAlign: "center", border: `2px solid ${T.border}`, borderRadius: T.radius, padding: 16 }}>
                         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{u.unit}</div>
@@ -6443,6 +6443,143 @@ const LoginPage = () => {
   );
 };
 
+// ── PUBLIC MAINTENANCE REQUEST FORM (no auth) ─────────────
+
+const PublicMaintenanceForm = ({ unitId, mobile, themeVars }) => {
+  const [form, setForm] = useState({ name: "", phone: "", email: "", category: "General", priority: "routine", description: "" });
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [unitInfo, setUnitInfo] = useState(null);
+
+  useEffect(() => {
+    // Look up unit info from Supabase
+    (async () => {
+      try {
+        const { data } = await supabase.from("units").select("*, properties(name)").or(`id.eq.${unitId},number.eq.${unitId}`).limit(1).single();
+        if (data) setUnitInfo(data);
+      } catch (e) {
+        // Try by number match
+        try {
+          const { data } = await supabase.from("units").select("*, properties(name)").eq("number", unitId).limit(1).single();
+          if (data) setUnitInfo(data);
+        } catch (e2) { console.warn("Unit lookup failed"); }
+      }
+    })();
+  }, [unitId]);
+
+  const handleSubmit = async () => {
+    if (!form.description.trim()) { setError("Please describe the issue"); return; }
+    setSubmitting(true);
+    setError("");
+    try {
+      const requestId = `MR-${Date.now().toString().slice(-4)}`;
+      await insertMaintenanceRequest({
+        id: requestId,
+        unit: unitInfo?.number || unitId,
+        category: form.category,
+        priority: form.priority,
+        description: form.description.trim(),
+        status: "submitted",
+        date: new Date().toISOString().split("T")[0],
+        assignedTo: "",
+        notes: form.name ? `Submitted by: ${form.name}${form.phone ? ` | Phone: ${form.phone}` : ""}${form.email ? ` | Email: ${form.email}` : ""}` : "",
+        source: "qr_code",
+      });
+      setSubmitted(true);
+    } catch (err) {
+      setError("Failed to submit: " + (err.message || "Please try again"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const cardStyle = { background: "#fff", borderRadius: 12, padding: mobile ? 20 : 28, boxShadow: "0 2px 12px rgba(0,0,0,0.08)", marginBottom: 16 };
+  const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #ddd", fontSize: 14, boxSizing: "border-box" };
+  const labelStyle = { display: "block", fontSize: 12, fontWeight: 600, color: "#666", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" };
+
+  if (submitted) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f5f7f9", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div style={{ ...cardStyle, maxWidth: 480, textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+          <h2 style={{ margin: "0 0 8px", fontSize: 22 }}>Request Submitted!</h2>
+          <p style={{ color: "#666", fontSize: 14, marginBottom: 20 }}>Your maintenance request for <strong>{unitInfo?.number || unitId}</strong> has been received. Our team will review it and get back to you.</p>
+          <button onClick={() => { setSubmitted(false); setForm({ name: "", phone: "", email: "", category: "General", priority: "routine", description: "" }); }}
+            style={{ padding: "10px 24px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, cursor: "pointer" }}>
+            Submit Another Request
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#f5f7f9", padding: mobile ? "20px 16px" : "40px 20px" }}>
+      <div style={{ maxWidth: 520, margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontWeight: 800, fontSize: 20, color: "#2563eb", marginBottom: 4 }}>BCLT Portal</div>
+          <h1 style={{ margin: "0 0 4px", fontSize: mobile ? 22 : 26 }}>Maintenance Request</h1>
+          {unitInfo && <p style={{ color: "#666", fontSize: 14, margin: 0 }}>{unitInfo.properties?.name || ""} — Unit {unitInfo.number}</p>}
+          {!unitInfo && <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Unit: {unitId}</p>}
+        </div>
+
+        <div style={cardStyle}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Your Name</label>
+            <input style={inputStyle} placeholder="Optional" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 16 }}>
+            <div>
+              <label style={labelStyle}>Phone</label>
+              <input style={inputStyle} placeholder="Optional" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
+            </div>
+            <div>
+              <label style={labelStyle}>Email</label>
+              <input type="email" style={inputStyle} placeholder="Optional" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 16 }}>
+            <div>
+              <label style={labelStyle}>Category *</label>
+              <select style={inputStyle} value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}>
+                <option>General</option>
+                <option>Plumbing</option>
+                <option>Electrical</option>
+                <option>HVAC</option>
+                <option>Appliance</option>
+                <option>Structural</option>
+                <option>Pest Control</option>
+                <option>Exterior</option>
+                <option>Safety</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Priority</label>
+              <select style={inputStyle} value={form.priority} onChange={e => setForm(p => ({ ...p, priority: e.target.value }))}>
+                <option value="routine">Routine</option>
+                <option value="urgent">Urgent</option>
+                <option value="emergency">Emergency</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Describe the Issue *</label>
+            <textarea style={{ ...inputStyle, minHeight: 120, resize: "vertical" }} placeholder="Please describe the maintenance issue in detail..." value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+          </div>
+          {error && <div style={{ padding: 10, background: "#fee2e2", color: "#dc2626", borderRadius: 8, fontSize: 13, marginBottom: 14 }}>{error}</div>}
+          <button disabled={submitting} onClick={handleSubmit}
+            style={{ width: "100%", padding: 14, background: submitting ? "#94a3b8" : "#2563eb", color: "#fff", border: "none", borderRadius: 8, fontSize: 16, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer" }}>
+            {submitting ? "Submitting..." : "Submit Request"}
+          </button>
+        </div>
+        <p style={{ textAlign: "center", fontSize: 12, color: "#999" }}>Bolinas Community Land Trust • Resident Portal</p>
+      </div>
+    </div>
+  );
+};
+
 // ── MAIN APP ───────────────────────────────────────────────
 
 export default function App() {
@@ -6885,6 +7022,13 @@ export default function App() {
       </div>
     </>
   );
+
+  // Public maintenance request form (no auth required)
+  const urlParams = new URLSearchParams(window.location.search);
+  const publicMaintUnit = urlParams.get("maintenance");
+  if (publicMaintUnit) {
+    return <PublicMaintenanceForm unitId={publicMaintUnit} mobile={mobile} themeVars={themeVars} />;
+  }
 
   // Auth gate
   if (authLoading) return <div style={{ ...s.page, ...themeVars, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}><div style={{ color: T.muted, fontSize: 14 }}>Loading...</div></div>;
