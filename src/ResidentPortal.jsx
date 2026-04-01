@@ -2533,11 +2533,16 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 }
                 setEditing(!editing);
               }}>{editing ? "Cancel" : "✏️ Edit Resident"}</button>
-              <button style={{ ...s.btn("ghost"), color: ext.status === "active" ? T.danger : T.success }} onClick={() => {
+              <button style={{ ...s.btn("ghost"), color: ext.status === "active" ? T.danger : T.success }} onClick={async () => {
                 const newStatus = ext.status === "active" ? "inactive" : "active";
-                updateResident(selectedResident._uuid, { status: newStatus }).then(() => reloadData()).catch(err => console.warn(err));
-                ext.status = newStatus;
-                showSuccess(`Resident ${newStatus === "active" ? "reactivated" : "deactivated"}`);
+                try {
+                  await updateResident(selectedResident._uuid, { status: newStatus });
+                  await reloadData();
+                  showSuccess(`Resident ${newStatus === "active" ? "reactivated" : "deactivated"}`);
+                } catch (err) {
+                  console.warn(err);
+                  showSuccess("Error: " + (err.message || "Failed to update status"));
+                }
               }}>{ext.status === "active" ? "🚫 Deactivate" : "✅ Reactivate"}</button>
               {selectedResident.email && (
                 <button style={s.btn("ghost")} onClick={async () => {
