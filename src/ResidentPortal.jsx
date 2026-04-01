@@ -5129,7 +5129,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
 };
 
 // --- ADMIN SETTINGS ---
-const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset }) => {
+const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers }) => {
   const tabs = ["Users", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
@@ -5326,12 +5326,31 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
           </div>
           <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Management Contact</div>
-            <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-              <div><label style={s.label}>Manager Name</label><input style={s.mInput(mobile)} value={settings.property.manager} onChange={e => upd("property", "manager", e.target.value)} /></div>
-              <div><label style={s.label}>Phone</label><input style={s.mInput(mobile)} value={settings.property.managerPhone} onChange={e => upd("property", "managerPhone", e.target.value)} /></div>
-              <div><label style={s.label}>Email</label><input style={s.mInput(mobile)} value={settings.property.managerEmail} onChange={e => upd("property", "managerEmail", e.target.value)} /></div>
-              <div><label style={s.label}>Office Hours</label><input style={s.mInput(mobile)} value={settings.property.officeHours} onChange={e => upd("property", "officeHours", e.target.value)} /></div>
-            </div>
+            {(() => {
+              const allStaff = (parentStaffMembers || staffList || []).filter(st => st.active);
+              const selectedStaff = allStaff.find(st => st.name === settings.property.manager);
+              return (
+                <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
+                  <div>
+                    <label style={s.label}>Manager</label>
+                    <select style={{ ...s.mSelect(mobile), width: "100%" }} value={settings.property.manager || ""} onChange={e => {
+                      const staff = allStaff.find(st => st.name === e.target.value);
+                      if (staff) {
+                        setSettings(p => ({ ...p, property: { ...p.property, manager: staff.name, managerPhone: staff.phone || p.property.managerPhone, managerEmail: staff.email || p.property.managerEmail } }));
+                      } else {
+                        upd("property", "manager", e.target.value);
+                      }
+                    }}>
+                      <option value="">Select staff member...</option>
+                      {allStaff.map(st => <option key={st.id} value={st.name}>{st.name} — {st.role === "property_manager" ? "Property Manager" : st.role === "admin" ? "Admin" : "Maintenance"}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={s.label}>Phone</label><input value={settings.property.managerPhone} readOnly style={{ ...s.mInput(mobile), background: T.bg, color: T.muted }} /></div>
+                  <div><label style={s.label}>Email</label><input value={settings.property.managerEmail} readOnly style={{ ...s.mInput(mobile), background: T.bg, color: T.muted }} /></div>
+                  <div><label style={s.label}>Office Hours</label><input style={s.mInput(mobile)} value={settings.property.officeHours} onChange={e => upd("property", "officeHours", e.target.value)} /></div>
+                </div>
+              );
+            })()}
             <button style={s.btn()} onClick={() => showSuccess("Property settings saved")}>Save Changes</button>
           </div>
 
@@ -6935,7 +6954,7 @@ export default function App() {
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} />;
-        case "settings": return <AdminSettings mobile={mobile} settings={settings} setSettings={setSettings} darkMode={darkMode} setDarkMode={setDarkMode} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onReset={resetAllState} />;
+        case "settings": return <AdminSettings mobile={mobile} settings={settings} setSettings={setSettings} darkMode={darkMode} setDarkMode={setDarkMode} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onReset={resetAllState} staffMembers={staffMembers} />;
         default: return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} />;
       }
     }
