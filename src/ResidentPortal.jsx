@@ -3722,6 +3722,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   const [updateForm, setUpdateForm] = useState({ result: "", score: "", failedItems: "", notes: "" });
   const [activeChecklist, setActiveChecklist] = useState(null); // { unit, inspector, date, responses: { "sectionIdx-itemIdx": { value, notes } } }
   const [checklistHistory, setChecklistHistory] = useState([]); // completed checklists
+  const [viewingChecklist, setViewingChecklist] = useState(null);
 
   const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "")) : unitInspections;
   const regInsp = selectedProperty && selectedProperty !== "all"
@@ -4063,9 +4064,6 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
             responses: { ...prev.responses, [key]: { ...(prev.responses[key] || {}), [field]: val } }
           }));
         };
-
-        // View a completed checklist
-        const [viewingChecklist, setViewingChecklist] = useState(null);
 
         return (
           <div>
