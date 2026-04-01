@@ -3425,7 +3425,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                           if (!confirm(`Delete unit ${u.number}?`)) return;
                           try { await deleteUnit(uid); setUnitList(prev => prev.filter(x => (x._uuid || x.id) !== uid)); showUnitSuccess(`Unit ${u.number} deleted`); } catch (err) { showUnitSuccess("Error: " + err.message); }
                         }}>Delete</button>
-                        <button title="QR Code — Maintenance Request" style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => setQrUnit(qrUnit === u.number ? null : u.number)}>QR</button>
+                        <button title="QR Code — Maintenance Request" style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => setQrUnit(qrUnit === u.number ? null : u.number)}>QR Code</button>
                       </div>
                     </td>
                   </tr>
@@ -5205,6 +5205,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
   const [staffForm, setStaffForm] = useState({ firstName: "", lastName: "", role: "maintenance", email: "", phone: "", propertyId: "" });
   const [editingStaff, setEditingStaff] = useState(null);
   const [editStaffForm, setEditStaffForm] = useState({});
+  const [settingsPropIdx, setSettingsPropIdx] = useState(0);
 
   useEffect(() => {
     if (tab === "Audit Log") {
@@ -5376,12 +5377,26 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
       {tab === "Property" && (
         <div>
           <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Property Information</div>
-            <DetailRow label="Property Name" value={(LIVE_PROPERTIES[0]?.name || "—")} />
-            <DetailRow label="Address" value={(LIVE_PROPERTIES[0]?.address || "—")} />
-            <DetailRow label="Type" value={(LIVE_PROPERTIES[0]?.type || "—")} />
-            <DetailRow label="Year Built" value={(LIVE_PROPERTIES[0]?.yearBuilt || "—")} />
-            <DetailRow label="Total Units" value={(LIVE_PROPERTIES[0]?.totalUnits || 0)} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Property Information</div>
+              {LIVE_PROPERTIES.length > 1 && (
+                <select style={{ ...s.select, fontSize: 13, padding: "6px 10px" }} value={settingsPropIdx} onChange={e => setSettingsPropIdx(Number(e.target.value))}>
+                  {LIVE_PROPERTIES.map((p, i) => <option key={p._uuid || i} value={i}>{p.name}</option>)}
+                </select>
+              )}
+            </div>
+            {(() => {
+              const prop = LIVE_PROPERTIES[settingsPropIdx] || LIVE_PROPERTIES[0] || {};
+              return (
+                <>
+                  <DetailRow label="Property Name" value={prop.name || "—"} />
+                  <DetailRow label="Address" value={prop.address || "—"} />
+                  <DetailRow label="Type" value={prop.type || "—"} />
+                  <DetailRow label="Year Built" value={prop.yearBuilt || "—"} />
+                  <DetailRow label="Total Units" value={prop.totalUnits || 0} />
+                </>
+              );
+            })()}
           </div>
           <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Management Contact</div>
