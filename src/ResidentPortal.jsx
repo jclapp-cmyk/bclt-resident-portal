@@ -3394,7 +3394,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                           if (!confirm(`Delete unit ${u.number}?`)) return;
                           try { await deleteUnit(uid); setUnitList(prev => prev.filter(x => (x._uuid || x.id) !== uid)); showUnitSuccess(`Unit ${u.number} deleted`); } catch (err) { showUnitSuccess("Error: " + err.message); }
                         }}>Delete</button>
-                        <button title="QR Code — Maintenance Request" style={{ ...s.btn("ghost"), fontSize: 13, padding: "4px 6px" }} onClick={() => setQrUnit(qrUnit === u.number ? null : u.number)}>📱</button>
+                        <button title="QR Code — Maintenance Request" style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => setQrUnit(qrUnit === u.number ? null : u.number)}>QR</button>
                       </div>
                     </td>
                   </tr>
@@ -3406,7 +3406,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
           {qrUnit && (
             <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setQrUnit(null)}>
               <div style={{ background: "#fff", borderRadius: 12, padding: 24, textAlign: "center", maxWidth: 320, boxShadow: "0 8px 30px rgba(0,0,0,0.2)" }} onClick={e => e.stopPropagation()}>
-                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Unit {qrUnit}</div>
+                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{p?.name || ""} — Unit {qrUnit}</div>
                 <div style={{ fontSize: 12, color: "#666", marginBottom: 14 }}>Scan to submit a maintenance request</div>
                 <QRCodeCanvas
                   id={"qr-unit-popup-" + qrUnit}
@@ -3421,7 +3421,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                 <div style={{ marginTop: 14, display: "flex", gap: 8, justifyContent: "center" }}>
                   <button style={{ padding: "8px 16px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13 }} onClick={() => {
                     const canvas = document.getElementById("qr-unit-popup-" + qrUnit);
-                    if (canvas) { const a = document.createElement("a"); a.download = `QR-Unit-${qrUnit}.png`; a.href = canvas.toDataURL(); a.click(); }
+                    if (canvas) { const a = document.createElement("a"); a.download = `QR-${(p?.name || "Property").replace(/\s+/g, "_")}-Unit_${qrUnit}.png`; a.href = canvas.toDataURL(); a.click(); }
                   }}>Download PNG</button>
                   <button style={{ padding: "8px 16px", background: "#e5e7eb", color: "#333", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13 }} onClick={() => setQrUnit(null)}>Close</button>
                 </div>
