@@ -2515,7 +2515,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
           </div>
           <div>
             <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22, marginBottom: 2 }}>{selectedResident.name}</h1>
-            <p style={{ ...s.sectionSub, marginBottom: 0 }}>Unit {selectedResident.unit} — {ext.status === "active" ? "Active Resident" : "Inactive"}</p>
+            <p style={{ ...s.sectionSub, marginBottom: 0 }}>Unit {selectedResident.unit} — {ext.status === "inactive" ? "Inactive" : "Active Resident"}</p>
           </div>
         </div>
         <SuccessMessage message={success} />
@@ -2533,8 +2533,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 }
                 setEditing(!editing);
               }}>{editing ? "Cancel" : "✏️ Edit Resident"}</button>
-              <button style={{ ...s.btn("ghost"), color: ext.status === "active" ? T.danger : T.success }} onClick={async () => {
-                const newStatus = ext.status === "active" ? "inactive" : "active";
+              <button style={{ ...s.btn("ghost"), color: ext.status === "inactive" ? T.success : T.danger }} onClick={async () => {
+                const newStatus = ext.status === "inactive" ? "active" : "inactive";
                 try {
                   await updateResident(selectedResident._uuid, { status: newStatus });
                   await reloadData();
@@ -2543,7 +2543,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   console.warn(err);
                   showSuccess("Error: " + (err.message || "Failed to update status"));
                 }
-              }}>{ext.status === "active" ? "🚫 Deactivate" : "✅ Reactivate"}</button>
+              }}>{ext.status === "inactive" ? "✅ Reactivate" : "🚫 Deactivate"}</button>
               {selectedResident.email && (
                 <button style={s.btn("ghost")} onClick={async () => {
                   if (!selectedResident.email) { showSuccess("No email address on file"); return; }
