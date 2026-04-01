@@ -33,41 +33,27 @@ export async function getCurrentSession() {
 }
 
 export async function fetchProfile(userId, userEmail) {
-  // First try to find profile by user ID
-  let { data, error } = await supabase
-    .from('user_profiles')
-    .select('*, residents(slug, name, property_id, unit_id, phone, email, units(number), properties(slug, name))')
-    .eq('id', userId)
-    .single();
+  // Use secure server-side function to fetch and link profile
+  const { data, error } = await supabase.rpc('link_profile_on_login', {
+    user_id: userId,
+    user_email: userEmail,
+  });
 
-  // If not found by ID, try by email (for first-time login — link the profile)
   if (error || !data) {
-    const { data: byEmail } = await supabase
-      .from('user_profiles')
-      .select('*, residents(slug, name, property_id, unit_id, phone, email, units(number), properties(slug, name))')
-      .eq('email', userEmail)
-      .single();
-
-    if (byEmail) {
-      // Link the profile to this auth user
-      await supabase.from('user_profiles').update({ id: userId }).eq('email', userEmail);
-      data = { ...byEmail, id: userId };
-    } else {
-      return null; // No profile exists for this user
-    }
+    console.warn('fetchProfile failed:', error?.message);
+    return null;
   }
 
-  const r = data.residents;
   return {
     role: data.role,
     email: data.email,
     displayName: data.display_name,
     residentId: data.resident_id,
-    residentSlug: r?.slug || null,
-    residentName: r?.name || null,
-    unit: r?.units?.number || null,
-    propertySlug: r?.properties?.slug || null,
-    propertyName: r?.properties?.name || null,
+    residentSlug: data.resident_slug || null,
+    residentName: data.resident_name || null,
+    unit: data.unit_number || null,
+    propertySlug: data.property_slug || null,
+    propertyName: data.property_name || null,
   };
 }
 
