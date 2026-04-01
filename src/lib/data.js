@@ -75,6 +75,9 @@ export async function insertUnit(unit, propertyUuid) {
   if (unit.rv_info !== undefined) row.rv_info = unit.rv_info;
   const { data, error } = await supabase.from('units').insert(row).select().single();
   if (error) throw error;
+  // Update property total_units count
+  const { count } = await supabase.from('units').select('*', { count: 'exact', head: true }).eq('property_id', propertyUuid);
+  await supabase.from('properties').update({ total_units: count || 1 }).eq('id', propertyUuid);
   return { _uuid: data.id, number: data.number, bedrooms: data.bedrooms, bathrooms: data.bathrooms, sqft: data.sqft, is_rv: data.is_rv || false, rv_info: data.rv_info || {} };
 }
 

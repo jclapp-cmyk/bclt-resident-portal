@@ -3048,7 +3048,7 @@ const PropertyCard = ({ p, mobile, onSelect }) => {
   const rentRoll = ledger.reduce((s, r) => s + r.rentDue, 0);
   const collected = ledger.reduce((s, r) => s + r.tenantPaid + r.hapReceived, 0);
   const collRate = rentRoll ? Math.round((collected / rentRoll) * 100) : 0;
-  const occupancy = Math.round((residents.length / p.totalUnits) * 100);
+  const occupancy = p.totalUnits > 0 ? Math.round((residents.length / p.totalUnits) * 100) : 0;
   return (
     <div style={{ ...s.card, cursor: onSelect ? "pointer" : undefined }} onClick={onSelect}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
