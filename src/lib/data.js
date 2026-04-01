@@ -1053,3 +1053,56 @@ export async function deleteAdminNote(noteUuid) {
   const { error } = await supabase.from('admin_notes').delete().eq('id', noteUuid);
   if (error) throw error;
 }
+
+// ── INSPECTION CHECKLISTS ──
+
+export async function fetchInspectionChecklists() {
+  const { data, error } = await supabase
+    .from('inspection_checklists')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(c => ({
+    id: c.code,
+    _uuid: c.id,
+    procedureId: c.procedure_id,
+    procedure: c.procedure_name,
+    unit: c.unit,
+    inspector: c.inspector,
+    date: c.inspection_date,
+    responses: c.responses || {},
+    overallResult: c.overall_result,
+    completedAt: c.completed_at,
+    createdAt: c.created_at,
+    updatedAt: c.updated_at,
+  }));
+}
+
+export async function insertInspectionChecklist(checklist) {
+  const code = `CL-${Date.now()}`;
+  const { data, error } = await supabase.from('inspection_checklists').insert({
+    code,
+    procedure_id: checklist.procedureId,
+    procedure_name: checklist.procedure,
+    unit: checklist.unit,
+    inspector: checklist.inspector,
+    inspection_date: checklist.date,
+    responses: checklist.responses || {},
+    overall_result: checklist.overallResult || 'Complete',
+    completed_at: new Date().toISOString(),
+  }).select().single();
+  if (error) throw error;
+  return { id: code, _uuid: data.id, ...checklist };
+}
+
+export async function updateInspectionChecklist(uuid, changes) {
+  const mapped = {};
+  if (changes.responses !== undefined) mapped.responses = changes.responses;
+  if (changes.overallResult !== undefined) mapped.overall_result = changes.overallResult;
+  if (changes.inspector !== undefined) mapped.inspector = changes.inspector;
+  if (changes.date !== undefined) mapped.inspection_date = changes.date;
+  mapped.updated_at = new Date().toISOString();
+  if (changes.overallResult) mapped.completed_at = new Date().toISOString();
+  const { error } = await supabase.from('inspection_checklists').update(mapped).eq('id', uuid);
+  if (error) throw error;
+}

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -3711,7 +3711,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 };
 
 // --- INSPECTIONS (All Roles — Unified) ---
-const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [] }) => {
+const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [], savedChecklists = [], onSaveChecklist, onUpdateChecklist }) => {
   const isResident = role === "resident";
   const isAdmin = role === "admin";
   const tabs = isResident ? null : isAdmin ? ["Schedule", "Unit History", "Procedures", "Regulatory", "Categories"] : ["Unit History", "Procedures", "Categories", "My Assigned"];
@@ -3720,9 +3720,9 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
   const [selectedInsp, setSelectedInsp] = useState(null);
   const [updateForm, setUpdateForm] = useState({ result: "", score: "", failedItems: "", notes: "" });
-  const [activeChecklist, setActiveChecklist] = useState(null); // { unit, inspector, date, responses: { "sectionIdx-itemIdx": { value, notes } } }
-  const [checklistHistory, setChecklistHistory] = useState([]); // completed checklists
+  const [activeChecklist, setActiveChecklist] = useState(null);
   const [viewingChecklist, setViewingChecklist] = useState(null);
+  const [editingChecklist, setEditingChecklist] = useState(false); // true when editing a completed checklist
 
   const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "")) : unitInspections;
   const regInsp = selectedProperty && selectedProperty !== "all"
@@ -4124,10 +4124,10 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
         };
 
         const ALL_PROCEDURES = [RV_PROCEDURE, QUARTERLY_PROCEDURE];
-        const activeProcedure = activeChecklist?.procedureId
-          ? ALL_PROCEDURES.find(p => p.id === activeChecklist.procedureId) || RV_PROCEDURE
-          : null;
-        const currentProc = activeProcedure || RV_PROCEDURE;
+        const lookupId = activeChecklist?.procedureId || viewingChecklist?.procedureId;
+        const currentProc = lookupId
+          ? ALL_PROCEDURES.find(p => p.id === lookupId) || RV_PROCEDURE
+          : RV_PROCEDURE;
 
         const totalItems = currentProc.sections.reduce((sum, sec) => sum + sec.items.length, 0);
         const resp = activeChecklist?.responses || {};
@@ -4210,24 +4210,22 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 })}
 
                 {/* Completed checklists history */}
-                {checklistHistory.length > 0 && (
+                {savedChecklists.length > 0 && (
                   <div style={s.card}>
-                    <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Completed Checklists ({checklistHistory.length})</div>
+                    <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Completed Checklists ({savedChecklists.length})</div>
                     <table style={s.table}>
-                      <thead><tr>{["Date", "Unit", "Inspector", "Items", "Passed", "Failed", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <thead><tr>{["Date", "Unit", "Procedure", "Inspector", "Result", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                       <tbody>
-                        {checklistHistory.map(cl => {
-                          const rKeys = Object.keys(cl.responses);
-                          const passed = Object.values(cl.responses).filter(r => r.value === "Yes" || r.value === "Pass" || r.value === "Ok").length;
-                          const failed = Object.values(cl.responses).filter(r => r.value === "No" || r.value === "Fail").length;
+                        {savedChecklists.map(cl => {
+                          const resultColor = cl.overallResult === "Pass" ? T.success : cl.overallResult === "Fail" ? T.danger : T.warn;
+                          const resultBg = cl.overallResult === "Pass" ? T.successDim : cl.overallResult === "Fail" ? T.dangerDim : T.warnDim;
                           return (
-                            <tr key={cl.id} style={{ cursor: "pointer" }} onClick={() => setViewingChecklist(cl)}>
+                            <tr key={cl.id || cl._uuid} style={{ cursor: "pointer" }} onClick={() => setViewingChecklist(cl)}>
                               <td style={s.td}>{cl.date}</td>
                               <td style={s.td}><strong>{cl.unit}</strong></td>
+                              <td style={s.td}><span style={{ fontSize: 12 }}>{cl.procedure}</span></td>
                               <td style={s.td}>{cl.inspector}</td>
-                              <td style={s.td}>{rKeys.length}/{totalItems}</td>
-                              <td style={s.td}><span style={s.badge(T.successDim, T.success)}>{passed}</span></td>
-                              <td style={s.td}>{failed > 0 ? <span style={s.badge(T.dangerDim, T.danger)}>{failed}</span> : <span style={{ color: T.dim }}>0</span>}</td>
+                              <td style={s.td}><span style={s.badge(resultBg, resultColor)}>{cl.overallResult || "Complete"}</span></td>
                               <td style={s.td}><button style={s.btn("ghost")}>View</button></td>
                             </tr>
                           );
@@ -4242,14 +4240,23 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
             {/* View completed checklist */}
             {viewingChecklist && (
               <div>
-                <button style={{ ...s.btn("ghost"), marginBottom: 16 }} onClick={() => setViewingChecklist(null)}>&larr; Back to Procedures</button>
+                <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                  <button style={s.btn("ghost")} onClick={() => setViewingChecklist(null)}>&larr; Back to Procedures</button>
+                  {isAdmin && !editingChecklist && (
+                    <button style={s.btn()} onClick={() => {
+                      setActiveChecklist({ ...viewingChecklist, procedureId: viewingChecklist.procedureId });
+                      setEditingChecklist(true);
+                      setViewingChecklist(null);
+                    }}>Edit Checklist</button>
+                  )}
+                </div>
                 <div style={s.card}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 17 }}>Completed: {viewingChecklist.procedure}</div>
+                      <div style={{ fontWeight: 700, fontSize: 17 }}>{viewingChecklist.procedure}</div>
                       <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Unit {viewingChecklist.unit} &middot; {viewingChecklist.inspector} &middot; {viewingChecklist.date}</div>
                     </div>
-                    <span style={s.badge(T.successDim, T.success)}>Complete</span>
+                    <span style={s.badge(T.successDim, T.success)}>{viewingChecklist.overallResult || "Complete"}</span>
                   </div>
                   {currentProc.sections.map((sec, si) => {
                     const secItems = sec.items.map((item, ii) => ({ ...item, key: `${si}-${ii}`, response: viewingChecklist.responses[`${si}-${ii}`] }));
@@ -4382,33 +4389,53 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
 
                 {/* Actions */}
                 <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-                  <button style={s.btn()} onClick={() => {
+                  <button style={s.btn()} onClick={async () => {
                     const result = failedCount > 0 ? "Fail" : "Pass";
-                    // Save to history
-                    setChecklistHistory(prev => [{ ...activeChecklist, completedAt: new Date().toISOString(), overallResult: result }, ...prev]);
-                    // Also create an inspection record if onSchedule exists
-                    if (onSchedule) {
-                      const resident = LIVE_RESIDENTS.find(r => r.unit === activeChecklist.unit);
-                      onSchedule({
-                        id: `UI-${Date.now()}`,
-                        unit: activeChecklist.unit,
-                        propertyId: resident?.propertyId || LIVE_PROPERTIES[0]?.id || "wharf",
-                        category: currentProc.name,
-                        date: activeChecklist.date,
-                        inspector: activeChecklist.inspector,
-                        result,
-                        score: `${answeredCount}/${totalItems}`,
-                        failedItems: Object.entries(resp).filter(([, r]) => r.value === "No" || r.value === "Fail" || r.value === "Flag").map(([k]) => {
-                          const [si2, ii2] = k.split("-").map(Number);
-                          return currentProc.sections[si2]?.items[ii2]?.text || k;
-                        }),
-                        notes: `Checklist ${activeChecklist.id}: ${answeredCount}/${totalItems} items completed, ${failedCount} failed`,
-                      });
-                    }
+                    try {
+                      if (editingChecklist && activeChecklist._uuid && onUpdateChecklist) {
+                        // Update existing checklist in Supabase
+                        await onUpdateChecklist(activeChecklist._uuid, {
+                          responses: activeChecklist.responses,
+                          overallResult: result,
+                        });
+                        showSuccess("Checklist updated!");
+                      } else if (onSaveChecklist) {
+                        // Save new checklist to Supabase
+                        await onSaveChecklist({
+                          ...activeChecklist,
+                          procedureId: activeChecklist.procedureId || currentProc.id,
+                          procedure: currentProc.name,
+                          overallResult: result,
+                        });
+                        // Also create an inspection record
+                        if (onSchedule) {
+                          const resident = LIVE_RESIDENTS.find(r => r.unit === activeChecklist.unit);
+                          onSchedule({
+                            id: `UI-${Date.now()}`,
+                            unit: activeChecklist.unit,
+                            propertyId: resident?.propertyId || LIVE_PROPERTIES[0]?.id || "wharf",
+                            category: currentProc.name,
+                            date: activeChecklist.date,
+                            inspector: activeChecklist.inspector,
+                            result,
+                            score: `${answeredCount}/${totalItems}`,
+                            failedItems: Object.entries(resp).filter(([, r]) => r.value === "No" || r.value === "Fail" || r.value === "Flag").map(([k]) => {
+                              const [si2, ii2] = k.split("-").map(Number);
+                              return currentProc.sections[si2]?.items[ii2]?.text || k;
+                            }),
+                            notes: `Checklist ${activeChecklist.id}: ${answeredCount}/${totalItems} items completed, ${failedCount} failed`,
+                          });
+                        }
+                        showSuccess(`Inspection checklist completed — ${result}`);
+                      }
+                    } catch (err) { showSuccess("Error: " + err.message); }
                     setActiveChecklist(null);
-                    showSuccess(`Inspection checklist completed — ${result}`);
-                  }}>Complete & Save ({progressPct}% done)</button>
-                  <button style={s.btn("ghost")} onClick={() => { if (confirm("Discard this checklist? All responses will be lost.")) setActiveChecklist(null); }}>Discard</button>
+                    setEditingChecklist(false);
+                  }}>{editingChecklist ? "Update Checklist" : `Complete & Save (${progressPct}% done)`}</button>
+                  <button style={s.btn("ghost")} onClick={() => {
+                    if (editingChecklist) { setActiveChecklist(null); setEditingChecklist(false); }
+                    else if (confirm("Discard this checklist? All responses will be lost.")) setActiveChecklist(null);
+                  }}>{editingChecklist ? "Cancel" : "Discard"}</button>
                 </div>
               </div>
             )}
@@ -6327,6 +6354,7 @@ export default function App() {
   const [vendors, setVendors] = useState([]);
   const [unitInspections, setUnitInspections] = useState([]);
   const [allUnits, setAllUnits] = useState([]);
+  const [savedChecklists, setSavedChecklists] = useState([]);
   const [staffMembers, setStaffMembers] = useState([]);
   const [emergencyContacts, setEmergencyContacts] = useState({});
   const [adminNotes, setAdminNotes] = useState({});
@@ -6352,11 +6380,11 @@ export default function App() {
   const reloadData = useCallback(async () => {
     try {
       const safe = (fn) => fn().catch(err => { console.warn('Fetch failed:', err.message); return null; });
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes, aUnits] = await Promise.all([
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes, aUnits, checklists] = await Promise.all([
         safe(fetchProperties), safe(fetchResidents), safe(fetchResidentsExtended), safe(fetchLeaseDocsByResident),
         safe(fetchRentLedger), safe(fetchMaintenanceRequests), safe(fetchVendors),
         safe(fetchUnitInspections), safe(fetchRegInspections), safe(fetchThreads), safe(fetchMessages),
-        safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers), safe(fetchAdminNotes), safe(fetchAllUnits),
+        safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers), safe(fetchAdminNotes), safe(fetchAllUnits), safe(fetchInspectionChecklists),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
@@ -6368,6 +6396,7 @@ export default function App() {
       setVendors(vend || []);
       setUnitInspections(uInsp || []);
       setAllUnits(aUnits || []);
+      setSavedChecklists(checklists || []);
       setStaffMembers(staff || []);
       setThreads(thr || []);
       setMessages(msgs || []);
@@ -6655,7 +6684,7 @@ export default function App() {
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
-        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} />;
+        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
