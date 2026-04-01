@@ -2003,6 +2003,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
         filteredCerts.length === 0 ? <EmptyState icon="📋" text="No income certifications yet. Start one for a resident above." /> : (
         <SortableTable mobile={mobile} keyField="id" onRowClick={(row) => { setActiveCert(row); loadCertData(row); setStep(0); }} columns={[
           { key: "residentName", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+          { key: "propertySlug", label: "Property", render: v => { const p = LIVE_PROPERTIES.find(pr => pr.id === v); return <span style={{ fontWeight: 600 }}>{p?.name || v || "—"}</span>; }, filterOptions: [...new Set(filteredCerts.map(c => c.propertySlug).filter(Boolean))], filterValue: row => row.propertySlug },
           { key: "unit", label: "Unit" },
           { key: "certType", label: "Type", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span> },
           { key: "effectiveDate", label: "Effective Date" },
@@ -3809,6 +3810,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 mobile={mobile}
                 columns={[
                   { key: "date", label: "Date" },
+                  { key: "propertyId", label: "Property", render: v => { const p = LIVE_PROPERTIES.find(pr => pr.id === v); return <span style={{ fontWeight: 600 }}>{p?.name || v || "—"}</span>; } },
                   { key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
                   { key: "category", label: "Category", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span> },
                   { key: "inspector", label: "Inspector" },
@@ -3839,7 +3841,10 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
             mobile={mobile}
             columns={[
               { key: "date", label: "Date" },
-              ...(isResident ? [] : [{ key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> }]),
+              ...(isResident ? [] : [
+                { key: "propertyId", label: "Property", render: v => { const p = LIVE_PROPERTIES.find(pr => pr.id === v); return <span style={{ fontWeight: 600 }}>{p?.name || v || "—"}</span>; }, filterOptions: [...new Set(unitData.map(i => i.propertyId).filter(Boolean))], filterValue: row => row.propertyId },
+                { key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+              ]),
               { key: "category", label: "Category", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span>, filterOptions: catNames, filterValue: row => row.category },
               { key: "inspector", label: "Inspector" },
               { key: "result", label: "Result", render: (v, row) => {
