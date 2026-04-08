@@ -6489,7 +6489,7 @@ const LoginPage = () => {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bg, padding: 20 }}>
       <div style={{ ...s.card, maxWidth: 420, width: "100%", padding: 32, textAlign: "center" }}>
-        <div style={{ fontSize: 28, fontWeight: 800, color: T.accent, marginBottom: 4 }}>BCLT Portal</div>
+        <div style={{ fontSize: 28, fontWeight: 800, color: T.accent, marginBottom: 4 }}>BCLT Resident Portal</div>
         <div style={{ fontSize: 13, color: T.muted, marginBottom: 28 }}>Bolinas Community Land Trust</div>
         {sent ? (
           <div>
