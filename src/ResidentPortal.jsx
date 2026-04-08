@@ -6597,7 +6597,7 @@ const PublicMaintenanceForm = ({ unitId, mobile, themeVars }) => {
     <div style={{ minHeight: "100vh", background: "#f5f7f9", padding: mobile ? "20px 16px" : "40px 20px" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontWeight: 800, fontSize: 20, color: "#2563eb", marginBottom: 4 }}>BCLT Portal</div>
+          <div style={{ fontWeight: 800, fontSize: 20, color: "#2563eb", marginBottom: 4 }}>BCLT Resident Portal</div>
           <h1 style={{ margin: "0 0 4px", fontSize: mobile ? 22 : 26 }}>Maintenance Request</h1>
           {unitInfo && <p style={{ color: "#666", fontSize: 14, margin: 0 }}>{unitInfo.properties?.name || ""} — Unit {unitInfo.number}</p>}
           {!unitInfo && <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Unit: {unitId}</p>}
@@ -7040,7 +7040,7 @@ export default function App() {
     <>
       <div style={{ padding: "20px 18px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: T.accent, letterSpacing: "-0.3px" }}>BCLT Portal</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.accent, letterSpacing: "-0.3px" }}>BCLT Resident Portal</div>
           <div style={{ fontSize: 11, color: T.dim, marginTop: 2 }}>Resident Management</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -7120,7 +7120,7 @@ export default function App() {
       {/* MOBILE TOP BAR */}
       {mobile && (
         <div data-print-hide style={{ position: "sticky", top: 0, zIndex: 900, background: T.surface, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", height: 56, flexShrink: 0 }}>
-          <div style={{ fontWeight: 800, color: T.accent, fontSize: 15 }}>BCLT Portal</div>
+          <div style={{ fontWeight: 800, color: T.accent, fontSize: 15 }}>BCLT Resident Portal</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button onClick={() => setDarkMode(d => !d)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", padding: 4, minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }} title={darkMode ? "Light mode" : "Dark mode"}>{darkMode ? "☀️" : "🌙"}</button>
             <NotificationBell count={unreadCount} onClick={() => setShowNotifPanel(!showNotifPanel)} mobile={mobile} />
