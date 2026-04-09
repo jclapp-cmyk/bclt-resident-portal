@@ -3772,13 +3772,21 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 };
 
 // --- INSPECTIONS (All Roles — Unified) ---
-const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [], savedChecklists = [], onSaveChecklist, onUpdateChecklist }) => {
+const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [], savedChecklists = [], onSaveChecklist, onUpdateChecklist, staffMembers = [] }) => {
+  const inspectorOptions = React.useMemo(() => {
+    const list = (staffMembers || [])
+      .filter(s => s && s.active !== false && (s.role === "admin" || s.role === "maintenance" || s.role === "property_manager"))
+      .map(s => s.name)
+      .filter(Boolean);
+    const unique = Array.from(new Set(list));
+    return unique.length ? unique : ["External Vendor"];
+  }, [staffMembers]);
   const isResident = role === "resident";
   const isAdmin = role === "admin";
   const tabs = isResident ? null : isAdmin ? ["Schedule", "Unit History", "Procedures", "Regulatory", "Categories"] : ["Unit History", "Procedures", "Categories", "My Assigned"];
   const [tab, setTab] = useState(isResident ? null : tabs[0]);
   const [success, showSuccess] = useSuccess();
-  const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
+  const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "", notify: "Yes — 48hr notice" });
   const [selectedInsp, setSelectedInsp] = useState(null);
   const [updateForm, setUpdateForm] = useState({ result: "", score: "", failedItems: "", notes: "" });
   const [activeChecklist, setActiveChecklist] = useState(null);
@@ -3840,7 +3848,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
               <div><label style={s.label}>Date</label><input style={s.mInput(mobile)} type="date" value={schedForm.date} onChange={e => setSchedForm(p => ({ ...p, date: e.target.value }))} /></div>
             </div>
             <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-              <div><label style={s.label}>Inspector</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.inspector} onChange={e => setSchedForm(p => ({ ...p, inspector: e.target.value }))}><option>Mike R.</option><option>External Vendor</option></select></div>
+              <div><label style={s.label}>Inspector</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.inspector} onChange={e => setSchedForm(p => ({ ...p, inspector: e.target.value }))}>{inspectorOptions.map(n => <option key={n} value={n}>{n}</option>)}<option value="External Vendor">External Vendor</option></select></div>
               <div><label style={s.label}>Notify Resident</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.notify} onChange={e => setSchedForm(p => ({ ...p, notify: e.target.value }))}><option>Yes — 48hr notice</option><option>Yes — 24hr notice</option><option>No notification</option></select></div>
             </div>
             <button style={s.btn()} onClick={() => {
@@ -3858,7 +3866,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 failedItems: [],
                 notes: `Notification: ${schedForm.notify}`,
               });
-              setSchedForm({ category: "", unit: "", date: "", inspector: "Mike R.", notify: "Yes — 48hr notice" });
+              setSchedForm({ category: "", unit: "", date: "", inspector: "", notify: "Yes — 48hr notice" });
               showSuccess("Inspection scheduled!");
             }}>Schedule Inspection</button>
           </div>
@@ -4232,8 +4240,8 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                       <div style={{ flex: 1, minWidth: 150 }}>
                         <label style={s.label}>Inspector</label>
                         <select id="proc-inspector" style={{ ...s.mSelect(mobile), width: "100%" }}>
-                          <option>Mike R.</option>
-                          <option>External Vendor</option>
+                          {inspectorOptions.map(n => <option key={n} value={n}>{n}</option>)}
+                          <option value="External Vendor">External Vendor</option>
                         </select>
                       </div>
                       <div style={{ flex: 1, minWidth: 150 }}>
@@ -6990,7 +6998,7 @@ export default function App() {
         case "rent": return <RentPayments mobile={mobile} rc={rc} />;
         case "recert": return <IncomeCertification role="resident" mobile={mobile} selectedProperty={selectedProperty} rc={rc} pushNotif={pushNotif} />;
         case "unit": return <UnitDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} rc={rc} />;
-        case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} rc={rc} />;
+        case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} rc={rc} staffMembers={staffMembers} />;
         case "profile": return <ResidentProfile mobile={mobile} commPrefs={commPrefs} setCommPrefs={setCommPrefs} emergencyContacts={emergencyContacts} onUpdateEmergencyContacts={updateEmergencyContacts} rc={rc} />;
         case "messages": return <Communications role="resident" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={myThreads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} rc={rc} />;
         default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} rc={rc} />;
@@ -7009,7 +7017,7 @@ export default function App() {
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
-        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
+        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
@@ -7024,7 +7032,7 @@ export default function App() {
       switch (page) {
         case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} />;
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} />;
-        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} />;
+        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} />;
