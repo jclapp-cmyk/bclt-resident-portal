@@ -448,23 +448,23 @@ export async function deleteLeaseFile(path) {
   if (error) throw error;
 }
 
-// ── INSPECTION ATTACHMENTS (reuses lease-documents bucket under inspections/) ──
+// ── INSPECTION ATTACHMENTS (dedicated inspection-attachments bucket) ──
 
 export async function uploadInspectionAttachment(file, checklistId, itemKey) {
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = `inspections/${checklistId}/${itemKey}/${Date.now()}_${safeName}`;
-  const { error } = await supabase.storage.from('lease-documents').upload(path, file);
+  const path = `${checklistId}/${itemKey}/${Date.now()}_${safeName}`;
+  const { error } = await supabase.storage.from('inspection-attachments').upload(path, file);
   if (error) throw error;
   return { path, name: file.name };
 }
 
 export async function getInspectionAttachmentUrl(path) {
-  const { data } = await supabase.storage.from('lease-documents').createSignedUrl(path, 3600);
+  const { data } = await supabase.storage.from('inspection-attachments').createSignedUrl(path, 3600);
   return data?.signedUrl || null;
 }
 
 export async function deleteInspectionAttachment(path) {
-  const { error } = await supabase.storage.from('lease-documents').remove([path]);
+  const { error } = await supabase.storage.from('inspection-attachments').remove([path]);
   if (error) throw error;
 }
 
