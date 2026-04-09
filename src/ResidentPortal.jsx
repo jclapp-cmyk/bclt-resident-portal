@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -4452,6 +4452,41 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                                 value={r.notes || ""}
                                 onChange={e => setResp(key, "notes", e.target.value)}
                               />
+                              {/* Attachments */}
+                              <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                                {(r.attachments || []).map((att, ai) => (
+                                  <div key={ai} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+                                    <span style={{ color: T.dim }}>📎</span>
+                                    <a href="#" onClick={async e => {
+                                      e.preventDefault();
+                                      try {
+                                        const url = await getInspectionAttachmentUrl(att.path);
+                                        if (url) window.open(url, "_blank");
+                                      } catch (err) { showSuccess("Could not open attachment"); }
+                                    }} style={{ color: T.accent, textDecoration: "underline", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name}</a>
+                                    <button onClick={async () => {
+                                      try { await deleteInspectionAttachment(att.path); } catch (err) {}
+                                      const current = (activeChecklist.responses[key]?.attachments) || [];
+                                      setResp(key, "attachments", current.filter((_, idx) => idx !== ai));
+                                    }} style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
+                                  </div>
+                                ))}
+                                <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: T.accent, cursor: "pointer", fontWeight: 600 }}>
+                                  <span>+ Attach file</span>
+                                  <input type="file" style={{ display: "none" }} onChange={async e => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = "";
+                                    if (!file) return;
+                                    try {
+                                      const att = await uploadInspectionAttachment(file, activeChecklist.id, key);
+                                      const current = (activeChecklist.responses[key]?.attachments) || [];
+                                      setResp(key, "attachments", [...current, att]);
+                                    } catch (err) {
+                                      showSuccess("Upload failed: " + (err.message || "error"));
+                                    }
+                                  }} />
+                                </label>
+                              </div>
                             </div>
                           );
                         })}
