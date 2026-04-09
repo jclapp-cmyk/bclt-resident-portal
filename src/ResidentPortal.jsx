@@ -4355,6 +4355,19 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                                   )}>{item.response.value}</span>
                                 ) : <span style={{ fontSize: 12, color: T.dim }}>--</span>}
                                 {item.response?.notes && <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>{item.response.notes}</div>}
+                                {(item.response?.attachments || []).length > 0 && (
+                                  <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
+                                    {item.response.attachments.map((att, ai) => (
+                                      <a key={ai} href="#" onClick={async e => {
+                                        e.preventDefault();
+                                        try {
+                                          const url = await getInspectionAttachmentUrl(att.path);
+                                          if (url) window.open(url, "_blank");
+                                        } catch (err) {}
+                                      }} style={{ fontSize: 11, color: T.accent, textDecoration: "underline" }}>📎 {att.name}</a>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           ))}
