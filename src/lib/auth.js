@@ -33,27 +33,76 @@ export async function getCurrentSession() {
 }
 
 export async function fetchProfile(userId, userEmail) {
-  // Use secure server-side function to fetch and link profile
+  // Try RPC first (links the profile and returns enriched data)
   const { data, error } = await supabase.rpc('link_profile_on_login', {
     user_id: userId,
     user_email: userEmail,
   });
 
-  if (error || !data) {
-    console.warn('fetchProfile failed:', error?.message);
-    return null;
+  if (!error && data) {
+    return {
+      role: data.role,
+      email: data.email,
+      displayName: data.display_name,
+      residentId: data.resident_id,
+      residentSlug: data.resident_slug || null,
+      residentName: data.resident_name || null,
+      unit: data.unit_number || null,
+      propertySlug: data.property_slug || null,
+      propertyName: data.property_name || null,
+    };
   }
 
+  console.warn('RPC link_profile_on_login failed, using direct query fallback:', error?.message);
+
+  // Fallback: link profile by updating the id, then query directly
+  try {
+    // Try to claim the pre-created profile row by email
+    await supabase.from('user_profiles').update({ id: userId }).eq('email', userEmail).is('id', null);
+  } catch (e) { /* ignore — row may already be linked */ }
+
+  // Direct query — works with the fixed RLS policies (self-access)
+  const { data: profile, error: profileErr } = await supabase
+    .from('user_profiles')
+    .select('*, residents(name, slug, unit_number, properties(slug, name))')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profileErr || !profile) {
+    // Last resort: try matching by email
+    const { data: emailProfile } = await supabase
+      .from('user_profiles')
+      .select('*, residents(name, slug, unit_number, properties(slug, name))')
+      .eq('email', userEmail)
+      .maybeSingle();
+
+    if (!emailProfile) {
+      console.warn('fetchProfile fallback failed:', profileErr?.message);
+      return null;
+    }
+
+    // Link the profile to this auth user
+    await supabase.from('user_profiles').update({ id: userId }).eq('email', userEmail).catch(() => {});
+
+    return mapProfileRow(emailProfile);
+  }
+
+  return mapProfileRow(profile);
+}
+
+function mapProfileRow(row) {
+  const resident = row.residents;
+  const property = resident?.properties;
   return {
-    role: data.role,
-    email: data.email,
-    displayName: data.display_name,
-    residentId: data.resident_id,
-    residentSlug: data.resident_slug || null,
-    residentName: data.resident_name || null,
-    unit: data.unit_number || null,
-    propertySlug: data.property_slug || null,
-    propertyName: data.property_name || null,
+    role: row.role,
+    email: row.email,
+    displayName: row.display_name || row.email?.split('@')[0],
+    residentId: row.resident_id,
+    residentSlug: resident?.slug || null,
+    residentName: resident?.name || null,
+    unit: resident?.unit_number || null,
+    propertySlug: property?.slug || null,
+    propertyName: property?.name || null,
   };
 }
 
