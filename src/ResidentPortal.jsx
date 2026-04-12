@@ -1,31 +1,20 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchCommTemplates, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
 
 /* ═══════════════════════════════════════════════════════════
    BCLT RESIDENT PORTAL — Affordable Housing / Section 8
-   Full interactive prototype with mock data
+   Full interactive portal with Supabase backend
    Roles: Resident, Admin/Management, Maintenance Staff
    ═══════════════════════════════════════════════════════════ */
 
-// ── DATA DEFAULTS (empty — all real data comes from Supabase) ──
+// ── DATA DEFAULTS ──
 
-const MOCK_PROPERTIES = [];
-const MOCK_PROPERTY = {};
 const getProperty = (id) => LIVE_PROPERTIES.find(p => p.id === id || p._uuid === id) || LIVE_PROPERTIES[0] || {};
-const MOCK_UNIT = {};
-const MOCK_MAINTENANCE = [];
-const MOCK_PAYMENTS = [];
-const MOCK_RESIDENTS = [];
-const MOCK_THREADS = [];
-const MOCK_MESSAGES = [];
-const MOCK_COMM_TEMPLATES = [];
-const MOCK_RECERT = { status: 'not-started', deadline: '', anniversaryDate: '', stepsCompleted: {}, householdMembers: [], income: { total: 0 }, documents: [] };
-const MOCK_REG_INSPECTIONS = [];
-const MOCK_UNIT_INSPECTION_CATEGORIES = [
+const DEFAULT_UNIT_INSPECTION_CATEGORIES = [
   { id: 'cat-1', name: 'Move-In', description: 'Document unit condition at lease start', frequency: 'At move-in', scoring: 'pass-fail', active: true, checklist: ['Walls & paint condition', 'Flooring condition', 'Windows & screens', 'Doors & locks', 'Kitchen appliances', 'Bathroom fixtures', 'Plumbing', 'Electrical', 'Smoke/CO detectors', 'HVAC operation', 'Cleanliness', 'Exterior/patio'] },
   { id: 'cat-2', name: 'Move-Out', description: 'Assess unit condition at lease end', frequency: 'At move-out', scoring: 'pass-fail', active: true, checklist: ['Walls & paint condition', 'Flooring condition', 'Windows & screens', 'Doors & locks', 'Kitchen appliances', 'Bathroom fixtures', 'Plumbing', 'Electrical', 'Smoke/CO detectors', 'HVAC', 'Cleanliness', 'Damage beyond normal wear'] },
   { id: 'cat-3', name: 'Annual / Routine', description: 'Proactive check on unit condition and safety', frequency: 'Annually', scoring: 'pass-fail', active: true, checklist: ['Smoke detectors', 'CO detectors', 'Fire extinguisher', 'HVAC filter', 'Water heater', 'Plumbing leaks', 'Window locks', 'Door locks', 'Electrical panels', 'Pest evidence', 'Mold/moisture', 'General condition'] },
@@ -35,17 +24,9 @@ const MOCK_UNIT_INSPECTION_CATEGORIES = [
   { id: 'cat-7', name: 'Pest', description: 'Check for pest activity', frequency: 'Quarterly', scoring: 'pass-fail', active: true, checklist: ['Roach evidence', 'Bed bug evidence', 'Rodent evidence', 'Ant activity', 'Entry points sealed', 'Moisture issues'] },
   { id: 'cat-8', name: 'Seasonal / Preventive', description: 'HVAC, weatherization, plumbing', frequency: 'Seasonal', scoring: 'pass-fail', active: true, checklist: ['HVAC filter', 'HVAC operation', 'Weather stripping', 'Caulking', 'Pipe insulation', 'Gutter/drainage'] },
 ];
-const MOCK_UNIT_INSPECTIONS = [];
-const MOCK_VENDORS = [];
-const MOCK_COMM_PREFS = { preferredChannel: 'email', phone: '', email: '', quietHoursStart: '21:00', quietHoursEnd: '08:00', language: 'en' };
-const MOCK_EMERGENCY_CONTACTS = {};
-const MOCK_ADMIN_NOTES = {};
-const MOCK_RESIDENTS_EXTENDED = {};
-const MOCK_LEASE_DOCS = {};
-const MOCK_COMPLIANCE_DOCS = [];
-const MOCK_ONBOARDING = [];
-const MOCK_RENT_LEDGER = [];
-const MOCK_MONTHLY_REVENUE = [];
+const DEFAULT_COMM_PREFS = { preferredChannel: 'email', phone: '', email: '', quietHoursStart: '21:00', quietHoursEnd: '08:00', language: 'en' };
+const DEFAULT_LEASE_DOCS = {};
+const DEFAULT_ONBOARDING = [];
 const LEASE_DOC_TYPES = { lease: "Lease Agreement", addendum: "Addendum", notice: "Notice", income: "Income Verification", id: "ID/SSN", other: "Other" };
 
 const DEFAULT_SETTINGS = {
@@ -1134,8 +1115,6 @@ const RentPayments = ({ mobile, rc }) => {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [success, showSuccess] = useSuccess();
-  const [autopay, setAutopay] = useState(false);
-
   useEffect(() => {
     setLoadingHistory(true);
     fetchRentPayments().then(all => {
@@ -1190,7 +1169,7 @@ const RentPayments = ({ mobile, rc }) => {
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Rent & Payments</h1>
-      <p style={s.sectionSub}>View your balance, make payments, and manage autopay</p>
+      <p style={s.sectionSub}>View your balance and make payments</p>
       <SuccessMessage message={success} />
 
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
@@ -1198,29 +1177,6 @@ const RentPayments = ({ mobile, rc }) => {
         <StatCard label="Monthly Rent" value={`$${(_ext.rentAmount || 0).toLocaleString()}`} accent={T.accent} mobile={mobile} />
         <StatCard label="Your Portion" value={`$${(_ext.tenantPortion || 0).toLocaleString()}`} accent={T.accent} mobile={mobile} />
         <StatCard label="HAP Payment" value={`$${(_ext.hapPayment || 0).toLocaleString()}`} accent={T.info} mobile={mobile} />
-      </div>
-
-      {/* Autopay Card */}
-      <div style={{ ...s.card, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Autopay</div>
-            <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
-              {autopay
-                ? `$${(_ext.tenantPortion || 0).toLocaleString()} via ACH on the 1st of each month`
-                : "Automatically pay your rent each month — never miss a payment"}
-            </div>
-          </div>
-          <Toggle label="" checked={autopay} onChange={() => {
-            setAutopay(!autopay);
-            showSuccess(autopay ? "Autopay disabled" : "Autopay enabled — payment will process on the 1st of each month");
-          }} />
-        </div>
-        {autopay && (
-          <div style={{ marginTop: 12, padding: "10px 14px", background: T.successDim, borderRadius: 8, fontSize: 12, color: T.success, fontWeight: 600 }}>
-            Autopay is active. Your tenant portion of ${(_ext.tenantPortion || 0).toLocaleString()} will be drafted via ACH on the 1st. A payment processor must be connected to process payments.
-          </div>
-        )}
       </div>
 
       {/* Make Payment */}
@@ -2267,10 +2223,12 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Property Management</div>
-        <DetailRow label="Manager" value={LIVE_PROPERTIES[0]?.manager || "—"} />
-        <DetailRow label="Phone" value={LIVE_PROPERTIES[0]?.managerPhone || "—"} />
-        <DetailRow label="Email" value={LIVE_PROPERTIES[0]?.managerEmail || "—"} />
-        <DetailRow label="Office Hours" value={LIVE_PROPERTIES[0]?.officeHours || "—"} />
+        {(() => { const prop = getProperty(rc?.propertyId); return (<>
+          <DetailRow label="Manager" value={prop?.manager || "—"} />
+          <DetailRow label="Phone" value={prop?.managerPhone || "—"} />
+          <DetailRow label="Email" value={prop?.managerEmail || "—"} />
+          <DetailRow label="Office Hours" value={prop?.officeHours || "—"} />
+        </>); })()}
       </div>
       <LeaseDocumentsPanel docs={residentDocs} onUpload={handleUpload} canUpload={true} canDelete={false} residentSlug={rc?.id} />
     </div>
@@ -3759,7 +3717,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
   const overdueInsp = regInsp.filter(i => new Date(i.nextDue) < new Date()).length;
   const activeVendors = vendors.filter(v => v.active).length;
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
-  const revenueData = filterByProperty(MOCK_MONTHLY_REVENUE, selectedProperty);
+  const revenueData = filterByProperty([], selectedProperty);
   const monthLabels = [...new Set(revenueData.map(r => r.month))].sort();
   const trendPoints = monthLabels.map(m => revenueData.filter(r => r.month === m).reduce((s, r) => s + r.collected, 0));
 
@@ -3889,7 +3847,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
     ? LIVE_REG_INSPECTIONS.filter(i => i.propertyId === selectedProperty)
     : LIVE_REG_INSPECTIONS;
   const regDueSoon = regInsp.filter(i => new Date(i.nextDue) < new Date("2026-09-01")).length;
-  const catNames = [...new Set(MOCK_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => c.name))];
+  const catNames = [...new Set(DEFAULT_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => c.name))];
   const scheduled = unitInspections.filter(i => i.result === "Scheduled");
   const availableResidents = selectedProperty && selectedProperty !== "all"
     ? LIVE_RESIDENTS.filter(r => r.propertyId === selectedProperty)
@@ -3934,7 +3892,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
           <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Schedule New Inspection</div>
             <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
-              <div><label style={s.label}>Category</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.category} onChange={e => setSchedForm(p => ({ ...p, category: e.target.value }))}><option value="">Select...</option>{MOCK_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
+              <div><label style={s.label}>Category</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.category} onChange={e => setSchedForm(p => ({ ...p, category: e.target.value }))}><option value="">Select...</option>{DEFAULT_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
               <div><label style={s.label}>Unit</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option value="">Select unit...</option>{unitOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
               <div><label style={s.label}>Date</label><input style={s.mInput(mobile)} type="date" value={schedForm.date} onChange={e => setSchedForm(p => ({ ...p, date: e.target.value }))} /></div>
             </div>
@@ -4686,7 +4644,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
         <div>
           {isAdmin && <button style={{ ...s.btn(), marginBottom: 16 }}>+ Add Category</button>}
           <div style={s.grid("1fr 1fr", mobile)}>
-            {MOCK_UNIT_INSPECTION_CATEGORIES.map(cat => (
+            {DEFAULT_UNIT_INSPECTION_CATEGORIES.map(cat => (
               <div key={cat.id} style={{ ...s.card, opacity: cat.active ? 1 : 0.5, borderLeft: `3px solid ${cat.active ? T.accent : T.dim}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <span style={{ fontWeight: 700, fontSize: 15 }}>{cat.name}</span>
@@ -4700,7 +4658,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 </div>
                 {isAdmin && (
                   <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button style={s.btn("ghost")} onClick={() => { const idx = MOCK_UNIT_INSPECTION_CATEGORIES.findIndex(c => c.id === cat.id); if (idx >= 0) MOCK_UNIT_INSPECTION_CATEGORIES[idx].active = !cat.active; showSuccess(cat.active ? `${cat.name} deactivated` : `${cat.name} activated`); }}>{cat.active ? "Deactivate" : "Activate"}</button>
+                    <button style={s.btn("ghost")} onClick={() => { const idx = DEFAULT_UNIT_INSPECTION_CATEGORIES.findIndex(c => c.id === cat.id); if (idx >= 0) DEFAULT_UNIT_INSPECTION_CATEGORIES[idx].active = !cat.active; showSuccess(cat.active ? `${cat.name} deactivated` : `${cat.name} activated`); }}>{cat.active ? "Deactivate" : "Activate"}</button>
                     <button style={s.btn("ghost")} onClick={() => alert(`Checklist for ${cat.name}:\n\n${cat.checklist.map((c, i) => `${i + 1}. ${c}`).join("\n")}`)}> View Checklist</button>
                   </div>
                 )}
@@ -4934,7 +4892,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   }
 
   const handleTemplateSelect = (tplId) => {
-    const tpl = MOCK_COMM_TEMPLATES.find(t => t.id === tplId);
+    const tpl = [].find(t => t.id === tplId);
     if (tpl) setComposeData(prev => ({ ...prev, body: tpl.body, subject: tpl.subject || prev.subject, channel: tpl.channel === "multi" ? "auto" : tpl.channel, template: tplId }));
   };
 
@@ -5030,7 +4988,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               <label style={s.label}>Use Template</label>
               <select style={{ ...s.mSelect(mobile), width: "100%" }} value={composeData.template} onChange={e => handleTemplateSelect(e.target.value)}>
                 <option value="">None</option>
-                {MOCK_COMM_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {[].map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
           </div>
@@ -5112,7 +5070,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             <div />
             <button style={s.btn()}>+ New Template</button>
           </div>
-          {MOCK_COMM_TEMPLATES.map(tpl => {
+          {[].map(tpl => {
             const chBadge = CHANNEL_BADGES[tpl.channel] || CHANNEL_BADGES.portal;
             return (
               <div key={tpl.id} style={s.card}>
@@ -5910,7 +5868,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
 };
 
 // --- CALENDAR EVENTS BUILDER ---
-const buildCalendarEvents = (maintenance, vendors, unitInspections) => {
+const buildCalendarEvents = (maintenance, vendors, unitInspections, threads = []) => {
   const events = [];
   const add = (date, type, icon, color, label, description, sourcePage) => {
     if (date) events.push({ date: date.slice(0, 10), type, icon, color, label, description, sourcePage });
@@ -5935,7 +5893,7 @@ const buildCalendarEvents = (maintenance, vendors, unitInspections) => {
     add(v.coiExp, "vendor", "📇", T.accent, `COI Expiry: ${v.company}`, `Certificate of Insurance`, "vendors");
   });
   // Community events from broadcasts
-  MOCK_THREADS.filter(t => t.type === "broadcast").forEach(t => {
+  threads.filter(t => t.type === "broadcast").forEach(t => {
     const match = t.subject.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})/i);
     let d = t.lastDate.slice(0, 10);
     if (match) {
@@ -6096,7 +6054,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const totalCollected = ledger.reduce((sum, r) => sum + r.tenantPaid + r.hapReceived, 0);
   const collectionRate = monthlyRentRoll ? Math.round((totalCollected / monthlyRentRoll) * 100) : 0;
   const delinquent = ledger.filter(r => r.balance > 0);
-  const revenueData = filterByProperty(MOCK_MONTHLY_REVENUE, selectedProperty);
+  const revenueData = filterByProperty([], selectedProperty);
   const monthLabels = [...new Set(revenueData.map(r => r.month))].sort();
   const trendPoints = monthLabels.map(m => revenueData.filter(r => r.month === m).reduce((s, r) => s + r.collected, 0));
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
@@ -6467,7 +6425,7 @@ const PrintButton = ({ mobile }) => (
 );
 
 const OnboardingChecklist = ({ mobile, selectedProperty, initialRecords }) => {
-  const [records, setRecords] = useState(initialRecords || MOCK_ONBOARDING);
+  const [records, setRecords] = useState(initialRecords || DEFAULT_ONBOARDING);
   const tabs = ["Active", "Completed", "New"];
   const [tab, setTab] = useState(tabs[0]);
   const [newResident, setNewResident] = useState("");
@@ -6812,11 +6770,10 @@ export default function App() {
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [roleOverride, setRoleOverride] = useState(null);
-  const role = roleOverride || profile?.role || "resident";
+  const role = profile?.role || "resident";
   const [page, setPage] = useState("dashboard");
-  const [commPrefs, setCommPrefs] = useState(MOCK_COMM_PREFS);
-  const [leaseDocs, setLeaseDocs] = useState(MOCK_LEASE_DOCS);
+  const [commPrefs, setCommPrefs] = useState(DEFAULT_COMM_PREFS);
+  const [leaseDocs, setLeaseDocs] = useState(DEFAULT_LEASE_DOCS);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [maintenance, setMaintenance] = useState([]);
   const [threads, setThreads] = useState([]);
@@ -7019,11 +6976,11 @@ export default function App() {
       if (onboard && onboard.length) setOnboardingData(onboard);
     } catch (err) {
       console.warn('Reset fetch failed:', err);
-      setLeaseDocs(MOCK_LEASE_DOCS);
+      setLeaseDocs(DEFAULT_LEASE_DOCS);
     }
     // Reset non-Supabase state to mocks (only state not fetched above)
     setEmergencyContacts({}); setAdminNotes({});
-    setCommPrefs(MOCK_COMM_PREFS); setSettings(DEFAULT_SETTINGS); setPage("dashboard");
+    setCommPrefs(DEFAULT_COMM_PREFS); setSettings(DEFAULT_SETTINGS); setPage("dashboard");
   };
 
   // Notification-aware wrappers
@@ -7097,12 +7054,6 @@ export default function App() {
   } else {
     navBadges.messages = threads.filter(t => t.unread > 0 && (t.participants.includes(residentCtx?.id || "") || t.type === "broadcast")).length;
   }
-
-  const handleRoleChange = useCallback((newRole) => {
-    setRoleOverride(newRole === profile?.role ? null : newRole);
-    setPage("dashboard");
-    setSidebarOpen(false);
-  }, [profile]);
 
   const handleNav = (id) => {
     setPage(id);
