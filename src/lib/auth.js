@@ -33,7 +33,7 @@ export async function getCurrentSession() {
 }
 
 export async function fetchProfile(userId, userEmail) {
-  // Try the single-param RPC first (uses auth.uid() server-side)
+  // RPC links the profile (swaps placeholder UUID → real auth.uid) and returns enriched data
   const { data, error } = await supabase.rpc('link_profile_on_login', {
     user_email: userEmail,
   });
@@ -52,31 +52,9 @@ export async function fetchProfile(userId, userEmail) {
     };
   }
 
-  console.warn('RPC link_profile_on_login failed, trying legacy two-param version:', error?.message);
+  console.warn('RPC link_profile_on_login failed:', error?.message);
 
-  // Fallback: try the old two-param version (in case DB hasn't been updated yet)
-  const { data: data2, error: error2 } = await supabase.rpc('link_profile_on_login', {
-    user_id: userId,
-    user_email: userEmail,
-  });
-
-  if (!error2 && data2) {
-    return {
-      role: data2.role,
-      email: data2.email,
-      displayName: data2.display_name,
-      residentId: data2.resident_id,
-      residentSlug: data2.resident_slug || null,
-      residentName: data2.resident_name || null,
-      unit: data2.unit_number || null,
-      propertySlug: data2.property_slug || null,
-      propertyName: data2.property_name || null,
-    };
-  }
-
-  console.warn('Both RPC versions failed, using direct query fallback:', error2?.message);
-
-  // Last resort: direct query (works if profile id already matches auth.uid)
+  // Fallback: direct query (works if profile was already linked by trigger or invite_user RPC)
   const { data: profile } = await supabase
     .from('user_profiles')
     .select('*, residents(name, slug, unit_number, properties(slug, name))')
@@ -125,22 +103,36 @@ export async function fetchUserProfiles() {
 }
 
 export async function inviteUser(email, role, residentId, displayName) {
-  // Insert profile row with placeholder UUID — will be linked on first sign-in via fetchProfile
-  const placeholderId = crypto.randomUUID();
-  const { error: insertErr } = await supabase.from('user_profiles').insert({
-    id: placeholderId,
-    email,
-    role,
-    resident_id: residentId || null,
-    display_name: displayName || email.split('@')[0],
-  });
-  if (insertErr) throw insertErr;
-
-  // Send magic link invite email so the user can sign in
+  // Send magic link first — this creates the auth.users entry in Supabase
   const redirectTo = window.location.origin;
   const { error: otpErr } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: redirectTo },
+    options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
   });
   if (otpErr) console.warn('Invite email failed:', otpErr.message);
+
+  // Small delay to let auth.users entry be created
+  await new Promise(r => setTimeout(r, 500));
+
+  // Create profile via SECURITY DEFINER RPC — it looks up the real auth.users ID
+  const { data, error: rpcErr } = await supabase.rpc('invite_user', {
+    invite_email: email,
+    invite_role: role,
+    invite_resident_id: residentId || null,
+    invite_display_name: displayName || email.split('@')[0],
+  });
+
+  if (rpcErr) {
+    // Fallback: insert with placeholder (will be linked on first login)
+    console.warn('invite_user RPC failed, using fallback:', rpcErr.message);
+    const placeholderId = crypto.randomUUID();
+    const { error: insertErr } = await supabase.from('user_profiles').insert({
+      id: placeholderId,
+      email,
+      role,
+      resident_id: residentId || null,
+      display_name: displayName || email.split('@')[0],
+    });
+    if (insertErr) throw insertErr;
+  }
 }
