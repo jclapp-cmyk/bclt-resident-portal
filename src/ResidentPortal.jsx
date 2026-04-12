@@ -6855,17 +6855,31 @@ export default function App() {
 
   // Auth: check session on mount, listen for changes
   useEffect(() => {
+    const loadProfile = async (user) => {
+      setAuthUser(user);
+      // Try up to 3 times with a small delay — handles race condition
+      // where auth.uid() isn't available in the RPC on first attempt
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const p = await fetchProfile(user.id, user.email);
+        if (p) {
+          setProfile(p);
+          reloadData(); // Reload data now that we're authenticated
+          return;
+        }
+        if (attempt < 2) await new Promise(r => setTimeout(r, 500));
+      }
+      console.warn('Profile load failed after 3 attempts for', user.email);
+    };
+
     getCurrentSession().then(session => {
       if (session?.user) {
-        setAuthUser(session.user);
-        fetchProfile(session.user.id, session.user.email).then(p => { if (p) setProfile(p); });
+        loadProfile(session.user);
       }
       setAuthLoading(false);
     });
     const { data: { subscription } } = onAuthStateChange(session => {
       if (session?.user) {
-        setAuthUser(session.user);
-        fetchProfile(session.user.id, session.user.email).then(p => { if (p) setProfile(p); });
+        loadProfile(session.user);
       } else {
         setAuthUser(null);
         setProfile(null);
