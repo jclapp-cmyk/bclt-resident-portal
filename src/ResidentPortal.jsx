@@ -2586,7 +2586,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 const newStatus = ext.status === "inactive" ? "active" : "inactive";
                 try {
                   await updateResident(selectedResident._uuid, { status: newStatus });
-                  await reloadData();
+                  if (onDataChanged) await onDataChanged();
                   showSuccess(`Resident ${newStatus === "active" ? "reactivated" : "deactivated"}`);
                 } catch (err) {
                   console.warn(err);
