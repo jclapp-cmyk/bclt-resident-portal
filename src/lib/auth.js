@@ -1,19 +1,15 @@
 import { supabase } from './supabase';
 
 export async function signInWithMagicLink(email) {
-  // Check if email exists using secure server-side function (no table data exposed)
-  const { data: exists, error: checkErr } = await supabase.rpc('check_email_exists', { lookup_email: email });
-
-  if (checkErr || !exists) {
-    throw new Error("No account found for this email address. Contact your property manager.");
-  }
-
+  // C4 fix: Don't check email existence — just call signInWithOtp directly.
+  // Supabase shows a generic message regardless, so no information is leaked.
   const redirectTo = window.location.origin;
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: redirectTo },
   });
   if (error) throw error;
+  // Always show a generic message to the caller
 }
 
 export async function signOut() {
@@ -103,16 +99,22 @@ export async function fetchUserProfiles() {
 }
 
 export async function inviteUser(email, role, residentId, displayName) {
-  // Send magic link first — this creates the auth.users entry in Supabase
+  let warning = null;
+
+  // C1 fix: Call signInWithOtp first (creates auth.users entry), then RPC.
+  // No sleep — if RPC fails because auth.users doesn't exist yet, fall back
+  // to placeholder UUID (trigger and login RPC will handle linking later).
   const redirectTo = window.location.origin;
   const { error: otpErr } = await supabase.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
   });
-  if (otpErr) console.warn('Invite email failed:', otpErr.message);
 
-  // Small delay to let auth.users entry be created
-  await new Promise(r => setTimeout(r, 500));
+  // C2 fix: If OTP fails, still create the profile but capture the warning
+  // so the caller can show it to the user.
+  if (otpErr) {
+    warning = `Invite email could not be sent: ${otpErr.message}. The user profile was still created — they can request a login link manually.`;
+  }
 
   // Create profile via SECURITY DEFINER RPC — it looks up the real auth.users ID
   const { data, error: rpcErr } = await supabase.rpc('invite_user', {
@@ -123,7 +125,7 @@ export async function inviteUser(email, role, residentId, displayName) {
   });
 
   if (rpcErr) {
-    // Fallback: insert with placeholder (will be linked on first login)
+    // Fallback: insert with placeholder UUID (will be linked on first login)
     console.warn('invite_user RPC failed, using fallback:', rpcErr.message);
     const placeholderId = crypto.randomUUID();
     const { error: insertErr } = await supabase.from('user_profiles').insert({
@@ -135,4 +137,6 @@ export async function inviteUser(email, role, residentId, displayName) {
     });
     if (insertErr) throw insertErr;
   }
+
+  return { warning };
 }

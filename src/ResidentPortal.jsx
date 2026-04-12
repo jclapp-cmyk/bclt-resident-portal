@@ -5335,15 +5335,19 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
     setInviting(true);
     try {
       const displayName = [inviteForm.firstName, inviteForm.lastName].filter(Boolean).join(" ") || null;
-      const userRole = inviteForm.role === "property_manager" ? "admin" : inviteForm.role;
-      await inviteUser(inviteForm.email, userRole, inviteForm.residentId || null, displayName);
+      const userRole = inviteForm.role;
+      const result = await inviteUser(inviteForm.email, userRole, inviteForm.residentId || null, displayName);
       // Also create staff record for non-resident roles
       if (inviteForm.role !== "resident" && displayName) {
         try {
           await insertStaffMember({ name: displayName, role: inviteForm.role, email: inviteForm.email, phone: inviteForm.phone || "", propertyId: inviteForm.propertyId || "" });
         } catch (staffErr) { /* staff record is supplementary, don't block */ }
       }
-      showSuccess(`${displayName || inviteForm.email} added and invite sent`);
+      if (result?.warning) {
+        showSuccess(`${displayName || inviteForm.email} added. Warning: ${result.warning}`);
+      } else {
+        showSuccess(`${displayName || inviteForm.email} added and invite sent`);
+      }
       setInviteForm({ email: "", role: "resident", residentId: "", firstName: "", lastName: "", phone: "", propertyId: "" });
       // Refresh user list
       const data = await fetchUserProfiles();
@@ -5387,9 +5391,8 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                 <label style={s.label}>Role</label>
                 <select style={{ ...s.mSelect(mobile), width: "100%" }} value={inviteForm.role} onChange={e => setInviteForm(p => ({ ...p, role: e.target.value }))}>
                   <option value="resident">Resident</option>
-                  <option value="admin">Admin</option>
+                  <option value="admin">Admin / Property Manager</option>
                   <option value="maintenance">Maintenance Staff</option>
-                  <option value="property_manager">Property Manager</option>
                 </select>
               </div>
               <div>
@@ -5441,7 +5444,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                       <td style={s.td}><span style={{ fontWeight: 600 }}>{lastName}</span></td>
                       <td style={s.td}>{u.email}</td>
                       <td style={s.td}>
-                        <select value={u.role} style={{ ...s.select, fontSize: 12, padding: "2px 6px", background: u.role === "admin" || u.role === "property_manager" ? T.accentDim : u.role === "maintenance" ? T.warnDim : T.successDim, color: u.role === "admin" || u.role === "property_manager" ? T.accent : u.role === "maintenance" ? T.warn : T.success, fontWeight: 600, border: "none", borderRadius: 4 }}
+                        <select value={u.role} style={{ ...s.select, fontSize: 12, padding: "2px 6px", background: u.role === "admin" ? T.accentDim : u.role === "maintenance" ? T.warnDim : T.successDim, color: u.role === "admin" ? T.accent : u.role === "maintenance" ? T.warn : T.success, fontWeight: 600, border: "none", borderRadius: 4 }}
                           onChange={async (e) => {
                             const newRole = e.target.value;
                             try {
@@ -5453,7 +5456,6 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                           <option value="resident">Resident</option>
                           <option value="admin">Admin</option>
                           <option value="maintenance">Maintenance</option>
-                          <option value="property_manager">Property Manager</option>
                         </select>
                       </td>
                       <td style={s.td}><span style={{ fontSize: 12 }}>{u.phone || "—"}</span></td>
@@ -6847,11 +6849,8 @@ export default function App() {
     }
   }, []);
 
-  // Load core data from Supabase on mount
-  useEffect(() => {
-    reloadData();
-    return () => {};
-  }, []);
+  // H6 fix: Removed standalone reloadData() on mount.
+  // Data is loaded after auth succeeds inside loadProfile via reloadData().
 
   // Auth: check session on mount, listen for changes
   useEffect(() => {
@@ -6871,12 +6870,8 @@ export default function App() {
       console.warn('Profile load failed after 3 attempts for', user.email);
     };
 
-    getCurrentSession().then(session => {
-      if (session?.user) {
-        loadProfile(session.user);
-      }
-      setAuthLoading(false);
-    });
+    // L2 fix: Removed getCurrentSession() — onAuthStateChange with
+    // INITIAL_SESSION event handles existing sessions, avoiding double loadProfile.
     const { data: { subscription } } = onAuthStateChange(session => {
       if (session?.user) {
         loadProfile(session.user);
@@ -6884,6 +6879,7 @@ export default function App() {
         setAuthUser(null);
         setProfile(null);
       }
+      setAuthLoading(false);
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -6977,17 +6973,17 @@ export default function App() {
         fetchMaintenanceRequests(), fetchVendors(), fetchUnitInspections(), fetchRegInspections(), fetchThreads(), fetchMessages(),
         fetchComplianceDocs(), fetchOnboardingWorkflows(),
       ]);
-      LIVE_PROPERTIES = props; LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt;
-      if (ledger && ledger.length) LIVE_RENT_LEDGER = ledger;
-      if (rInsp && rInsp.length) LIVE_REG_INSPECTIONS = rInsp;
-      if (compDocs && compDocs.length) LIVE_COMPLIANCE_DOCS = compDocs;
-      setSbProperties(props); setSbResidents(res); setSbResidentsExt(resExt); setSbRentLedger(ledger); setLeaseDocs(docs);
-      if (maint && maint.length) setMaintenance(maint);
-      if (vend && vend.length) setVendors(vend);
-      if (uInsp && uInsp.length) setUnitInspections(uInsp);
-      if (thr && thr.length) setThreads(thr);
-      if (msgs && msgs.length) setMessages(msgs);
-      if (onboard && onboard.length) setOnboardingData(onboard);
+      LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
+      LIVE_RENT_LEDGER = ledger || [];
+      LIVE_REG_INSPECTIONS = rInsp || [];
+      LIVE_COMPLIANCE_DOCS = compDocs || [];
+      setSbProperties(props || []); setSbResidents(res || []); setSbResidentsExt(resExt || {}); setSbRentLedger(ledger || []); setLeaseDocs(docs || {});
+      setMaintenance(maint || []);
+      setVendors(vend || []);
+      setUnitInspections(uInsp || []);
+      setThreads(thr || []);
+      setMessages(msgs || []);
+      setOnboardingData(onboard || []);
     } catch (err) {
       console.warn('Reset fetch failed:', err);
       setLeaseDocs(DEFAULT_LEASE_DOCS);
