@@ -10,16 +10,23 @@ async function verifyAuth(req) {
   const supabase = createClient(supabaseUrl, serviceKey);
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) return null;
-  return user;
+  return { user, supabase };
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // Verify the caller is authenticated
-  const user = await verifyAuth(req);
-  if (!user) {
+  const auth = await verifyAuth(req);
+  if (!auth) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const { user, supabase } = auth;
+
+  // Check user role — only admin and maintenance can send SMS
+  const { data: profile } = await supabase.from('user_profiles').select('role').eq('id', user.id).single();
+  if (!profile || !['admin', 'maintenance'].includes(profile.role)) {
+    return res.status(403).json({ error: 'Forbidden: insufficient role' });
   }
 
   const { to, body } = req.body;

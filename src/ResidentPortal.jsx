@@ -692,7 +692,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
 // --- ADMIN DASHBOARD ---
 const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notifications, selectedProperty, onSelectProperty }) => {
   const [dashCerts, setDashCerts] = useState([]);
-  useEffect(() => { fetchIncomeCertifications().then(c => setDashCerts(c || [])).catch(() => {}); }, []);
+  useEffect(() => { fetchIncomeCertifications().then(c => setDashCerts(c || [])).catch((err) => { console.error('Failed to fetch certifications:', err); }); }, []);
   const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
   const totalUnits = selectedProperty === "all" ? LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0) : getProperty(selectedProperty).totalUnits;
@@ -1346,7 +1346,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
     setLoading(true);
     Promise.all([fetchIncomeCertifications(), fetchAMIReference(2026, "Marin"), fetchRentLimits(2026, "Marin")])
       .then(([c, ami, rents]) => { setCerts(c || []); if (ami && Object.keys(ami).length) setAmiLookup(ami); setRentLimits(rents || {}); })
-      .catch(() => {})
+      .catch((err) => { console.error('Failed to load certification data:', err); })
       .finally(() => setLoading(false));
   }, []);
 
@@ -1674,8 +1674,8 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                         </div>
                         {catEntries.map(entry => (
                           <div key={entry.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                            <input placeholder="Source" value={entry.source || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, source: e.target.value } : x)); }} onBlur={() => updateTICIncome(entry.id, { source: entry.source }).catch(() => {})} style={{ ...s.input, flex: 2, fontSize: 12, padding: "4px 8px" }} />
-                            <input type="number" placeholder="$/yr" value={entry.amount || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, amount: parseFloat(e.target.value) || 0 } : x)); }} onBlur={() => updateTICIncome(entry.id, { amount: entry.amount }).catch(() => {})} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                            <input placeholder="Source" value={entry.source || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, source: e.target.value } : x)); }} onBlur={() => updateTICIncome(entry.id, { source: entry.source }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 2, fontSize: 12, padding: "4px 8px" }} />
+                            <input type="number" placeholder="$/yr" value={entry.amount || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, amount: parseFloat(e.target.value) || 0 } : x)); }} onBlur={() => updateTICIncome(entry.id, { amount: entry.amount }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
                             <label style={{ fontSize: 10, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
                               <input type="file" accept=".pdf,.jpg,.png" style={{ display: "none" }} onChange={async (ev) => {
                                 const file = ev.target.files?.[0]; if (!file) return;
@@ -1720,11 +1720,11 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                   </div>
                   {memberAssets.length === 0 ? <div style={{ fontSize: 12, color: T.dim }}>No assets reported</div> : memberAssets.map(a => (
                     <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                      <select value={a.assetType} onChange={e => { setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, assetType: e.target.value } : x)); updateTICAsset(a.id, { assetType: e.target.value }).catch(() => {}); }} style={{ ...s.select, flex: 1, fontSize: 12, padding: "4px 6px" }}>
+                      <select value={a.assetType} onChange={e => { setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, assetType: e.target.value } : x)); updateTICAsset(a.id, { assetType: e.target.value }).catch((err) => { showSuccess('Error saving: ' + err.message); }); }} style={{ ...s.select, flex: 1, fontSize: 12, padding: "4px 6px" }}>
                         <option value="savings">Savings</option><option value="checking">Checking</option><option value="cd">CD</option><option value="stocks">Stocks/Bonds</option><option value="real_estate">Real Estate</option><option value="retirement">Retirement</option><option value="life_insurance">Life Insurance</option><option value="other">Other</option>
                       </select>
-                      <input type="number" placeholder="Cash Value" value={a.cashValue || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, cashValue: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { cashValue: a.cashValue }).catch(() => {})} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
-                      <input type="number" placeholder="Annual Income" value={a.annualIncome || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, annualIncome: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { annualIncome: a.annualIncome }).catch(() => {})} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                      <input type="number" placeholder="Cash Value" value={a.cashValue || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, cashValue: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { cashValue: a.cashValue }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                      <input type="number" placeholder="Annual Income" value={a.annualIncome || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, annualIncome: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { annualIncome: a.annualIncome }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
                       <button onClick={async () => { try { await deleteTICAsset(a.id); setAssetEntries(prev => prev.filter(x => x.id !== a.id)); } catch {} }} style={{ ...s.btn("ghost"), color: T.danger, fontSize: 10, padding: "2px 6px" }}>✕</button>
                     </div>
                   ))}
@@ -1925,9 +1925,9 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                             to: admin.email,
                             subject: `Income Certification Submitted — ${activeCert.residentName} (${activeCert.unit})`,
                             body: `${activeCert.residentName} in Unit ${activeCert.unit} has submitted their income certification for review.\n\nTotal Annual Household Income: $${incomeForDetermination.toLocaleString()}\nAMI Category: ${eligibility.category}\n\nPlease log in to the Resident Portal to review and approve.`,
-                          }).catch(() => {});
+                          }).catch((err) => { console.error('Admin notification failed:', err); });
                         });
-                      }).catch(() => {});
+                      }).catch((err) => { console.error('Failed to fetch admin profiles for notification:', err); });
                     }
                     // Refresh certs before clearing active cert to avoid stale list
                     const refreshed = await fetchIncomeCertifications();
@@ -2520,7 +2520,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   // Load units when property changes or form opens
   useEffect(() => {
     const prop = LIVE_PROPERTIES.find(p => p.id === addForm.propertyId);
-    if (prop?._uuid) fetchUnits(prop._uuid).then(u => setAddFormUnits(u || [])).catch(() => {});
+    if (prop?._uuid) fetchUnits(prop._uuid).then(u => setAddFormUnits(u || [])).catch((err) => { console.error('Failed to fetch units:', err); });
   }, [addForm.propertyId]);
 
   const detailTabs = ["Overview", "Household", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
@@ -2724,7 +2724,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   await insertHouseholdMember({ residentId: selectedResident._uuid, name: hhForm.name.trim(), relationship: hhForm.relationship, phone: hhForm.phone, email: hhForm.email });
                   showSuccess(`Added ${hhForm.name}`);
                   setHhForm({ name: "", relationship: "Spouse", phone: "", email: "" });
-                  fetchHouseholdMembers(selectedResident._uuid).then(setHouseholdMembers).catch(() => {});
+                  fetchHouseholdMembers(selectedResident._uuid).then(setHouseholdMembers).catch((err) => { console.error('Failed to fetch household members:', err); });
                 } catch (err) { showSuccess("Error: " + err.message); }
               }} style={{ ...s.mBtn("primary", mobile) }}>Add Member</button>
             </div>
@@ -3035,7 +3035,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             <div><label style={s.label}>First Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.firstName || ""} onChange={e => setAddForm(p => ({ ...p, firstName: e.target.value, name: e.target.value + " " + (p.lastName || "") }))} placeholder="First" /></div>
             <div><label style={s.label}>Last Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.lastName || ""} onChange={e => setAddForm(p => ({ ...p, lastName: e.target.value, name: (p.firstName || "") + " " + e.target.value }))} placeholder="Last" /></div>
             <div><label style={s.label}>Property *</label>
-              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.propertyId} onChange={e => { setAddForm(p => ({ ...p, propertyId: e.target.value, unitId: "" })); const pr = LIVE_PROPERTIES.find(x => x.id === e.target.value); if (pr?._uuid) fetchUnits(pr._uuid).then(u => setAddFormUnits(u || [])).catch(() => {}); }}>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.propertyId} onChange={e => { setAddForm(p => ({ ...p, propertyId: e.target.value, unitId: "" })); const pr = LIVE_PROPERTIES.find(x => x.id === e.target.value); if (pr?._uuid) fetchUnits(pr._uuid).then(u => setAddFormUnits(u || [])).catch((err) => { console.error('Failed to fetch units:', err); }); }}>
                 {LIVE_PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
@@ -3241,7 +3241,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   // Load units for selected property (must be before early return to satisfy hooks rules)
   const p = !isAll ? getProperty(selectedProperty) : null;
   useEffect(() => {
-    if (p?._uuid) fetchUnits(p._uuid).then(setUnitList).catch(() => {});
+    if (p?._uuid) fetchUnits(p._uuid).then(setUnitList).catch((err) => { console.error('Failed to fetch units:', err); });
   }, [p?._uuid]);
 
   if (isAll) {
@@ -6911,10 +6911,11 @@ export default function App() {
     } catch (err) { console.warn('Supabase insert maintenance failed:', err); }
   };
   const updateMaintenance = async (id, changes) => {
-    setMaintenance(prev => prev.map(m => m.id === id ? { ...m, ...changes } : m));
+    const prev = maintenance;
+    setMaintenance(p => p.map(m => m.id === id ? { ...m, ...changes } : m));
     try {
       await updateMaintenanceRequest(id, changes);
-    } catch (err) { console.warn('Supabase update maintenance failed:', err); }
+    } catch (err) { setMaintenance(prev); showSuccess('Error updating request: ' + err.message); }
   };
   const addThread = async (t) => {
     setThreads(prev => [t, ...prev]);
@@ -6925,8 +6926,9 @@ export default function App() {
     try { await insertMessage(msg); } catch (err) { console.warn('Supabase insert message failed:', err); }
   };
   const updateThread = async (id, changes) => {
-    setThreads(prev => prev.map(t => t.id === id ? { ...t, ...changes } : t));
-    try { await updateThreadDb(id, changes); } catch (err) { console.warn('Supabase update thread failed:', err); }
+    const prev = threads;
+    setThreads(p => p.map(t => t.id === id ? { ...t, ...changes } : t));
+    try { await updateThreadDb(id, changes); } catch (err) { setThreads(prev); showSuccess('Error updating thread: ' + err.message); }
   };
   const addVendor = async (v) => {
     setVendors(prev => [v, ...prev]);
@@ -6937,8 +6939,9 @@ export default function App() {
     try { await insertUnitInspection(insp); } catch (err) { console.warn('Supabase insert inspection failed:', err); }
   };
   const updateInspection = async (id, changes) => {
-    setUnitInspections(prev => prev.map(i => i.id === id ? { ...i, ...changes } : i));
-    try { await updateUnitInspection(id, changes); } catch (err) { console.warn('Supabase update inspection failed:', err); }
+    const prev = unitInspections;
+    setUnitInspections(p => p.map(i => i.id === id ? { ...i, ...changes } : i));
+    try { await updateUnitInspection(id, changes); } catch (err) { setUnitInspections(prev); showSuccess('Error updating inspection: ' + err.message); }
   };
   const updateEmergencyContacts = (residentId, contacts) => setEmergencyContacts(prev => ({ ...prev, [residentId]: contacts }));
   const addAdminNote = async (residentId, note, replace = false) => {
@@ -7002,11 +7005,17 @@ export default function App() {
   const addMaintenanceN = (req) => {
     addMaintenance(req);
     pushNotif({ id: `N-${Date.now()}`, type: "maintenance", icon: "🔧", message: `New request: ${req.description.slice(0, 50)} (${req.unit})${req.priority === "critical" ? " — Critical" : ""}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance"] });
-    // Email notify admin team about new maintenance request
-    const adminEmails = ["maintenance@bolinaslandtrust.org"]; // TODO: pull from user_profiles where role=admin
-    adminEmails.forEach(email => {
-      sendNotification("maintenance_created", { to: email, residentName: req.unit, unit: req.unit, description: req.description, priority: req.priority, category: req.category }).catch(() => {});
-    });
+    // Email notify admin team about new maintenance request (dynamically from user_profiles)
+    fetchUserProfiles().then(profiles => {
+      const admins = (profiles || []).filter(p => (p.role === "admin" || p.role === "maintenance") && p.email);
+      admins.forEach(admin => {
+        sendNotification("custom", {
+          to: admin.email,
+          subject: `New Maintenance Request — ${req.unit}`,
+          body: `A new ${req.priority} priority maintenance request has been submitted for Unit ${req.unit}.\n\nCategory: ${req.category}\nDescription: ${req.description}\n\nPlease log in to the Resident Portal to review and assign.`,
+        }).catch((err) => { console.error('Admin maintenance notification failed:', err); });
+      });
+    }).catch((err) => { console.error('Failed to fetch admin profiles for maintenance notification:', err); });
   };
   const updateMaintenanceN = (id, changes) => {
     updateMaintenance(id, changes);

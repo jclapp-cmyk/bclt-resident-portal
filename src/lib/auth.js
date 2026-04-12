@@ -85,6 +85,20 @@ export async function updateUserProfile(profileId, changes) {
 }
 
 export async function deleteUserProfile(profileId) {
+  // Prefer the SECURITY DEFINER RPC that also removes the auth.users entry
+  const { data, error: rpcErr } = await supabase.rpc('delete_user_complete', {
+    profile_id: profileId,
+  });
+
+  if (!rpcErr && data?.success) return;
+
+  // If the RPC returned a business-logic error (e.g. not admin), throw it
+  if (!rpcErr && data && !data.success) {
+    throw new Error(data.error || 'delete_user_complete failed');
+  }
+
+  // Fallback: RPC doesn't exist yet (SQL not applied) — delete profile row only
+  console.warn('delete_user_complete RPC unavailable, falling back to direct delete:', rpcErr?.message);
   const { error } = await supabase.from('user_profiles').delete().eq('id', profileId);
   if (error) throw error;
 }

@@ -125,10 +125,39 @@ export async function deleteUnit(unitUuid) {
 }
 
 export async function deleteProperty(propertyUuid) {
-  // Delete units first (cascade may not cover all FKs)
-  await supabase.from('units').delete().eq('property_id', propertyUuid);
-  const { error } = await supabase.from('properties').delete().eq('id', propertyUuid);
-  if (error) throw error;
+  // Cascade delete in dependency order.
+  // Note: DB should have ON DELETE CASCADE for most FKs, but we explicitly
+  // delete residents and units to ensure dependent records (leases,
+  // lease_documents, household_members, rent_payments, income_certifications,
+  // onboarding_workflows, user_profiles, etc.) are cleaned up.
+  try {
+    // 1. Delete maintenance requests referencing this property
+    await supabase.from('maintenance_requests').delete().eq('property_id', propertyUuid);
+
+    // 2. Get resident IDs for this property (needed for dependent tables)
+    const { data: residents } = await supabase.from('residents').select('id').eq('property_id', propertyUuid);
+    const residentIds = (residents || []).map(r => r.id);
+
+    if (residentIds.length > 0) {
+      // 3. Delete onboarding workflows for these residents
+      await supabase.from('onboarding_workflows').delete().in('resident_id', residentIds);
+      // 4. Delete user_profiles for these residents (if table exists)
+      await supabase.from('user_profiles').delete().in('resident_id', residentIds).then(() => {}, () => {});
+    }
+
+    // 5. Delete residents (cascades to leases, lease_documents, household_members, etc.)
+    await supabase.from('residents').delete().eq('property_id', propertyUuid);
+
+    // 6. Delete units
+    await supabase.from('units').delete().eq('property_id', propertyUuid);
+
+    // 7. Delete the property itself
+    const { error } = await supabase.from('properties').delete().eq('id', propertyUuid);
+    if (error) throw error;
+  } catch (err) {
+    console.error('deleteProperty cascade error:', err);
+    throw err;
+  }
 }
 
 export async function fetchUnits(propertyUuid) {
@@ -362,7 +391,7 @@ export async function fetchMessages() {
 
 export async function insertThread(t) {
   const { data, error } = await supabase.from('message_threads').insert({
-    code: t.id || `THR-${Date.now()}`, participants: JSON.stringify(t.participants || []),
+    code: t.id || `THR-${Date.now()}`, participants: t.participants || [],
     subject: t.subject, last_message: t.lastMessage || '', last_date: t.lastDate || new Date().toISOString(),
     unread: t.unread || 0, channel: t.channel || 'email', type: t.type || 'direct', priority: t.priority || null,
   }).select().single();
@@ -532,9 +561,8 @@ export async function insertUnitInspection(insp) {
     if (!fallback) throw new Error('No properties found');
     prop = fallback;
   }
-  const { data: unitRow } = await supabase.from('units').select('id').eq('number', insp.unit).maybeSingle();
-  const { count } = await supabase.from('unit_inspections').select('*', { count: 'exact', head: true });
-  const code = `UI-${110 + (count || 0)}`;
+  const { data: unitRow } = await supabase.from('units').select('id').eq('number', insp.unit).eq('property_id', prop.id).maybeSingle();
+  const code = `UI-${Date.now().toString(36)}`;
   const { data, error } = await supabase.from('unit_inspections').insert({
     code, property_id: prop.id, unit_id: unitRow?.id || null,
     category: insp.category, inspection_date: insp.date, inspector: insp.inspector || 'Mike R.',
@@ -601,11 +629,9 @@ export async function fetchMaintenanceRequests() {
 
 export async function insertMaintenanceRequest({ unit, category, priority, description, propertySlug }) {
   // Look up unit row (includes property_id)
-  const { data: unitRow } = await supabase.from('units').select('id, property_id').eq('number', unit).limit(1).single();
-
-  // Look up property — prefer unit's property_id, fall back to slug lookup
-  let propertyId = unitRow?.property_id || null;
-  if (!propertyId && propertySlug) {
+  // Look up property first so we can scope the unit lookup
+  let propertyId = null;
+  if (propertySlug) {
     const { data: prop } = await supabase.from('properties').select('id').eq('slug', propertySlug).single();
     propertyId = prop?.id || null;
   }
@@ -615,12 +641,21 @@ export async function insertMaintenanceRequest({ unit, category, priority, descr
     propertyId = firstProp?.id || null;
   }
 
+  // Look up unit row scoped to property to avoid cross-property collisions
+  let unitQuery = supabase.from('units').select('id, property_id').eq('number', unit);
+  if (propertyId) unitQuery = unitQuery.eq('property_id', propertyId);
+  const { data: unitRow } = await unitQuery.limit(1).single();
+
+  // If we didn't have propertyId yet, use the unit's property_id
+  if (!propertyId && unitRow?.property_id) {
+    propertyId = unitRow.property_id;
+  }
+
   // Look up resident by unit
   const { data: resident } = await supabase.from('residents').select('id').eq('unit_id', unitRow?.id).limit(1).single();
 
-  // Generate code
-  const { count } = await supabase.from('maintenance_requests').select('*', { count: 'exact', head: true });
-  const code = `MR-${2406 + (count || 0)}`;
+  // Generate code with timestamp to avoid collisions
+  const code = `MR-${Date.now().toString(36)}`;
 
   const { data, error } = await supabase.from('maintenance_requests').insert({
     code,
@@ -688,8 +723,7 @@ export async function fetchOnboardingWorkflows() {
 export async function insertOnboardingWorkflow(w) {
   const { data: prop } = await supabase.from('properties').select('id').eq('slug', w.propertyId || 'wharf').single();
   const { data: resident } = await supabase.from('residents').select('id').eq('slug', w.residentId).single();
-  const { count } = await supabase.from('onboarding_workflows').select('*', { count: 'exact', head: true });
-  const code = `OB-${7 + (count || 0)}`;
+  const code = `OB-${Date.now().toString(36)}`;
   const { data, error } = await supabase.from('onboarding_workflows').insert({
     code, property_id: prop?.id, resident_id: resident?.id,
     type: w.type, status: w.status || 'not-started',
