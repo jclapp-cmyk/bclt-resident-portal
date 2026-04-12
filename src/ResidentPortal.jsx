@@ -2516,6 +2516,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [hhForm, setHhForm] = useState({ name: "", relationship: "Spouse", phone: "", email: "" });
   const [residentDocs, setResidentDocs] = useState([]);
   const [residentPayments, setResidentPayments] = useState([]);
+  const [hideInactive, setHideInactive] = useState(true);
 
   // Load units when property changes or form opens
   useEffect(() => {
@@ -3088,10 +3089,15 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         </div>
       )}
       {(() => {
-        const fr = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
+        const allRes = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
+        const fr = hideInactive ? allRes.filter(r => (r.status || "active") !== "inactive") : allRes;
+        const inactiveCount = allRes.length - allRes.filter(r => (r.status || "active") !== "inactive").length;
         const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
         return (<>
-      <p style={s.sectionSub}>{propLabel} — {fr.length} Residents</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <p style={{ ...s.sectionSub, marginBottom: 0 }}>{propLabel} — {fr.length} Residents{hideInactive && inactiveCount > 0 ? ` (${inactiveCount} inactive hidden)` : ""}</p>
+        {inactiveCount > 0 && <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => setHideInactive(h => !h)}>{hideInactive ? `Show ${inactiveCount} Inactive` : "Hide Inactive"}</button>}
+      </div>
       <SuccessMessage message={success} />
       <SortableTable
         mobile={mobile}
