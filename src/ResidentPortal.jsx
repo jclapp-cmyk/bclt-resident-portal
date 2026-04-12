@@ -3387,14 +3387,17 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               showUnitSuccess(`Unit ${unitForm.number} added!`);
               setUnitList(prev => [...prev, newUnit]);
               setUnitForm({ number: "", bedrooms: "1", bathrooms: "1", sqft: "", isRv: false, rvInfo: {} });
+              setShowAddUnit(false);
             } catch (err) { showUnitSuccess("Error: " + err.message); }
           }} style={{ ...s.mBtn("primary", mobile) }}>Add Unit</button>
         </div>
       )}
-      {unitList.length > 0 && (
-        <div style={{ ...s.card, marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Units ({unitList.length})</div>
-          <SuccessMessage message={unitSuccess} />
+      {/* Always show unit list section */}
+      <div style={{ ...s.card, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Units ({unitList.length})</div>
+        <SuccessMessage message={unitSuccess} />
+      {unitList.length > 0 ? (
+        <>
           <table style={s.table}>
             <thead><tr>{["Unit", "Resident", "BR", "BA", "Sqft", "Type", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
             <tbody>
@@ -3457,7 +3460,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                 const unitResident = propResidents.find(r => r.unit === u.number);
                 return (
                   <tr key={uid}>
-                    <td style={s.td}><span style={{ fontWeight: 600 }}>{u.number}</span></td>
+                    <td style={s.td}><button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); }}>{u.number}</button></td>
                     <td style={s.td}>{unitResident ? (
                       <button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={() => {
                         if (onSelectProperty) onSelectProperty(selectedProperty, "residents", unitResident.id);
@@ -3508,8 +3511,11 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               </div>
             </div>
           )}
-        </div>
+        </>
+      ) : (
+        <div style={{ color: T.dim, fontSize: 13, textAlign: "center", padding: "12px 0" }}>No units yet. Click "Add Unit" above to create one.</div>
       )}
+      </div>
       {/* Edit Property */}
       <div style={{ ...s.card, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
