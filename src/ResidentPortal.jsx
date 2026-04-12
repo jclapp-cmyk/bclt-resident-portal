@@ -615,7 +615,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, {rc?.firstName || "Resident"}</h1>
       <p style={s.sectionSub}>Unit {rc?.unit || "—"} — {propName}</p>
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-        <StatCard label="Rent Balance" value="$0.00" accent={T.success} mobile={mobile} />
+        {(() => { const curMonth = new Date().toISOString().slice(0, 7); const le = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id && l.month === curMonth) || LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id) || {}; const bal = le.balance || 0; return <StatCard label="Rent Balance" value={`$${Math.abs(bal).toFixed(2)}`} accent={bal > 0 ? T.danger : T.success} mobile={mobile} />; })()}
         <StatCard label="Open Requests" value={openRequests} accent={openRequests > 0 ? T.warn : T.success} mobile={mobile} />
         <StatCard label="Income Cert" value={certStatus.label} accent={certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success} mobile={mobile} />
         <StatCard label="Lease Status" value={ext.leaseEnd ? (new Date(ext.leaseEnd) < new Date() ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "M-to-M" : "Active")} accent={ext.leaseEnd && new Date(ext.leaseEnd) < new Date() ? T.danger : T.success} mobile={mobile} />
@@ -657,10 +657,26 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
           </div>
           <span style={{ fontSize: 12, color: T.success, fontWeight: 600 }}>On Track</span>
         </div>
-        <SparkLine points={[0, 0, 150, 0, 0, 0]} color={T.success} width={mobile ? 260 : 400} height={48} mobile={mobile} />
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.dim, marginTop: 6, maxWidth: mobile ? 160 : 400 }}>
-          <span>Oct</span><span>Nov</span><span>Dec</span><span>Jan</span><span>Feb</span><span>Mar</span>
-        </div>
+        {(() => {
+          const now = new Date();
+          const months = [];
+          const points = [];
+          for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const monthKey = d.toISOString().slice(0, 7);
+            months.push(d.toLocaleString("default", { month: "short" }));
+            const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id && l.month === monthKey);
+            points.push(ledgerEntry ? (ledgerEntry.balance || 0) : 0);
+          }
+          return (
+            <>
+              <SparkLine points={points} color={points.some(p => p > 0) ? T.warn : T.success} width={mobile ? 260 : 400} height={48} mobile={mobile} />
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.dim, marginTop: 6, maxWidth: mobile ? 160 : 400 }}>
+                {months.map((m, i) => <span key={i}>{m}</span>)}
+              </div>
+            </>
+          );
+        })()}
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Recent Messages</div>
@@ -836,12 +852,13 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
 };
 
 // --- MAINTENANCE DASHBOARD (Staff) ---
-const MaintenanceDashboard = ({ mobile, maintenance, notifications }) => {
-  const myOrders = maintenance.filter(m => m.assignedTo === "Mike R." && m.status !== "completed");
+const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile }) => {
+  const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
+  const myOrders = maintenance.filter(m => m.assignedTo === staffName && m.status !== "completed");
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>My Dashboard</h1>
-      <p style={s.sectionSub}>Mike R. — Maintenance Staff</p>
+      <p style={s.sectionSub}>{staffName} — Maintenance Staff</p>
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
         <StatCard label="My Open Orders" value={myOrders.length} accent={T.warn} mobile={mobile} />
         <StatCard label="Unassigned" value={maintenance.filter(m => !m.assignedTo).length} accent={T.danger} mobile={mobile} />
@@ -892,10 +909,35 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
   const [showQr, setShowQr] = useState(false);
   const [success, showSuccess] = useSuccess();
   const [formData, setFormData] = useState({ category: "Plumbing", urgency: "routine", description: "", permission: "Yes, enter anytime" });
+  const [photoFiles, setPhotoFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const photoInputRef = useRef(null);
   const myRequests = maintenance.filter(m => m.unit === (rc?.unit || ""));
 
-  const handleSubmit = () => {
+  const handlePhotoSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    const imageFiles = files.filter(f => f.type.startsWith("image/"));
+    setPhotoFiles(prev => [...prev, ...imageFiles].slice(0, 5));
+  };
+
+  const removePhoto = (idx) => {
+    setPhotoFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleSubmit = async () => {
     if (!formData.description.trim()) return;
+    setUploading(true);
+    let photoPaths = [];
+    try {
+      for (const file of photoFiles) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `maintenance/${rc?.unit || 'unknown'}/${Date.now()}_${safeName}`;
+        const { error } = await supabase.storage.from('lease-documents').upload(path, file);
+        if (!error) photoPaths.push(path);
+      }
+    } catch (err) {
+      console.warn("Photo upload error:", err);
+    }
     const newReq = {
       id: `MR-${2406 + maintenance.length}`,
       unit: rc?.unit || "",
@@ -908,10 +950,13 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
       queuePos: maintenance.filter(m => m.status !== "completed").length + 1,
       projectedComplete: null,
       notes: [],
+      photos: photoPaths.length > 0 ? photoPaths : undefined,
     };
     onSubmit(newReq);
     setFormData({ category: "Plumbing", urgency: "routine", description: "", permission: "Yes, enter anytime" });
+    setPhotoFiles([]);
     setShowForm(false);
+    setUploading(false);
     showSuccess("Request submitted! You'll receive updates as it progresses.");
   };
 
@@ -957,8 +1002,24 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
           </div>
           <div style={{ marginBottom: 14 }}><label style={s.label}>Description</label><textarea style={{ ...s.input, minHeight: 80, resize: "vertical" }} placeholder="Describe the issue..." value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} /></div>
           <div style={{ marginBottom: 14 }}><label style={s.label}>Permission to Enter</label><select style={{ ...s.select, width: "100%" }} value={formData.permission} onChange={e => setFormData(p => ({ ...p, permission: e.target.value }))}><option>Yes, enter anytime</option><option>Contact me first</option><option>Only when I'm home</option></select></div>
-          <div style={{ marginBottom: 14 }}><label style={s.label}>Photos (optional)</label><div style={{ border: `2px dashed ${T.border}`, borderRadius: T.radiusSm, padding: 24, textAlign: "center", color: T.dim, cursor: "pointer" }}>Click or drag to upload photos</div></div>
-          <button style={s.btn()} onClick={handleSubmit}>Submit Request</button>
+          <div style={{ marginBottom: 14 }}>
+            <label style={s.label}>Photos (optional, max 5)</label>
+            <input ref={photoInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handlePhotoSelect} />
+            <div onClick={() => photoInputRef.current?.click()} onDragOver={e => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => { e.preventDefault(); e.stopPropagation(); handlePhotoSelect({ target: { files: e.dataTransfer.files } }); }} style={{ border: `2px dashed ${T.border}`, borderRadius: T.radiusSm, padding: 24, textAlign: "center", color: T.dim, cursor: "pointer" }}>
+              {photoFiles.length === 0 ? "Click or drag to upload photos" : `${photoFiles.length} photo${photoFiles.length > 1 ? "s" : ""} selected — click to add more`}
+            </div>
+            {photoFiles.length > 0 && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                {photoFiles.map((f, i) => (
+                  <div key={i} style={{ position: "relative", width: 64, height: 64, borderRadius: 6, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                    <img src={URL.createObjectURL(f)} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer", lineHeight: "16px", textAlign: "center", padding: 0 }}>x</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button style={s.btn()} onClick={handleSubmit} disabled={uploading}>{uploading ? "Uploading..." : "Submit Request"}</button>
         </div>
       )}
       {myRequests.map(m => (
@@ -987,12 +1048,13 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
 };
 
 // --- WORK ORDERS (Maintenance Staff) ---
-const WorkOrders = ({ mobile, maintenance, onUpdate }) => {
+const WorkOrders = ({ mobile, maintenance, onUpdate, profile }) => {
+  const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
   const [filter, setFilter] = useState("mine");
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ status: "", notes: "" });
   const [success, showSuccess] = useSuccess();
-  const orders = filter === "mine" ? maintenance.filter(m => m.assignedTo === "Mike R.") : maintenance;
+  const orders = filter === "mine" ? maintenance.filter(m => m.assignedTo === staffName) : maintenance;
 
   const startEdit = (row) => {
     setEditingId(row.id);
@@ -1002,7 +1064,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate }) => {
     const changes = { status: editData.status };
     if (editData.notes.trim()) {
       const existing = maintenance.find(m => m.id === editingId);
-      changes.notes = [...(existing?.notes || []), { by: "Mike R.", date: new Date().toISOString().slice(0, 10), text: editData.notes.trim() }];
+      changes.notes = [...(existing?.notes || []), { by: staffName, date: new Date().toISOString().slice(0, 10), text: editData.notes.trim() }];
     }
     onUpdate(editingId, changes);
     setEditingId(null);
@@ -2227,6 +2289,17 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
   const [ecForm, setEcForm] = useState({ name: "", relationship: "", phone: "", email: "" });
   const [success, showSuccess] = useSuccess();
   const myContacts = emergencyContacts[rc?.id || ""] || [];
+  const [householdMembers, setHouseholdMembers] = useState([]);
+  const [loadingHousehold, setLoadingHousehold] = useState(false);
+
+  useEffect(() => {
+    if (!rc?.id) return;
+    setLoadingHousehold(true);
+    fetchHouseholdMembers(rc.id).then(members => {
+      setHouseholdMembers(members || []);
+      setLoadingHousehold(false);
+    }).catch(() => setLoadingHousehold(false));
+  }, [rc?.id]);
 
   const saveContact = async () => {
     try {
@@ -2364,18 +2437,24 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
       {tab === "Household" && (
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Household Members</div>
-          <table style={s.table}>
-            <thead><tr>{["Name", "Relationship", "Date of Birth"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-            <tbody>
-              {(MOCK_RECERT.householdMembers || []).map((m, i) => (
-                <tr key={i}>
-                  <td style={s.td}><span style={{ fontWeight: 600 }}>{m.name}</span></td>
-                  <td style={s.td}>{m.relationship}</td>
-                  <td style={s.td}>{m.dob}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {loadingHousehold ? (
+            <div style={{ textAlign: "center", padding: 24, color: T.muted }}>Loading household members...</div>
+          ) : householdMembers.length > 0 ? (
+            <table style={s.table}>
+              <thead><tr>{["Name", "Relationship", "Date of Birth"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {householdMembers.map((m, i) => (
+                  <tr key={m.id || i}>
+                    <td style={s.td}><span style={{ fontWeight: 600 }}>{m.name}</span></td>
+                    <td style={s.td}>{m.relationship}</td>
+                    <td style={s.td}>{m.date_of_birth || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <EmptyState icon="👥" text="No household members on file. Contact management to update your household composition." />
+          )}
           <div style={{ marginTop: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm, fontSize: 12, color: T.muted }}>
             Household composition changes require a recertification. Contact management for assistance.
           </div>
@@ -7088,15 +7167,15 @@ export default function App() {
     }
     if (role === "maintenance") {
       switch (page) {
-        case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} />;
-        case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} />;
+        case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
+        case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} />;
         case "profile": return <MaintenanceProfile mobile={mobile} />;
-        case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} />;
-        default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} />;
+        case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} />;
+        default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
       }
     }
     return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} />;
