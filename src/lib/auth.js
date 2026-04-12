@@ -33,7 +33,7 @@ export async function getCurrentSession() {
 }
 
 export async function fetchProfile(userId, userEmail) {
-  // Try RPC first (links the profile and returns enriched data)
+  // Try the single-param RPC first (uses auth.uid() server-side)
   const { data, error } = await supabase.rpc('link_profile_on_login', {
     user_email: userEmail,
   });
@@ -52,41 +52,41 @@ export async function fetchProfile(userId, userEmail) {
     };
   }
 
-  console.warn('RPC link_profile_on_login failed, using direct query fallback:', error?.message);
+  console.warn('RPC link_profile_on_login failed, trying legacy two-param version:', error?.message);
 
-  // Fallback: link profile by updating the id, then query directly
-  try {
-    // Try to claim the pre-created profile row by email
-    await supabase.from('user_profiles').update({ id: userId }).eq('email', userEmail).is('id', null);
-  } catch (e) { /* ignore — row may already be linked */ }
+  // Fallback: try the old two-param version (in case DB hasn't been updated yet)
+  const { data: data2, error: error2 } = await supabase.rpc('link_profile_on_login', {
+    user_id: userId,
+    user_email: userEmail,
+  });
 
-  // Direct query — works with the fixed RLS policies (self-access)
-  const { data: profile, error: profileErr } = await supabase
+  if (!error2 && data2) {
+    return {
+      role: data2.role,
+      email: data2.email,
+      displayName: data2.display_name,
+      residentId: data2.resident_id,
+      residentSlug: data2.resident_slug || null,
+      residentName: data2.resident_name || null,
+      unit: data2.unit_number || null,
+      propertySlug: data2.property_slug || null,
+      propertyName: data2.property_name || null,
+    };
+  }
+
+  console.warn('Both RPC versions failed, using direct query fallback:', error2?.message);
+
+  // Last resort: direct query (works if profile id already matches auth.uid)
+  const { data: profile } = await supabase
     .from('user_profiles')
     .select('*, residents(name, slug, unit_number, properties(slug, name))')
     .eq('id', userId)
     .maybeSingle();
 
-  if (profileErr || !profile) {
-    // Last resort: try matching by email
-    const { data: emailProfile } = await supabase
-      .from('user_profiles')
-      .select('*, residents(name, slug, unit_number, properties(slug, name))')
-      .eq('email', userEmail)
-      .maybeSingle();
+  if (profile) return mapProfileRow(profile);
 
-    if (!emailProfile) {
-      console.warn('fetchProfile fallback failed:', profileErr?.message);
-      return null;
-    }
-
-    // Link the profile to this auth user
-    await supabase.from('user_profiles').update({ id: userId }).eq('email', userEmail).catch(() => {});
-
-    return mapProfileRow(emailProfile);
-  }
-
-  return mapProfileRow(profile);
+  console.warn('fetchProfile: no profile found for', userEmail);
+  return null;
 }
 
 function mapProfileRow(row) {
