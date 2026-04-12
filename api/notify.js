@@ -1,9 +1,29 @@
 // Vercel Serverless Function — Email Notifications via Resend
-// Env var required: RESEND_API_KEY
+// Env vars required: RESEND_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+import { createClient } from '@supabase/supabase-js';
+
+async function verifyAuth(req) {
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7);
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return null;
+  const supabase = createClient(supabaseUrl, serviceKey);
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Verify the caller is authenticated
+  const user = await verifyAuth(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const apiKey = process.env.RESEND_API_KEY;

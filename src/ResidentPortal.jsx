@@ -46,6 +46,7 @@ const MOCK_COMPLIANCE_DOCS = [];
 const MOCK_ONBOARDING = [];
 const MOCK_RENT_LEDGER = [];
 const MOCK_MONTHLY_REVENUE = [];
+const LEASE_DOC_TYPES = { lease: "Lease Agreement", addendum: "Addendum", notice: "Notice", income: "Income Verification", id: "ID/SSN", other: "Other" };
 
 const DEFAULT_SETTINGS = {
   property: { manager: "Sarah Chen", managerPhone: "(415) 555-0100", managerEmail: "sarah@bclt.org", officeHours: "Mon-Fri 9am-5pm" },
@@ -216,11 +217,15 @@ const Toggle = ({ label, checked, onChange, description }) => (
   </div>
 );
 
-const SuccessMessage = ({ message }) => message ? (
-  <div style={{ padding: "10px 16px", background: T.successDim, color: T.success, borderRadius: T.radiusSm, marginBottom: 14, fontWeight: 600, fontSize: 13 }}>
-    ✓ {message}
-  </div>
-) : null;
+const SuccessMessage = ({ message }) => {
+  if (!message) return null;
+  const isError = typeof message === "string" && message.startsWith("Error");
+  return (
+    <div style={{ padding: "10px 16px", background: isError ? T.dangerDim : T.successDim, color: isError ? T.danger : T.success, borderRadius: T.radiusSm, marginBottom: 14, fontWeight: 600, fontSize: 13 }}>
+      {isError ? "✗" : "✓"} {message}
+    </div>
+  );
+};
 
 const useSuccess = () => {
   const [msg, setMsg] = useState(null);
@@ -705,7 +710,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Property Performance</div>
           <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap" }}>
             {LIVE_PROPERTIES.map(p => {
-              const pMaint = MOCK_MAINTENANCE.filter(m => m.propertyId === p.id);
+              const pMaint = maintenance.filter(m => m.propertyId === p.id);
               const pOpen = pMaint.filter(m => m.status !== "completed").length;
               const pCrit = pMaint.filter(m => m.priority === "critical" && m.status !== "completed").length;
               const pRes = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
@@ -2223,9 +2228,16 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
   const [success, showSuccess] = useSuccess();
   const myContacts = emergencyContacts[rc?.id || ""] || [];
 
-  const saveContact = () => {
-    setEditingContact(false);
-    showSuccess("Contact information updated!");
+  const saveContact = async () => {
+    try {
+      if (myRes._uuid) {
+        await updateResident(myRes._uuid, { phone: contactForm.phone, email: contactForm.email });
+      }
+      setEditingContact(false);
+      showSuccess("Contact information updated!");
+    } catch (err) {
+      showSuccess("Error: " + (err.message || "Failed to update contact info"));
+    }
   };
 
   const startEditEC = (ec) => {
@@ -3073,9 +3085,9 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
 };
 
 // --- PROPERTY DETAILS (Admin) ---
-const PropertyCard = ({ p, mobile, onSelect }) => {
+const PropertyCard = ({ p, mobile, onSelect, maintenance = [] }) => {
   const residents = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
-  const maint = MOCK_MAINTENANCE.filter(m => m.propertyId === p.id);
+  const maint = maintenance.filter(m => m.propertyId === p.id);
   const openMaint = maint.filter(m => m.status !== "completed").length;
   const ledger = LIVE_RENT_LEDGER.filter(r => r.propertyId === p.id);
   const rentRoll = ledger.reduce((s, r) => s + r.rentDue, 0);
@@ -3171,7 +3183,7 @@ const PropertySingleView = ({ p, mobile }) => (
   </>
 );
 
-const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty, onDataRefresh, settings }) => {
+const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty, onDataRefresh, settings, maintenance = [] }) => {
   const isAll = !selectedProperty || selectedProperty === "all";
   const totalUnits = LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0);
   const totalResidents = LIVE_RESIDENTS.length;
@@ -3241,7 +3253,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
           <StatCard label="Total SF" value={totalSF.toLocaleString()} accent={T.success} mobile={mobile} />
         </div>
         {LIVE_PROPERTIES.length === 0 && <EmptyState icon="🏘️" text="No properties yet. Click Add Property above to get started." />}
-        {LIVE_PROPERTIES.map(p => <PropertyCard key={p.id} p={p} mobile={mobile} onSelect={() => onSelectProperty?.(p.id, "property")} />)}
+        {LIVE_PROPERTIES.map(p => <PropertyCard key={p.id} p={p} mobile={mobile} maintenance={maintenance} onSelect={() => onSelectProperty?.(p.id, "property")} />)}
       </div>
     );
   }
@@ -3521,7 +3533,7 @@ const AdminDocuments = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty }) =
   const tabs = ["All Documents", "By Resident", "Property"];
   const [tab, setTab] = useState(tabs[0]);
   const filteredResidents = filterByProperty(LIVE_RESIDENTS, selectedProperty);
-  const [selectedResident, setSelectedResident] = useState(filteredResidents[0]?.id || LIVE_RESIDENTS[0].id);
+  const [selectedResident, setSelectedResident] = useState(filteredResidents[0]?.id || LIVE_RESIDENTS[0]?.id || "");
   const [success, showSuccess] = useSuccess();
 
   const resIds = new Set(filteredResidents.map(r => r.id));
@@ -6930,9 +6942,7 @@ export default function App() {
       console.warn('Reset fetch failed:', err);
       setLeaseDocs(MOCK_LEASE_DOCS);
     }
-    // Reset non-Supabase state to mocks
-    setMaintenance([]); setThreads([]); setMessages([]);
-    setVendors([]); setUnitInspections([]);
+    // Reset non-Supabase state to mocks (only state not fetched above)
     setEmergencyContacts({}); setAdminNotes({});
     setCommPrefs(MOCK_COMM_PREFS); setSettings(DEFAULT_SETTINGS); setPage("dashboard");
   };
@@ -6949,7 +6959,7 @@ export default function App() {
     // Email notify admin team about new maintenance request
     const adminEmails = ["maintenance@bolinaslandtrust.org"]; // TODO: pull from user_profiles where role=admin
     adminEmails.forEach(email => {
-      sendNotification({ type: "maintenance_created", to: email, residentName: req.unit, unit: req.unit, description: req.description, priority: req.priority, category: req.category }).catch(() => {});
+      sendNotification("maintenance_created", { to: email, residentName: req.unit, unit: req.unit, description: req.description, priority: req.priority, category: req.category }).catch(() => {});
     });
   };
   const updateMaintenanceN = (id, changes) => {
@@ -7066,7 +7076,7 @@ export default function App() {
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} />;
-        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} />;
+        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;

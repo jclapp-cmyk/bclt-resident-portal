@@ -1046,10 +1046,10 @@ export async function uploadTICDocument(file, certId) {
   return path;
 }
 
-export function getTICDocumentUrl(path) {
+export async function getTICDocumentUrl(path) {
   if (!path) return null;
-  const { data } = supabase.storage.from('tic-documents').getPublicUrl(path);
-  return data?.publicUrl || null;
+  const { data } = await supabase.storage.from('tic-documents').createSignedUrl(path, 3600); // 1hr
+  return data?.signedUrl || null;
 }
 
 // ── ADMIN NOTES ──

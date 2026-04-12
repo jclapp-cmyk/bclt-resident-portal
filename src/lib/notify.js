@@ -1,9 +1,24 @@
+import { supabase } from './supabase';
+
+/**
+ * Get the current user's JWT access token for authenticating API calls.
+ */
+async function getAuthHeaders() {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+  };
+}
+
 // Send email notification via /api/notify serverless function
 export async function sendNotification(type, data) {
   try {
+    const headers = await getAuthHeaders();
     const res = await fetch('/api/notify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ type, data }),
     });
     if (!res.ok) {
@@ -19,9 +34,10 @@ export async function sendNotification(type, data) {
 // Send SMS via /api/send-sms serverless function (Twilio)
 export async function sendSMS(to, body) {
   try {
+    const headers = await getAuthHeaders();
     const res = await fetch('/api/send-sms', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ to, body }),
     });
     const data = await res.json();

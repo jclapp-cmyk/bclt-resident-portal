@@ -35,7 +35,6 @@ export async function getCurrentSession() {
 export async function fetchProfile(userId, userEmail) {
   // Try RPC first (links the profile and returns enriched data)
   const { data, error } = await supabase.rpc('link_profile_on_login', {
-    user_id: userId,
     user_email: userEmail,
   });
 

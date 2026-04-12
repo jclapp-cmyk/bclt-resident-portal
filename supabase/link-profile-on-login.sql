@@ -6,27 +6,38 @@
 --   2. Update its id to the real auth.uid()
 --   3. Return the enriched profile data
 --
+-- SECURITY: Uses auth.uid() directly instead of trusting a user_id parameter.
+-- The email parameter is still accepted for matching, but identity comes from auth.
+--
 -- Run this in the Supabase SQL editor.
 
-create or replace function public.link_profile_on_login(user_id uuid, user_email text)
+-- Drop old function signature that accepted (uuid, text)
+DROP FUNCTION IF EXISTS public.link_profile_on_login(uuid, text);
+
+create or replace function public.link_profile_on_login(user_email text)
 returns json
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
+  caller_id uuid := auth.uid();
   prof record;
   result json;
 begin
+  if caller_id is null then
+    raise exception 'Not authenticated';
+  end if;
+
   -- First try to find by matching auth id (already linked)
-  select * into prof from user_profiles where id = user_id;
+  select * into prof from user_profiles where id = caller_id;
 
   -- If not found, find by email and link
   if prof is null then
     select * into prof from user_profiles where lower(email) = lower(user_email);
-    if prof is not null and prof.id != user_id then
-      update user_profiles set id = user_id where email = prof.email;
-      prof.id := user_id;
+    if prof is not null and prof.id != caller_id then
+      update user_profiles set id = caller_id where email = prof.email;
+      prof.id := caller_id;
     end if;
   end if;
 
@@ -54,7 +65,7 @@ begin
 end;
 $$;
 
-grant execute on function public.link_profile_on_login(uuid, text) to authenticated, anon;
+grant execute on function public.link_profile_on_login(text) to authenticated;
 
 -- Also ensure check_email_exists function exists (used on login form)
 create or replace function public.check_email_exists(lookup_email text)
