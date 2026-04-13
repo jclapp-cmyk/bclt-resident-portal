@@ -3391,16 +3391,13 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
             try {
               const newUnit = await insertUnit({ ...unitForm, bedrooms: parseInt(unitForm.bedrooms) || 1, bathrooms: parseInt(unitForm.bathrooms) || 1, sqft: parseInt(unitForm.sqft) || 0, is_rv: unitForm.isRv, rv_info: unitForm.isRv ? unitForm.rvInfo : null }, p._uuid);
               showUnitSuccess(`Unit ${unitForm.number} added!`);
-              setUnitList(prev => {
-                const updated = [...prev, newUnit];
-                // Update property total_units count in global state so sidebar reflects it
-                const propIdx = LIVE_PROPERTIES.findIndex(x => x._uuid === p._uuid);
-                if (propIdx >= 0) LIVE_PROPERTIES[propIdx] = { ...LIVE_PROPERTIES[propIdx], totalUnits: updated.length };
-                if (onDataRefresh) onDataRefresh();
-                return updated;
-              });
+              setUnitList(prev => [...prev, newUnit]);
+              // Update property total_units count in global state so sidebar reflects it
+              const propIdx = LIVE_PROPERTIES.findIndex(x => x._uuid === p._uuid);
+              if (propIdx >= 0) LIVE_PROPERTIES[propIdx] = { ...LIVE_PROPERTIES[propIdx], totalUnits: (LIVE_PROPERTIES[propIdx].totalUnits || 0) + 1 };
               setUnitForm({ number: "", bedrooms: "1", bathrooms: "1", sqft: "", isRv: false, rvInfo: {} });
               setShowAddUnit(false);
+              if (onDataRefresh) onDataRefresh();
             } catch (err) { showUnitSuccess("Error: " + err.message); }
           }} style={{ ...s.mBtn("primary", mobile) }}>Add Unit</button>
         </div>
@@ -3490,14 +3487,11 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                           if (!confirm(`Delete unit ${u.number}?`)) return;
                           try {
                             await deleteUnit(uid);
-                            setUnitList(prev => {
-                              const updated = prev.filter(x => (x._uuid || x.id) !== uid);
-                              const propIdx = LIVE_PROPERTIES.findIndex(x => x._uuid === p._uuid);
-                              if (propIdx >= 0) LIVE_PROPERTIES[propIdx] = { ...LIVE_PROPERTIES[propIdx], totalUnits: updated.length };
-                              if (onDataRefresh) onDataRefresh();
-                              return updated;
-                            });
+                            setUnitList(prev => prev.filter(x => (x._uuid || x.id) !== uid));
+                            const propIdx = LIVE_PROPERTIES.findIndex(x => x._uuid === p._uuid);
+                            if (propIdx >= 0) LIVE_PROPERTIES[propIdx] = { ...LIVE_PROPERTIES[propIdx], totalUnits: Math.max(0, (LIVE_PROPERTIES[propIdx].totalUnits || 1) - 1) };
                             showUnitSuccess(`Unit ${u.number} deleted`);
+                            if (onDataRefresh) onDataRefresh();
                           } catch (err) { showUnitSuccess("Error: " + err.message); }
                         }}>Delete</button>
                         <button title="QR Code — Maintenance Request" style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => setQrUnit(qrUnit === u.number ? null : u.number)}>QR Code</button>

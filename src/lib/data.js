@@ -667,7 +667,6 @@ export async function insertMaintenanceRequest({ unit, category, priority, descr
     status: 'submitted',
     description,
     assigned_to: null,
-    queue_pos: (count || 0) + 1,
   }).select().single();
   if (error) throw error;
   return { ...data, id: data.code };
