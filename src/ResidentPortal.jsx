@@ -2955,11 +2955,11 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   // Log the communication as a thread
                   const threadId = `THR-${Date.now()}`;
                   const now = new Date().toISOString();
-                  if (onAddThread) onAddThread({
+                  if (onAddThread) await onAddThread({
                     id: threadId, participants: [selectedResident.id], subject: msgSubject || `${channel.toUpperCase()} to ${selectedResident.name}`,
                     lastMessage: msgBody.slice(0, 100), lastDate: now, unread: 0, channel: channel === "both" ? "multi" : channel, type: "direct",
                   });
-                  if (onAddMessage) onAddMessage({
+                  if (onAddMessage) await onAddMessage({
                     id: `MSG-${Date.now()}`, threadId, from: "admin", body: msgBody, date: now, status: "delivered",
                   });
                   showSuccess(`${channel === "both" ? "Email + SMS" : channel === "sms" ? "SMS" : "Email"} sent to ${selectedResident.name}`);
@@ -5034,8 +5034,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               setSending(true);
               const threadId = `THR-${Date.now()}`;
               const ch = composeData.channel === "auto" ? "email" : composeData.channel;
-              // Save thread + message to database
-              onAddThread({
+              // Save thread + message to database (await thread so message can reference it)
+              await onAddThread({
                 id: threadId,
                 participants: composeData.broadcast ? ["all"] : [composeData.to],
                 subject: composeData.subject.trim(),
@@ -5046,7 +5046,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 type: composeData.broadcast ? "broadcast" : "direct",
                 priority: composeData.priority,
               });
-              onAddMessage({
+              await onAddMessage({
                 id: `MSG-${Date.now()}`,
                 threadId,
                 from: "admin",
@@ -7060,12 +7060,12 @@ export default function App() {
       }
     }
   };
-  const addThreadN = (t) => {
-    addThread(t);
+  const addThreadN = async (t) => {
+    await addThread(t);
     pushNotif({ id: `N-${Date.now()}`, type: "message", icon: "💬", message: `New message: ${t.subject}`, timestamp: new Date().toISOString(), roles: ["resident", "admin"].filter(r => r !== role) });
   };
-  const addMessageN = (msg) => {
-    addMessage(msg);
+  const addMessageN = async (msg) => {
+    await addMessage(msg);
     const thread = threads.find(t => t.id === msg.threadId);
     pushNotif({ id: `N-${Date.now()}`, type: "message", icon: "💬", message: `Reply in "${thread?.subject || "thread"}"`, timestamp: new Date().toISOString(), roles: ["resident", "admin"].filter(r => r !== role) });
   };

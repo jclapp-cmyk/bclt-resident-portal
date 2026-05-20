@@ -381,8 +381,18 @@ export async function fetchThreads() {
 }
 
 export async function fetchMessages() {
-  const { data, error } = await supabase.from('messages').select('*, message_threads(code)').order('sent_at');
-  if (error) throw error;
+  // Try join first; fall back to plain select if PostgREST can't resolve the FK
+  let { data, error } = await supabase.from('messages').select('*, message_threads(code)').order('sent_at');
+  if (error) {
+    const fallback = await supabase.from('messages').select('*').order('sent_at');
+    if (fallback.error) throw fallback.error;
+    const { data: threads } = await supabase.from('message_threads').select('id, code');
+    const threadMap = Object.fromEntries((threads || []).map(t => [t.id, t.code]));
+    return (fallback.data || []).map(m => ({
+      id: m.code, _uuid: m.id, threadId: threadMap[m.thread_id] || '',
+      from: m.sender, body: m.body, date: m.sent_at, status: m.status,
+    }));
+  }
   return (data || []).map(m => ({
     id: m.code, _uuid: m.id, threadId: m.message_threads?.code || '',
     from: m.sender, body: m.body, date: m.sent_at, status: m.status,
