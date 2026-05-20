@@ -2,14 +2,16 @@ import { createClient } from '@supabase/supabase-js';
 
 async function verifyAuth(req) {
   const authHeader = req.headers.authorization || req.headers.Authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
+  if (!authHeader?.startsWith('Bearer ')) return { error: 'no_auth_header' };
   const token = authHeader.slice(7);
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_row_key || process.env.VITE_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !key) return null;
+  if (!supabaseUrl) return { error: 'no_supabase_url' };
+  if (!key) return { error: 'no_supabase_key' };
   const supabase = createClient(supabaseUrl, key);
   const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return null;
+  if (error) return { error: `getUser_failed: ${error.message}` };
+  if (!user) return { error: 'no_user_returned' };
   return { user, supabase };
 }
 
@@ -18,8 +20,8 @@ export default async function handler(req, res) {
 
   // Verify the caller is authenticated
   const auth = await verifyAuth(req);
-  if (!auth) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  if (!auth.user) {
+    return res.status(401).json({ error: 'Unauthorized', reason: auth.error });
   }
   const { user, supabase } = auth;
 
