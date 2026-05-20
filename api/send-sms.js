@@ -5,9 +5,9 @@ async function verifyAuth(req) {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !serviceKey) return null;
-  const supabase = createClient(supabaseUrl, serviceKey);
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_row_key || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !key) return null;
+  const supabase = createClient(supabaseUrl, key);
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) return null;
   return { user, supabase };
