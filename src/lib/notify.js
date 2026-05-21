@@ -53,10 +53,10 @@ export async function sendSMS(to, body) {
 }
 
 // Send both email and SMS
-export async function sendBoth({ email, phone, subject, emailBody, smsBody }) {
+export async function sendBoth({ email, phone, subject, emailBody, smsBody, threadCode }) {
   const results = { email: null, sms: null };
   if (email) {
-    await sendNotification('custom', { to: email, subject, body: emailBody });
+    await sendNotification('custom', { to: email, subject, body: emailBody, threadCode });
     results.email = 'sent';
   }
   if (phone) {

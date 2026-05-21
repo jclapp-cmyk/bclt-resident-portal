@@ -2942,17 +2942,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               <button disabled={!msgBody.trim() || ((msgChannel) !== "sms" && !msgSubject.trim())} onClick={async () => {
                 const channel = msgChannel;
                 try {
-                  if (channel === "email" && selectedResident.email) {
-                    await sendNotification("custom", { to: selectedResident.email, subject: msgSubject, body: msgBody });
-                  } else if (channel === "sms" && selectedResident.phone) {
-                    const result = await sendSMS(selectedResident.phone, msgBody);
-                    if (!result?.success) throw new Error(result?.error || "SMS failed");
-                  } else if (channel === "both") {
-                    await sendBoth({ email: selectedResident.email, phone: selectedResident.phone, subject: msgSubject, emailBody: msgBody, smsBody: msgBody });
-                  } else {
-                    throw new Error(channel === "sms" ? "No phone number on file" : "No email on file");
-                  }
-                  // Log the communication as a thread
+                  // Create thread first so we can include threadCode in emails
                   const threadId = `THR-${Date.now()}`;
                   const now = new Date().toISOString();
                   if (onAddThread) await onAddThread({
@@ -2962,6 +2952,16 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   if (onAddMessage) await onAddMessage({
                     id: `MSG-${Date.now()}`, threadId, from: "admin", body: msgBody, date: now, status: "delivered",
                   });
+                  if (channel === "email" && selectedResident.email) {
+                    await sendNotification("custom", { to: selectedResident.email, subject: msgSubject, body: msgBody, threadCode: threadId });
+                  } else if (channel === "sms" && selectedResident.phone) {
+                    const result = await sendSMS(selectedResident.phone, msgBody);
+                    if (!result?.success) throw new Error(result?.error || "SMS failed");
+                  } else if (channel === "both") {
+                    await sendBoth({ email: selectedResident.email, phone: selectedResident.phone, subject: msgSubject, emailBody: msgBody, smsBody: msgBody, threadCode: threadId });
+                  } else {
+                    throw new Error(channel === "sms" ? "No phone number on file" : "No email on file");
+                  }
                   showSuccess(`${channel === "both" ? "Email + SMS" : channel === "sms" ? "SMS" : "Email"} sent to ${selectedResident.name}`);
                   setMsgSubject(""); setMsgBody("");
                 } catch (err) { showSuccess("Error: " + err.message); }
@@ -5055,23 +5055,24 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               });
               // Actually send the message via SMS/email
               try {
+                const emailData = { subject: composeData.subject.trim(), body: composeData.body.trim(), threadCode: threadId };
                 if (composeData.broadcast) {
                   for (const r of LIVE_RESIDENTS) {
                     if (ch === "sms" && r.phone) await sendSMS(r.phone, composeData.body.trim());
-                    else if (ch === "email" && r.email) await sendNotification("custom", { to: r.email, subject: composeData.subject.trim(), body: composeData.body.trim() });
+                    else if (ch === "email" && r.email) await sendNotification("custom", { ...emailData, to: r.email });
                     else {
                       if (r.phone) await sendSMS(r.phone, composeData.body.trim());
-                      if (r.email) await sendNotification("custom", { to: r.email, subject: composeData.subject.trim(), body: composeData.body.trim() });
+                      if (r.email) await sendNotification("custom", { ...emailData, to: r.email });
                     }
                   }
                 } else {
                   const r = LIVE_RESIDENTS.find(res => res.id === composeData.to);
                   if (r) {
                     if (ch === "sms" && r.phone) await sendSMS(r.phone, composeData.body.trim());
-                    else if (ch === "email" && r.email) await sendNotification("custom", { to: r.email, subject: composeData.subject.trim(), body: composeData.body.trim() });
+                    else if (ch === "email" && r.email) await sendNotification("custom", { ...emailData, to: r.email });
                     else {
                       if (r.phone) await sendSMS(r.phone, composeData.body.trim());
-                      if (r.email) await sendNotification("custom", { to: r.email, subject: composeData.subject.trim(), body: composeData.body.trim() });
+                      if (r.email) await sendNotification("custom", { ...emailData, to: r.email });
                     }
                   }
                 }

@@ -40,6 +40,10 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: `Unknown notification type: ${type}` });
     }
 
+    // Include thread code in subject so replies can be matched back
+    const threadCode = data.threadCode;
+    const subject = threadCode ? `[${threadCode}] ${email.subject}` : email.subject;
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -48,8 +52,9 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         from: fromEmail,
+        reply_to: 'residentportal@bolinaslandtrust.org',
         to: email.to,
-        subject: email.subject,
+        subject,
         html: wrapHtml(email.body),
       }),
     });
