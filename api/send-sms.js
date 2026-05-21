@@ -1,35 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
-
-async function verifyAuth(req) {
-  const authHeader = req.headers.authorization || req.headers.Authorization;
-  if (!authHeader?.startsWith('Bearer ')) return { error: 'no_auth_header' };
-  const token = authHeader.slice(7);
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_row_key || process.env.VITE_SUPABASE_ANON_KEY;
-  if (!supabaseUrl) return { error: 'no_supabase_url' };
-  if (!key) return { error: 'no_supabase_key' };
-  const supabase = createClient(supabaseUrl, key);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error) return { error: `getUser_failed: ${error.message}` };
-  if (!user) return { error: 'no_user_returned' };
-  return { user, supabase };
-}
+// Vercel Serverless Function — SMS via Twilio
+// Env vars required: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_MESSAGING_SERVICE_SID or TWILIO_PHONE_NUMBER
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  // Verify the caller is authenticated
-  const auth = await verifyAuth(req);
-  if (!auth.user) {
-    return res.status(401).json({ error: 'Unauthorized', reason: auth.error });
-  }
-  const { user, supabase } = auth;
-
-  // Check user role — only admin and maintenance can send SMS
-  const { data: profile } = await supabase.from('user_profiles').select('role').eq('id', user.id).single();
-  if (!profile || !['admin', 'maintenance'].includes(profile.role)) {
-    return res.status(403).json({ error: 'Forbidden: insufficient role' });
-  }
 
   const { to, body } = req.body;
   if (!to || !body) return res.status(400).json({ error: 'Missing to or body' });
@@ -49,7 +22,6 @@ export default async function handler(req, res) {
       To: to.startsWith('+') ? to : `+1${to.replace(/\D/g, '')}`,
       Body: body,
     });
-    // Use Messaging Service if available (required for A2P 10DLC), otherwise fall back to From number
     if (messagingServiceSid) {
       params.set('MessagingServiceSid', messagingServiceSid);
     } else if (fromNumber) {
