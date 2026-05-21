@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing type or data' });
   }
 
-  const fromEmail = process.env.FROM_EMAIL || 'BCLT Portal <portal@bolinaslandtrust.org>';
+  const fromEmail = process.env.FROM_EMAIL || 'BCLT Portal <residentportal@bolinaslandtrust.org>';
 
   let email;
   try {
