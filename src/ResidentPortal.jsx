@@ -91,10 +91,25 @@ const T = Object.fromEntries(Object.keys(THEMES.light).map(k => [k, `var(--t-${k
 T.radius = 12;
 T.radiusSm = 8;
 
+// Maintenance status helpers — recognise both legacy ("submitted"/"completed")
+// and new pipeline ("new"/"needs-info"/"todo"/"in-progress"/"done"/"rejected").
+const MAINT_OPEN = (m) => m && m.status !== "done" && MAINT_OPEN(m) && m.status !== "rejected";
+const MAINT_DONE = (m) => m && (m.status === "done" || MAINT_DONE(m));
+const MAINT_AWAITING = (m) => m && (m.status === "new" || m.status === "needs-info" || MAINT_AWAITING(m));
+const MAINT_ACTIVE_WO = (m) => m && (m.status === "todo" || m.status === "in-progress");
+const MAINT_INPROGRESS = (m) => m && m.status === "in-progress";
+
 const STATUS_COLORS = {
+  // legacy values (back-compat)
   submitted: { bg: T.infoDim, text: T.info, label: "Submitted" },
-  "in-progress": { bg: T.warnDim, text: T.warn, label: "In Progress" },
   completed: { bg: T.successDim, text: T.success, label: "Completed" },
+  // new pipeline
+  new: { bg: T.infoDim, text: T.info, label: "New" },
+  "needs-info": { bg: T.warnDim, text: T.warn, label: "Needs Info" },
+  rejected: { bg: T.dangerDim, text: T.danger, label: "Rejected" },
+  todo: { bg: T.dimLight, text: T.muted, label: "To Do" },
+  "in-progress": { bg: T.warnDim, text: T.warn, label: "In Progress" },
+  done: { bg: T.successDim, text: T.success, label: "Done" },
 };
 
 const PRIORITY_COLORS = {
@@ -589,7 +604,7 @@ const BOTTOM_TABS = {
 const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, onNavigate }) => {
   const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
   const certStatus = getCertStatus(ext.moveIn || ext.leaseStart, null);
-  const openRequests = maintenance.filter(m => m.unit === rc?.unit && m.status !== "completed").length;
+  const openRequests = maintenance.filter(m => m.unit === rc?.unit && MAINT_OPEN(m)).length;
   const propName = LIVE_PROPERTIES.find(p => p.id === rc?.propertyId)?.name || "BCLT";
   return (
     <div>
@@ -674,7 +689,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Active Maintenance</div>
-        {maintenance.filter(m => m.unit === (rc?.unit || "") && m.status !== "completed").map(m => (
+        {maintenance.filter(m => m.unit === (rc?.unit || "") && MAINT_OPEN(m)).map(m => (
           <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}` }}>
             <div>
               <span style={{ fontWeight: 600, fontSize: 14 }}>{m.category}</span>
@@ -708,8 +723,8 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
           <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap" }}>
             {LIVE_PROPERTIES.map(p => {
               const pMaint = maintenance.filter(m => m.propertyId === p.id);
-              const pOpen = pMaint.filter(m => m.status !== "completed").length;
-              const pCrit = pMaint.filter(m => m.priority === "critical" && m.status !== "completed").length;
+              const pOpen = pMaint.filter(m => MAINT_OPEN(m)).length;
+              const pCrit = pMaint.filter(m => m.priority === "critical" && MAINT_OPEN(m)).length;
               const pRes = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
               const pLedger = LIVE_RENT_LEDGER.filter(r => r.propertyId === p.id);
               const pRent = pLedger.reduce((s, r) => s + r.rentDue, 0);
@@ -742,9 +757,9 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Work Order Status</div>
           <DonutChart segments={[
-            { value: maintenance.filter(m => m.status === "submitted").length, color: T.info, label: "Submitted" },
+            { value: maintenance.filter(m => MAINT_AWAITING(m)).length, color: T.info, label: "Submitted" },
             { value: maintenance.filter(m => m.status === "in-progress").length, color: T.warn, label: "In Progress" },
-            { value: maintenance.filter(m => m.status === "completed").length, color: T.success, label: "Completed" },
+            { value: maintenance.filter(m => MAINT_DONE(m)).length, color: T.success, label: "Completed" },
           ]} size={120} centerValue={String(maintenance.length)} centerLabel="Total" mobile={mobile} />
         </div>
         <div style={s.card}>
@@ -757,7 +772,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
         <table style={s.table}>
           <thead><tr>{["ID", "Unit", "Category", "Priority", "Status", "Assigned"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>
-            {maintenance.filter(m => m.status !== "completed").map(m => (
+            {maintenance.filter(m => MAINT_OPEN(m)).map(m => (
               <tr key={m.id}>
                 <td style={s.td}><span style={{ fontWeight: 600 }}>{m.id}</span></td>
                 <td style={s.td}>{m.unit}</td>
@@ -835,7 +850,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
 // --- MAINTENANCE DASHBOARD (Staff) ---
 const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile }) => {
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
-  const myOrders = maintenance.filter(m => m.assignedTo === staffName && m.status !== "completed");
+  const myOrders = maintenance.filter(m => m.assignedTo === staffName && MAINT_OPEN(m));
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>My Dashboard</h1>
@@ -843,26 +858,26 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile }) =
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
         <StatCard label="My Open Orders" value={myOrders.length} accent={T.warn} mobile={mobile} />
         <StatCard label="Unassigned" value={maintenance.filter(m => !m.assignedTo).length} accent={T.danger} mobile={mobile} />
-        <StatCard label="Completed (Month)" value={maintenance.filter(m => m.status === "completed").length} accent={T.success} mobile={mobile} />
+        <StatCard label="Completed (Month)" value={maintenance.filter(m => MAINT_DONE(m)).length} accent={T.success} mobile={mobile} />
       </div>
       <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 24 }}>
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Completion Rate</div>
           <div style={{ display: "flex", alignItems: "center", gap: mobile ? 16 : 24 }}>
-            <ProgressRing value={maintenance.filter(m => m.status === "completed").length} max={maintenance.length} color={T.success} size={90} label="Complete" mobile={mobile} />
+            <ProgressRing value={maintenance.filter(m => MAINT_DONE(m)).length} max={maintenance.length} color={T.success} size={90} label="Complete" mobile={mobile} />
             <div>
-              <div style={{ fontSize: 13, color: T.muted, marginBottom: 4 }}>{maintenance.filter(m => m.status === "completed").length} of {maintenance.length} completed</div>
+              <div style={{ fontSize: 13, color: T.muted, marginBottom: 4 }}>{maintenance.filter(m => MAINT_DONE(m)).length} of {maintenance.length} completed</div>
               <div style={{ fontSize: 13, color: T.muted }}>{maintenance.filter(m => m.status === "in-progress").length} in progress</div>
-              <div style={{ fontSize: 13, color: T.muted }}>{maintenance.filter(m => m.status === "submitted").length} awaiting action</div>
+              <div style={{ fontSize: 13, color: T.muted }}>{maintenance.filter(m => MAINT_AWAITING(m)).length} awaiting action</div>
             </div>
           </div>
         </div>
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Open by Priority</div>
           <MiniBarChart bars={[
-            { label: "Critical", value: maintenance.filter(m => m.priority === "critical" && m.status !== "completed").length, color: T.danger },
-            { label: "Urgent", value: maintenance.filter(m => m.priority === "urgent" && m.status !== "completed").length, color: T.warn },
-            { label: "Routine", value: maintenance.filter(m => m.priority === "routine" && m.status !== "completed").length, color: T.info },
+            { label: "Critical", value: maintenance.filter(m => m.priority === "critical" && MAINT_OPEN(m)).length, color: T.danger },
+            { label: "Urgent", value: maintenance.filter(m => m.priority === "urgent" && MAINT_OPEN(m)).length, color: T.warn },
+            { label: "Routine", value: maintenance.filter(m => m.priority === "routine" && MAINT_OPEN(m)).length, color: T.info },
           ]} mobile={mobile} />
         </div>
       </div>
@@ -922,13 +937,15 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
     const newReq = {
       id: `MR-${2406 + maintenance.length}`,
       unit: rc?.unit || "",
+      propertyId: rc?.propertyId || "",
       category: formData.category,
       priority: formData.urgency,
-      status: "submitted",
+      status: "new",
+      source: "resident",
       description: formData.description.trim(),
       submitted: new Date().toISOString().slice(0, 10),
       assignedTo: null,
-      queuePos: maintenance.filter(m => m.status !== "completed").length + 1,
+      queuePos: maintenance.filter(m => MAINT_OPEN(m)).length + 1,
       projectedComplete: null,
       notes: [],
       photos: photoPaths.length > 0 ? photoPaths : undefined,
@@ -1013,7 +1030,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
           <div style={{ display: "flex", gap: 20, fontSize: 13, color: T.muted }}>
             <span>Submitted: {m.submitted}</span>
             {m.assignedTo && <span>Assigned: {m.assignedTo}</span>}
-            {m.queuePos && m.status !== "completed" && <span style={{ color: T.accent }}>Queue position: #{m.queuePos}</span>}
+            {m.queuePos && MAINT_OPEN(m) && <span style={{ color: T.accent }}>Queue position: #{m.queuePos}</span>}
             {m.projectedComplete && <span>Est. complete: {m.projectedComplete}</span>}
           </div>
           {(Array.isArray(m.notes) ? m.notes : []).length > 0 && (
@@ -1029,76 +1046,90 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
 };
 
 // --- WORK ORDERS (Maintenance Staff) ---
-const WorkOrders = ({ mobile, maintenance, onUpdate, profile }) => {
+const WorkOrders = ({ mobile, maintenance, onUpdate, profile, vendors = [], staffMembers = [] }) => {
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
-  const [filter, setFilter] = useState("mine");
-  const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({ status: "", notes: "" });
+  const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin" || s.role === "property_manager")).filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i);
+  const [woTab, setWoTab] = useState("todo");
+  const [assigneeFilter, setAssigneeFilter] = useState("mine");
+  const [selected, setSelected] = useState(null);
   const [success, showSuccess] = useSuccess();
-  const orders = filter === "mine" ? maintenance.filter(m => m.assignedTo === staffName) : maintenance;
 
-  const startEdit = (row) => {
-    setEditingId(row.id);
-    setEditData({ status: row.status, notes: "" });
+  useEffect(() => {
+    if (!selected) return;
+    const updated = maintenance.find(m => m.id === selected.id);
+    if (updated && updated !== selected) setSelected(updated);
+  }, [maintenance, selected]);
+
+  const todoRows = maintenance.filter(m => m.status === "todo" || m.status === "in-progress");
+  const doneRows = maintenance.filter(m => m.status === "done");
+  const applyAssignee = (rows) => assigneeFilter === "mine" ? rows.filter(r => r.assignedTo === staffName) : rows;
+
+  const issueCol = {
+    key: "description", label: "Issue",
+    render: (v, row) => (
+      <div>
+        <div style={{ fontWeight: 600, color: T.accent }}>{v}</div>
+        <div style={{ fontSize: 11, color: T.dim, marginTop: 2 }}>{row.id}</div>
+      </div>
+    ),
+    sortValue: row => (row.description || "").toLowerCase(),
   };
-  const saveEdit = () => {
-    const changes = { status: editData.status };
-    if (editData.notes.trim()) {
-      const existing = maintenance.find(m => m.id === editingId);
-      changes.notes = [...(existing?.notes || []), { by: staffName, date: new Date().toISOString().slice(0, 10), text: editData.notes.trim() }];
-    }
-    onUpdate(editingId, changes);
-    setEditingId(null);
-    showSuccess("Work order updated!");
-  };
+
+  const propertyOptions = [...new Set(maintenance.map(m => propertyDisplayName(m.propertyId)))];
+  const cols = [
+    issueCol,
+    { key: "residentName", label: "Requester", render: (v, row) => v || row.requesterName || "—" },
+    { key: "propertyId", label: "Property", render: v => propertyDisplayName(v), filterOptions: propertyOptions, filterValue: row => propertyDisplayName(row.propertyId) },
+    { key: "unit", label: "Unit" },
+    { key: "category", label: "Category", filterOptions: [...new Set(maintenance.map(m => m.category))] },
+    { key: "priority", label: "Priority", render: v => <Badge status={v} type="priority" />, filterOptions: ["critical", "urgent", "routine"], filterValue: row => row.priority },
+    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: woTab === "todo" ? ["todo", "in-progress"] : ["done"], filterValue: row => row.status },
+    { key: "vendorId", label: "Vendor", render: v => vendors.find(x => x.id === v)?.company || "—", filterOptions: [...new Set(vendors.map(v => v.company))], filterValue: row => vendors.find(x => x.id === row.vendorId)?.company || "" },
+    { key: "projectedComplete", label: "Projected", render: v => v || "—" },
+  ];
+
+  const currentRows = applyAssignee(woTab === "todo" ? todoRows : doneRows);
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div><h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Work Orders</h1><p style={s.sectionSub}>Manage and update assigned maintenance requests</p></div>
-        <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "ID", key: "id" }, { label: "Unit", key: "unit" }, { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" }, { label: "Assigned To", key: "assignedTo", exportValue: r => r.assignedTo || "Unassigned" }, { label: "Description", key: "description" }], maintenance, "work_orders")} />
+        <ExportButton mobile={mobile} onClick={() => generateCSV([
+          { label: "Issue", key: "description" }, { label: "Requester", key: "residentName", exportValue: r => r.residentName || r.requesterName || "" },
+          { label: "Property", key: "propertyId", exportValue: r => propertyDisplayName(r.propertyId) }, { label: "Unit", key: "unit" },
+          { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" },
+          { label: "Vendor", key: "vendorId", exportValue: r => vendors.find(v => v.id === r.vendorId)?.company || "" },
+          { label: "Projected", key: "projectedComplete" }, { label: "ID", key: "id" },
+        ], currentRows, `work_orders_${woTab}`)} />
       </div>
       <SuccessMessage message={success} />
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {["mine", "all"].map(f => (
-          <button key={f} onClick={() => setFilter(f)} style={{ ...s.btn(filter === f ? "primary" : "ghost"), textTransform: "capitalize" }}>{f === "mine" ? "My Orders" : "All Orders"}</button>
-        ))}
-      </div>
-      <SortableTable
-        mobile={mobile}
-        columns={[
-          { key: "id", label: "ID", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
-          { key: "unit", label: "Unit" },
-          { key: "category", label: "Category", filterOptions: [...new Set(maintenance.map(m => m.category))] },
-          { key: "priority", label: "Priority", render: v => <Badge status={v} type="priority" />, filterOptions: ["critical", "urgent", "routine", "low"], filterValue: row => row.priority },
-          { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["submitted", "in-progress", "completed"], filterValue: row => row.status },
-          { key: "projectedComplete", label: "Projected", render: v => v || "—", filterable: false },
-          { key: "_actions", label: "", sortable: false, filterable: false, render: (_, row) => <button style={s.btn("ghost")} onClick={() => startEdit(row)}>Update</button> },
-        ]}
-        data={orders}
-      />
-      {editingId && (
-        <div style={{ ...s.card, borderColor: T.accent, marginTop: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Update {editingId}</div>
-          <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-            <div>
-              <label style={s.label}>Status</label>
-              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={editData.status} onChange={e => setEditData(p => ({ ...p, status: e.target.value }))}>
-                <option value="submitted">Submitted</option>
-                <option value="in-progress">In Progress</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={s.label}>Add Note</label>
-            <textarea style={{ ...s.input, minHeight: 60, resize: "vertical" }} placeholder="Add a note about the work..." value={editData.notes} onChange={e => setEditData(p => ({ ...p, notes: e.target.value }))} />
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button style={s.btn()} onClick={saveEdit}>Save</button>
-            <button style={s.btn("ghost")} onClick={() => setEditingId(null)}>Cancel</button>
-          </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button style={s.btn(woTab === "todo" ? "primary" : "ghost")} onClick={() => setWoTab("todo")}>To Do ({applyAssignee(todoRows).length})</button>
+          <button style={s.btn(woTab === "done" ? "primary" : "ghost")} onClick={() => setWoTab("done")}>Done ({applyAssignee(doneRows).length})</button>
         </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button style={s.btn(assigneeFilter === "mine" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("mine")}>My Orders</button>
+          <button style={s.btn(assigneeFilter === "all" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("all")}>All</button>
+        </div>
+      </div>
+
+      <div style={s.card}>
+        <SortableTable mobile={mobile} columns={cols} data={currentRows} onRowClick={setSelected} />
+      </div>
+
+      {selected && (
+        <MaintenanceDetailModal
+          row={selected}
+          onClose={() => setSelected(null)}
+          onUpdate={(id, changes) => { onUpdate(id, changes); showSuccess("Updated"); }}
+          staffMembers={maintStaff}
+          vendors={vendors}
+          isStaff={true}
+          currentUserName={staffName}
+          mobile={mobile}
+        />
       )}
     </div>
   );
@@ -3131,7 +3162,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
 const PropertyCard = ({ p, mobile, onSelect, maintenance = [] }) => {
   const residents = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
   const maint = maintenance.filter(m => m.propertyId === p.id);
-  const openMaint = maint.filter(m => m.status !== "completed").length;
+  const openMaint = maint.filter(m => MAINT_OPEN(m)).length;
   const ledger = LIVE_RENT_LEDGER.filter(r => r.propertyId === p.id);
   const rentRoll = ledger.reduce((s, r) => s + r.rentDue, 0);
   const collected = ledger.reduce((s, r) => s + r.tenantPaid + r.hapReceived, 0);
@@ -3714,7 +3745,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
   const dMaint = filterByDateRange(maintenance, "submitted", dateRange);
   // Maintenance aggregations
   const total = dMaint.length;
-  const completed = dMaint.filter(m => m.status === "completed").length;
+  const completed = dMaint.filter(m => MAINT_DONE(m)).length;
   const open = total - completed;
   const avgResolution = (() => {
     const resolved = dMaint.filter(m => m.completedDate && m.submitted);
@@ -3724,8 +3755,8 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
   })();
   const cats = dMaint.reduce((acc, m) => { acc[m.category] = (acc[m.category] || 0) + 1; return acc; }, {});
   const topCategory = Object.entries(cats).sort((a, b) => b[1] - a[1])[0]?.[0] || "—";
-  const statusCounts = { submitted: dMaint.filter(m => m.status === "submitted").length, "in-progress": dMaint.filter(m => m.status === "in-progress").length, completed };
-  const priCounts = { critical: dMaint.filter(m => m.priority === "critical" && m.status !== "completed").length, urgent: dMaint.filter(m => m.priority === "urgent" && m.status !== "completed").length, routine: dMaint.filter(m => m.priority === "routine" && m.status !== "completed").length };
+  const statusCounts = { submitted: dMaint.filter(m => MAINT_AWAITING(m)).length, "in-progress": dMaint.filter(m => m.status === "in-progress").length, completed };
+  const priCounts = { critical: dMaint.filter(m => m.priority === "critical" && MAINT_OPEN(m)).length, urgent: dMaint.filter(m => m.priority === "urgent" && MAINT_OPEN(m)).length, routine: dMaint.filter(m => m.priority === "routine" && MAINT_OPEN(m)).length };
 
   // Financial aggregations
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
@@ -5164,48 +5195,335 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
 };
 
 // ── ADMIN MAINTENANCE (with assignment) ────────────────────
-const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers = [] }) => {
-  const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin" || s.role === "property_manager")).filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i);
-  const [editingId, setEditingId] = useState(null);
-  const [editData, setEditData] = useState({ status: "", assignedTo: "", notes: "" });
-  const [success, showSuccess] = useSuccess();
-  const [showCreate, setShowCreate] = useState(false);
-  const [createForm, setCreateForm] = useState({ unit: "", category: "Plumbing", priority: "routine", description: "" });
+// ── MAINTENANCE: Intake + Work Orders ──
+const propertyDisplayName = (slug) => LIVE_PROPERTIES.find(p => p.id === slug)?.name || slug || "—";
 
-  const startEdit = (row) => {
-    setEditingId(row.id);
-    setEditData({ status: row.status, assignedTo: row.assignedTo || "", notes: "" });
-  };
-  const saveEdit = () => {
-    const changes = { status: editData.status, assignedTo: editData.assignedTo || null };
-    if (editData.notes.trim()) {
-      const existing = maintenance.find(m => m.id === editingId);
-      changes.notes = [...(existing?.notes || []), { by: "Admin", date: new Date().toISOString().slice(0, 10), text: editData.notes.trim() }];
+const MaintenanceDetailModal = ({ row, onClose, onUpdate, staffMembers, vendors, isStaff, currentUserName, mobile }) => {
+  const notes = Array.isArray(row.notes) ? row.notes : [];
+  const isIntake = row.status === "new" || row.status === "needs-info";
+  const ven = vendors.find(v => v.id === row.vendorId);
+  const [tab, setTab] = useState(isIntake ? "review" : "update");
+  const [draft, setDraft] = useState({
+    status: row.status,
+    assignedTo: row.assignedTo || "",
+    vendorId: row.vendorId || "",
+    priority: row.priority,
+    projectedComplete: row.projectedComplete || "",
+    note: "",
+    rejectionReason: "",
+  });
+
+  const addNote = (existing, text, by) => [...existing, { by: by || "Admin", date: new Date().toISOString().slice(0, 10), text }];
+
+  const handleConvert = () => {
+    if (!draft.assignedTo && !draft.vendorId) {
+      alert("Assign a staff member or vendor before converting to a work order.");
+      return;
     }
-    onUpdate(editingId, changes);
-    setEditingId(null);
-    showSuccess("Work order updated!");
+    const changes = {
+      status: "todo",
+      assignedTo: draft.assignedTo || null,
+      vendorId: draft.vendorId || null,
+      priority: draft.priority,
+      projectedComplete: draft.projectedComplete || null,
+      convertedAt: new Date().toISOString(),
+    };
+    if (draft.note.trim()) changes.notes = addNote(notes, `Converted to work order. ${draft.note.trim()}`, currentUserName || "Admin");
+    else changes.notes = addNote(notes, "Converted to work order.", currentUserName || "Admin");
+    onUpdate(row.id, changes);
+    onClose();
+  };
+
+  const handleNeedsInfo = () => {
+    if (!draft.note.trim()) { alert("Add a note describing what info you need."); return; }
+    onUpdate(row.id, { status: "needs-info", notes: addNote(notes, `Needs info: ${draft.note.trim()}`, currentUserName || "Admin") });
+    onClose();
+  };
+
+  const handleReject = () => {
+    if (!draft.rejectionReason.trim()) { alert("Add a rejection reason."); return; }
+    onUpdate(row.id, { status: "rejected", rejectionReason: draft.rejectionReason.trim(), notes: addNote(notes, `Rejected: ${draft.rejectionReason.trim()}`, currentUserName || "Admin") });
+    onClose();
+  };
+
+  const handleUpdate = () => {
+    const changes = {
+      status: draft.status,
+      assignedTo: draft.assignedTo || null,
+      vendorId: draft.vendorId || null,
+      priority: draft.priority,
+      projectedComplete: draft.projectedComplete || null,
+    };
+    if (draft.status === "done" && !row.completedDate) changes.completedDate = new Date().toISOString().slice(0, 10);
+    if (draft.note.trim()) changes.notes = addNote(notes, draft.note.trim(), currentUserName || "Admin");
+    onUpdate(row.id, changes);
+    onClose();
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius, maxWidth: 720, width: "100%", maxHeight: "90vh", overflowY: "auto", padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, gap: 10 }}>
+          <div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+              <Badge status={row.priority} type="priority" />
+              <Badge status={row.status} />
+              <span style={{ fontSize: 11, color: T.dim }}>{row.id} · {row.source === "resident" ? "Resident-submitted" : "Staff-created"}</span>
+            </div>
+            <h2 style={{ margin: 0, fontSize: 18 }}>{row.description}</h2>
+          </div>
+          <button style={s.btn("ghost")} onClick={onClose}>✕</button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 10, padding: 12, background: T.bg, borderRadius: T.radiusSm, marginBottom: 16, fontSize: 13 }}>
+          <div><span style={{ color: T.muted }}>Requester: </span><span style={{ fontWeight: 600 }}>{row.residentName || row.requesterName || "—"}</span></div>
+          <div><span style={{ color: T.muted }}>Property: </span><span style={{ fontWeight: 600 }}>{propertyDisplayName(row.propertyId)}</span></div>
+          <div><span style={{ color: T.muted }}>Unit: </span><span style={{ fontWeight: 600 }}>{row.unit || "—"}</span></div>
+          <div><span style={{ color: T.muted }}>Category: </span><span style={{ fontWeight: 600 }}>{row.category}</span></div>
+          <div><span style={{ color: T.muted }}>Submitted: </span>{row.submitted || "—"}</div>
+          <div><span style={{ color: T.muted }}>Assignee: </span>{row.assignedTo || "Unassigned"}{ven ? ` · ${ven.company}` : ""}</div>
+          {row.projectedComplete && <div><span style={{ color: T.muted }}>Projected: </span>{row.projectedComplete}</div>}
+          {row.completedDate && <div><span style={{ color: T.muted }}>Completed: </span>{row.completedDate}</div>}
+          {row.rejectionReason && <div style={{ gridColumn: "1 / -1", color: T.danger }}><span style={{ color: T.muted }}>Rejection reason: </span>{row.rejectionReason}</div>}
+        </div>
+
+        {notes.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 8 }}>Notes History</div>
+            <div style={{ padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
+              {notes.map((n, i) => (
+                <div key={i} style={{ fontSize: 13, color: T.text, marginBottom: 6, paddingBottom: 6, borderBottom: i < notes.length - 1 ? `1px solid ${T.border}` : "none" }}>
+                  <span style={{ fontWeight: 600 }}>{n.by}</span> <span style={{ color: T.dim }}>({n.date})</span>: {n.text}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isIntake ? (
+          <div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
+              {[["review", "Approve / Convert"], ["needsinfo", "Needs Info"], ["reject", "Reject"]].map(([k, label]) => (
+                <button key={k} onClick={() => setTab(k)} style={{ ...s.btn("ghost"), background: "transparent", borderRadius: 0, borderBottom: tab === k ? `2px solid ${T.accent}` : "2px solid transparent", color: tab === k ? T.accent : T.text }}>{label}</button>
+              ))}
+            </div>
+
+            {tab === "review" && (
+              <div>
+                <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                  <div>
+                    <label style={s.label}>Assign To Staff</label>
+                    <select style={{ ...s.mSelect(mobile), width: "100%" }} value={draft.assignedTo} onChange={e => setDraft(d => ({ ...d, assignedTo: e.target.value }))}>
+                      <option value="">—</option>
+                      {staffMembers.map(m => <option key={m.id} value={m.name}>{m.name}{m.role === "property_manager" ? " (PM)" : ""}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={s.label}>Or Assign Vendor</label>
+                    <select style={{ ...s.mSelect(mobile), width: "100%" }} value={draft.vendorId} onChange={e => setDraft(d => ({ ...d, vendorId: e.target.value }))}>
+                      <option value="">—</option>
+                      {vendors.filter(v => v.active).map(v => <option key={v.id} value={v.id}>{v.company} ({v.trade})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={s.label}>Priority</label>
+                    <select style={{ ...s.mSelect(mobile), width: "100%" }} value={draft.priority} onChange={e => setDraft(d => ({ ...d, priority: e.target.value }))}>
+                      {["routine", "urgent", "critical"].map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={s.label}>Projected Complete</label>
+                    <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={draft.projectedComplete} onChange={e => setDraft(d => ({ ...d, projectedComplete: e.target.value }))} />
+                  </div>
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={s.label}>Note (optional)</label>
+                  <textarea style={{ ...s.input, width: "100%", minHeight: 60, resize: "vertical" }} placeholder="Notes for the work order..." value={draft.note} onChange={e => setDraft(d => ({ ...d, note: e.target.value }))} />
+                </div>
+                <button style={s.btn("primary")} onClick={handleConvert}>✓ Convert to Work Order</button>
+              </div>
+            )}
+
+            {tab === "needsinfo" && (
+              <div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={s.label}>What info do you need from the requester?</label>
+                  <textarea style={{ ...s.input, width: "100%", minHeight: 80, resize: "vertical" }} placeholder="e.g. Which bathroom? When does it happen?" value={draft.note} onChange={e => setDraft(d => ({ ...d, note: e.target.value }))} />
+                </div>
+                <button style={s.btn("primary")} onClick={handleNeedsInfo}>Request More Info</button>
+              </div>
+            )}
+
+            {tab === "reject" && (
+              <div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={s.label}>Rejection Reason</label>
+                  <textarea style={{ ...s.input, width: "100%", minHeight: 80, resize: "vertical" }} placeholder="Reason for rejecting this request..." value={draft.rejectionReason} onChange={e => setDraft(d => ({ ...d, rejectionReason: e.target.value }))} />
+                </div>
+                <button style={{ ...s.btn("primary"), background: T.danger }} onClick={handleReject}>Reject Request</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+              <div>
+                <label style={s.label}>Status</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={draft.status} onChange={e => setDraft(d => ({ ...d, status: e.target.value }))}>
+                  <option value="todo">To Do</option>
+                  <option value="in-progress">In Progress</option>
+                  <option value="done">Done</option>
+                </select>
+              </div>
+              <div>
+                <label style={s.label}>Priority</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={draft.priority} onChange={e => setDraft(d => ({ ...d, priority: e.target.value }))}>
+                  {["routine", "urgent", "critical"].map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={s.label}>Assigned Staff</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={draft.assignedTo} onChange={e => setDraft(d => ({ ...d, assignedTo: e.target.value }))}>
+                  <option value="">Unassigned</option>
+                  {staffMembers.map(m => <option key={m.id} value={m.name}>{m.name}{m.role === "property_manager" ? " (PM)" : ""}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={s.label}>Vendor</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={draft.vendorId} onChange={e => setDraft(d => ({ ...d, vendorId: e.target.value }))}>
+                  <option value="">—</option>
+                  {vendors.filter(v => v.active).map(v => <option key={v.id} value={v.id}>{v.company} ({v.trade})</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={s.label}>Projected Complete</label>
+                <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={draft.projectedComplete} onChange={e => setDraft(d => ({ ...d, projectedComplete: e.target.value }))} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Add Note</label>
+              <textarea style={{ ...s.input, width: "100%", minHeight: 60, resize: "vertical" }} placeholder="Add a note..." value={draft.note} onChange={e => setDraft(d => ({ ...d, note: e.target.value }))} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={s.btn("primary")} onClick={handleUpdate}>Save Changes</button>
+              <button style={s.btn("ghost")} onClick={onClose}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers = [], vendors = [], profile }) => {
+  const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin" || s.role === "property_manager")).filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i);
+  const staffName = profile?.displayName || profile?.email?.split("@")[0] || null;
+  const isMaintStaff = !!(staffName && maintStaff.some(m => m.name === staffName));
+
+  const [topTab, setTopTab] = useState("intake");
+  const [woTab, setWoTab] = useState("todo");
+  const [selected, setSelected] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState(isMaintStaff ? "mine" : "all");
+  const [createForm, setCreateForm] = useState({ unit: "", category: "Plumbing", priority: "routine", description: "", requesterName: "", assignedTo: "", vendorId: "" });
+  const [success, showSuccess] = useSuccess();
+
+  // Re-sync selected row whenever maintenance updates so the modal reflects latest data
+  useEffect(() => {
+    if (!selected) return;
+    const updated = maintenance.find(m => m.id === selected.id);
+    if (updated && updated !== selected) setSelected(updated);
+  }, [maintenance, selected]);
+
+  const intakeRows = maintenance.filter(m => m.status === "new" || m.status === "needs-info");
+  const todoRows = maintenance.filter(m => m.status === "todo" || m.status === "in-progress");
+  const doneRows = maintenance.filter(m => m.status === "done" || m.status === "rejected");
+
+  const applyAssignee = (rows) => assigneeFilter === "mine" && staffName ? rows.filter(r => r.assignedTo === staffName) : rows;
+
+  const issueCol = {
+    key: "description", label: "Issue",
+    render: (v, row) => (
+      <div>
+        <div style={{ fontWeight: 600, color: T.accent }}>{v}</div>
+        <div style={{ fontSize: 11, color: T.dim, marginTop: 2 }}>{row.id} · {row.source === "resident" ? "📨" : "🛠️"}</div>
+      </div>
+    ),
+    sortValue: row => (row.description || "").toLowerCase(),
+  };
+
+  const propertyOptions = [...new Set(maintenance.map(m => propertyDisplayName(m.propertyId)))];
+
+  const intakeCols = [
+    issueCol,
+    { key: "residentName", label: "Requester", render: (v, row) => v || row.requesterName || "—", sortValue: row => (row.residentName || row.requesterName || "").toLowerCase() },
+    { key: "propertyId", label: "Property", render: v => propertyDisplayName(v), filterOptions: propertyOptions, filterValue: row => propertyDisplayName(row.propertyId) },
+    { key: "unit", label: "Unit" },
+    { key: "category", label: "Category", filterOptions: [...new Set(intakeRows.map(m => m.category))] },
+    { key: "priority", label: "Priority", render: v => <Badge status={v} type="priority" />, filterOptions: ["critical", "urgent", "routine"], filterValue: row => row.priority },
+    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["new", "needs-info"], filterValue: row => row.status },
+    { key: "submitted", label: "Submitted" },
+  ];
+
+  const woStatusOptions = woTab === "todo" ? ["todo", "in-progress"] : ["done", "rejected"];
+  const workOrderCols = [
+    issueCol,
+    { key: "residentName", label: "Requester", render: (v, row) => v || row.requesterName || "—", sortValue: row => (row.residentName || row.requesterName || "").toLowerCase() },
+    { key: "propertyId", label: "Property", render: v => propertyDisplayName(v), filterOptions: propertyOptions, filterValue: row => propertyDisplayName(row.propertyId) },
+    { key: "unit", label: "Unit" },
+    { key: "category", label: "Category", filterOptions: [...new Set(maintenance.map(m => m.category))] },
+    { key: "priority", label: "Priority", render: v => <Badge status={v} type="priority" />, filterOptions: ["critical", "urgent", "routine"], filterValue: row => row.priority },
+    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: woStatusOptions, filterValue: row => row.status },
+    { key: "assignedTo", label: "Assignee", render: v => v || <span style={{ color: T.danger }}>Unassigned</span>, filterValue: row => row.assignedTo || "Unassigned" },
+    { key: "vendorId", label: "Vendor", render: v => vendors.find(x => x.id === v)?.company || "—", filterOptions: [...new Set(vendors.map(v => v.company))], filterValue: row => vendors.find(x => x.id === row.vendorId)?.company || "" },
+    { key: "projectedComplete", label: "Projected", render: v => v || "—" },
+  ];
+
+  const currentRows = topTab === "intake" ? intakeRows : (woTab === "todo" ? applyAssignee(todoRows) : applyAssignee(doneRows));
+  const currentCols = topTab === "intake" ? intakeCols : workOrderCols;
+
+  const csvExport = () => {
+    if (topTab === "intake") {
+      generateCSV([
+        { label: "Issue", key: "description" }, { label: "Requester", key: "residentName", exportValue: r => r.residentName || r.requesterName || "" },
+        { label: "Property", key: "propertyId", exportValue: r => propertyDisplayName(r.propertyId) }, { label: "Unit", key: "unit" },
+        { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" }, { label: "Submitted", key: "submitted" }, { label: "ID", key: "id" },
+      ], currentRows, "maintenance_intake");
+    } else {
+      generateCSV([
+        { label: "Issue", key: "description" }, { label: "Requester", key: "residentName", exportValue: r => r.residentName || r.requesterName || "" },
+        { label: "Property", key: "propertyId", exportValue: r => propertyDisplayName(r.propertyId) }, { label: "Unit", key: "unit" },
+        { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" },
+        { label: "Assignee", key: "assignedTo", exportValue: r => r.assignedTo || "Unassigned" },
+        { label: "Vendor", key: "vendorId", exportValue: r => vendors.find(v => v.id === r.vendorId)?.company || "" },
+        { label: "Projected", key: "projectedComplete" }, { label: "Completed", key: "completedDate" }, { label: "ID", key: "id" },
+      ], currentRows, `maintenance_${woTab}`);
+    }
   };
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
-        <div><h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Maintenance Management</h1><p style={s.sectionSub}>Manage all work orders across the property</p></div>
+        <div><h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Maintenance</h1><p style={s.sectionSub}>Triage intake requests and manage work orders</p></div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setShowCreate(v => !v)} style={{ ...s.btn(showCreate ? "ghost" : "primary"), fontSize: 13 }}>{showCreate ? "Cancel" : "➕ New Work Order"}</button>
-          <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "ID", key: "id" }, { label: "Unit", key: "unit" }, { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" }, { label: "Submitted", key: "submitted" }, { label: "Assigned To", key: "assignedTo", exportValue: r => r.assignedTo || "Unassigned" }, { label: "Description", key: "description" }], maintenance, "maintenance_orders")} />
+          <ExportButton mobile={mobile} onClick={csvExport} />
         </div>
       </div>
       <SuccessMessage message={success} />
+
       {showCreate && (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.warn}`, marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Create Work Order</div>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Create Work Order (staff-initiated)</div>
           <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
             <div><label style={s.label}>Unit *</label>
               <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.unit} onChange={e => setCreateForm(f => ({ ...f, unit: e.target.value }))}>
                 <option value="">Select unit...</option>
                 {LIVE_RESIDENTS.map(r => <option key={r.id} value={r.unit}>{r.unit} — {r.name}</option>)}
               </select>
+            </div>
+            <div><label style={s.label}>Requester (optional)</label>
+              <input style={{ ...s.mInput(mobile), width: "100%" }} value={createForm.requesterName} onChange={e => setCreateForm(f => ({ ...f, requesterName: e.target.value }))} placeholder="Who reported this?" />
             </div>
             <div><label style={s.label}>Category</label>
               <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.category} onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}>
@@ -5217,101 +5535,99 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
                 {["routine", "urgent", "critical"].map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
+            <div><label style={s.label}>Assign To Staff</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.assignedTo} onChange={e => setCreateForm(f => ({ ...f, assignedTo: e.target.value }))}>
+                <option value="">Unassigned</option>
+                {maintStaff.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+              </select>
+            </div>
+            <div><label style={s.label}>Vendor</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.vendorId} onChange={e => setCreateForm(f => ({ ...f, vendorId: e.target.value }))}>
+                <option value="">—</option>
+                {vendors.filter(v => v.active).map(v => <option key={v.id} value={v.id}>{v.company} ({v.trade})</option>)}
+              </select>
+            </div>
           </div>
           <div style={{ marginBottom: 14 }}><label style={s.label}>Description *</label><textarea style={{ ...s.mInput(mobile), width: "100%", minHeight: 60, resize: "vertical" }} value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the issue..." /></div>
           <button disabled={!createForm.unit || !createForm.description.trim()} onClick={() => {
             const res = LIVE_RESIDENTS.find(r => r.unit === createForm.unit);
             const req = {
-              id: `MR-${Date.now().toString().slice(-4)}`,
               propertyId: res?.propertyId || "",
               unit: createForm.unit,
               category: createForm.category,
               priority: createForm.priority,
-              status: "submitted",
               description: createForm.description.trim(),
-              submitted: new Date().toISOString().slice(0, 10),
-              assignedTo: null,
+              source: "staff",
+              status: "todo",
+              requesterName: createForm.requesterName.trim() || null,
+              assignedTo: createForm.assignedTo || null,
+              vendorId: createForm.vendorId || null,
               notes: [],
             };
             if (onAdd) onAdd(req);
             showSuccess(`Work order created for unit ${createForm.unit}`);
-            setCreateForm({ unit: "", category: "Plumbing", priority: "routine", description: "" });
+            setCreateForm({ unit: "", category: "Plumbing", priority: "routine", description: "", requesterName: "", assignedTo: "", vendorId: "" });
             setShowCreate(false);
           }} style={{ ...s.mBtn("primary", mobile) }}>Create Work Order</button>
         </div>
       )}
-      <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-        <StatCard label="Open" value={maintenance.filter(m => m.status !== "completed").length} accent={T.warn} mobile={mobile} />
-        <StatCard label="Unassigned" value={maintenance.filter(m => !m.assignedTo).length} accent={T.danger} mobile={mobile} />
-        <StatCard label="In Progress" value={maintenance.filter(m => m.status === "in-progress").length} accent={T.info} mobile={mobile} />
-        <StatCard label="Completed" value={maintenance.filter(m => m.status === "completed").length} accent={T.success} mobile={mobile} />
+
+      {/* Top tabs */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
+        {[["intake", `📥 Intake (${intakeRows.length})`], ["workorders", `🔧 Work Orders (${todoRows.length + doneRows.length})`]].map(([k, label]) => (
+          <button key={k} onClick={() => setTopTab(k)} style={{ background: "transparent", border: "none", padding: "10px 14px", fontWeight: 600, cursor: "pointer", fontSize: 14, borderBottom: topTab === k ? `2px solid ${T.accent}` : "2px solid transparent", color: topTab === k ? T.accent : T.text }}>{label}</button>
+        ))}
       </div>
-      <div style={s.card}>
-        <SortableTable
-          mobile={mobile}
-          columns={[
-            { key: "id", label: "ID", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
-            { key: "unit", label: "Unit" },
-            { key: "category", label: "Category", filterOptions: [...new Set(maintenance.map(m => m.category))] },
-            { key: "priority", label: "Priority", render: v => <Badge status={v} type="priority" />, filterOptions: ["critical", "urgent", "routine", "low"], filterValue: row => row.priority },
-            { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["submitted", "in-progress", "completed"], filterValue: row => row.status },
-            { key: "submitted", label: "Submitted" },
-            { key: "assignedTo", label: "Assigned", render: v => v || <span style={{ color: T.danger }}>Unassigned</span>, filterValue: row => row.assignedTo || "Unassigned" },
-            { key: "_actions", label: "", sortable: false, filterable: false, render: (_, row) => <button style={s.btn("ghost")} onClick={() => startEdit(row)}>Update</button> },
-          ]}
-          data={maintenance}
-        />
-      </div>
-      {editingId && (() => {
-        const editRow = maintenance.find(m => m.id === editingId);
-        const existingNotes = Array.isArray(editRow?.notes) ? editRow.notes : [];
-        return (
-        <div style={{ ...s.card, borderColor: T.accent, marginTop: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Update {editingId}</div>
-          {editRow && (
-            <div style={{ fontSize: 13, color: T.muted, marginBottom: 14, padding: 10, background: T.bg, borderRadius: T.radiusSm }}>
-              <span style={{ fontWeight: 600, color: T.text }}>{editRow.unit}</span> — {editRow.category} — {editRow.description}
+
+      {/* Sub-controls for work orders */}
+      {topTab === "workorders" && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button style={s.btn(woTab === "todo" ? "primary" : "ghost")} onClick={() => setWoTab("todo")}>To Do ({applyAssignee(todoRows).length})</button>
+            <button style={s.btn(woTab === "done" ? "primary" : "ghost")} onClick={() => setWoTab("done")}>Done ({applyAssignee(doneRows).length})</button>
+          </div>
+          {isMaintStaff && (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button style={s.btn(assigneeFilter === "mine" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("mine")}>My Orders</button>
+              <button style={s.btn(assigneeFilter === "all" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("all")}>All</button>
             </div>
           )}
-          <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-            <div>
-              <label style={s.label}>Status</label>
-              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={editData.status} onChange={e => setEditData(p => ({ ...p, status: e.target.value }))}>
-                <option value="submitted">Submitted</option>
-                <option value="in-progress">In Progress</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
-            <div>
-              <label style={s.label}>Assign To</label>
-              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={editData.assignedTo} onChange={e => setEditData(p => ({ ...p, assignedTo: e.target.value }))}>
-                <option value="">Unassigned</option>
-                {maintStaff.map(s => <option key={s.id} value={s.name}>{s.name}{s.role === "property_manager" ? " (PM)" : ""}</option>)}
-                <option value="External Vendor">External Vendor</option>
-              </select>
-            </div>
-          </div>
-          {existingNotes.length > 0 && (
-            <div style={{ marginBottom: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 8 }}>Notes History</div>
-              {existingNotes.map((n, i) => (
-                <div key={i} style={{ fontSize: 13, color: T.text, marginBottom: 6, paddingBottom: 6, borderBottom: i < existingNotes.length - 1 ? `1px solid ${T.border}` : "none" }}>
-                  <span style={{ fontWeight: 600 }}>{n.by}</span> <span style={{ color: T.dim }}>({n.date})</span>: {n.text}
-                </div>
-              ))}
-            </div>
-          )}
-          <div style={{ marginBottom: 14 }}>
-            <label style={s.label}>Add Note</label>
-            <textarea style={{ ...s.input, minHeight: 60, resize: "vertical" }} placeholder="Add a note..." value={editData.notes} onChange={e => setEditData(p => ({ ...p, notes: e.target.value }))} />
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button style={s.btn()} onClick={saveEdit}>Save</button>
-            <button style={s.btn("ghost")} onClick={() => setEditingId(null)}>Cancel</button>
-          </div>
         </div>
-        );
-      })()}
+      )}
+
+      {/* Stats */}
+      <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
+        {topTab === "intake" ? (
+          <>
+            <StatCard label="New" value={maintenance.filter(m => m.status === "new").length} accent={T.warn} mobile={mobile} />
+            <StatCard label="Needs Info" value={maintenance.filter(m => m.status === "needs-info").length} accent={T.info} mobile={mobile} />
+          </>
+        ) : (
+          <>
+            <StatCard label="To Do" value={maintenance.filter(m => m.status === "todo").length} accent={T.warn} mobile={mobile} />
+            <StatCard label="In Progress" value={maintenance.filter(m => m.status === "in-progress").length} accent={T.info} mobile={mobile} />
+            <StatCard label="Unassigned" value={maintenance.filter(m => (m.status === "todo" || m.status === "in-progress") && !m.assignedTo && !m.vendorId).length} accent={T.danger} mobile={mobile} />
+            <StatCard label="Done" value={maintenance.filter(m => m.status === "done").length} accent={T.success} mobile={mobile} />
+          </>
+        )}
+      </div>
+
+      <div style={s.card}>
+        <SortableTable mobile={mobile} columns={currentCols} data={currentRows} onRowClick={setSelected} />
+      </div>
+
+      {selected && (
+        <MaintenanceDetailModal
+          row={selected}
+          onClose={() => setSelected(null)}
+          onUpdate={(id, changes) => { onUpdate(id, changes); showSuccess("Updated"); }}
+          staffMembers={maintStaff}
+          vendors={vendors}
+          isStaff={isMaintStaff}
+          currentUserName={staffName}
+          mobile={mobile}
+        />
+      )}
     </div>
   );
 };
@@ -6929,9 +7245,22 @@ export default function App() {
 
   // Base mutation callbacks
   const addMaintenance = async (req) => {
-    setMaintenance(prev => [req, ...prev]);
+    const optimistic = {
+      ...req,
+      id: req.id || `MR-pending-${Date.now()}`,
+      status: req.status || (req.source === "staff" ? "todo" : "new"),
+      source: req.source || "resident",
+      submitted: req.submitted || new Date().toISOString().slice(0, 10),
+      notes: req.notes || [],
+    };
+    setMaintenance(prev => [optimistic, ...prev]);
     try {
-      await insertMaintenanceRequest({ unit: req.unit, category: req.category, priority: req.priority, description: req.description, propertySlug: req.propertyId });
+      const saved = await insertMaintenanceRequest({
+        unit: req.unit, category: req.category, priority: req.priority, description: req.description,
+        propertySlug: req.propertyId, source: req.source, requesterName: req.requesterName,
+        assignedTo: req.assignedTo, vendorId: req.vendorId, status: req.status,
+      });
+      if (saved?.code) setMaintenance(prev => prev.map(m => m.id === optimistic.id ? { ...optimistic, id: saved.code } : m));
     } catch (err) { console.warn('Supabase insert maintenance failed:', err); }
   };
   const updateMaintenance = async (id, changes) => {
@@ -7089,7 +7418,7 @@ export default function App() {
   const nav = NAV[role] || [];
   const navBadges = {};
   if (role === "admin") {
-    navBadges.maintenance = maintenance.filter(m => m.status === "submitted").length;
+    navBadges.maintenance = maintenance.filter(m => MAINT_AWAITING(m)).length;
     navBadges.communications = threads.filter(t => t.unread > 0).length;
   } else if (role === "maintenance") {
     navBadges["work-orders"] = maintenance.filter(m => !m.assignedTo).length;
@@ -7146,7 +7475,7 @@ export default function App() {
         }} />;
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
-        case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} />;
+        case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} vendors={vendors} profile={profile} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} />;
@@ -7162,13 +7491,13 @@ export default function App() {
     if (role === "maintenance") {
       switch (page) {
         case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
-        case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} />;
+        case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} />;
         case "profile": return <MaintenanceProfile mobile={mobile} />;
-        case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} />;
+        case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
         default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
       }
     }

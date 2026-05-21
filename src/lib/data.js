@@ -616,7 +616,7 @@ export async function fetchRegInspections() {
 export async function fetchMaintenanceRequests() {
   const { data, error } = await supabase
     .from('maintenance_requests')
-    .select('*, residents(slug), properties(slug), units(number)')
+    .select('*, residents(slug, name), properties(slug), units(number)')
     .order('submitted_date', { ascending: false });
   if (error) throw error;
   return (data || []).map(m => ({
@@ -624,21 +624,27 @@ export async function fetchMaintenanceRequests() {
     _uuid: m.id,
     propertyId: m.properties?.slug || '',
     unit: m.units?.number || '',
+    residentSlug: m.residents?.slug || '',
+    residentName: m.residents?.name || m.requester_name || '',
+    requesterName: m.requester_name || '',
+    source: m.source || 'resident',
     category: m.category,
     priority: m.priority,
     status: m.status,
     description: m.description,
     submitted: m.submitted_date,
     assignedTo: m.assigned_to,
+    vendorId: m.vendor_id,
     queuePos: m.queue_pos,
     projectedComplete: m.projected_complete,
     completedDate: m.completed_date,
+    convertedAt: m.converted_at,
+    rejectionReason: m.rejection_reason,
     notes: Array.isArray(m.notes) ? m.notes : (typeof m.notes === 'string' ? (() => { try { return JSON.parse(m.notes); } catch { return []; } })() : []),
   }));
 }
 
-export async function insertMaintenanceRequest({ unit, category, priority, description, propertySlug }) {
-  // Look up unit row (includes property_id)
+export async function insertMaintenanceRequest({ unit, category, priority, description, propertySlug, source, requesterName, assignedTo, vendorId, status }) {
   // Look up property first so we can scope the unit lookup
   let propertyId = null;
   if (propertySlug) {
@@ -646,25 +652,34 @@ export async function insertMaintenanceRequest({ unit, category, priority, descr
     propertyId = prop?.id || null;
   }
   if (!propertyId) {
-    // Last resort: grab first property
     const { data: firstProp } = await supabase.from('properties').select('id').limit(1).single();
     propertyId = firstProp?.id || null;
   }
 
   // Look up unit row scoped to property to avoid cross-property collisions
-  let unitQuery = supabase.from('units').select('id, property_id').eq('number', unit);
-  if (propertyId) unitQuery = unitQuery.eq('property_id', propertyId);
-  const { data: unitRow } = await unitQuery.limit(1).single();
+  let unitRow = null;
+  if (unit) {
+    let unitQuery = supabase.from('units').select('id, property_id').eq('number', unit);
+    if (propertyId) unitQuery = unitQuery.eq('property_id', propertyId);
+    const { data } = await unitQuery.limit(1).maybeSingle();
+    unitRow = data;
+  }
 
-  // If we didn't have propertyId yet, use the unit's property_id
   if (!propertyId && unitRow?.property_id) {
     propertyId = unitRow.property_id;
   }
 
-  // Look up resident by unit
-  const { data: resident } = await supabase.from('residents').select('id').eq('unit_id', unitRow?.id).limit(1).single();
+  // Look up resident by unit (for resident-submitted requests)
+  let resident = null;
+  if (unitRow?.id) {
+    const { data } = await supabase.from('residents').select('id').eq('unit_id', unitRow.id).limit(1).maybeSingle();
+    resident = data;
+  }
 
-  // Generate code with timestamp to avoid collisions
+  // Determine initial status based on source
+  const reqSource = source || 'resident';
+  const initialStatus = status || (reqSource === 'resident' ? 'new' : 'todo');
+
   const code = `MR-${Date.now().toString(36)}`;
 
   const { data, error } = await supabase.from('maintenance_requests').insert({
@@ -674,9 +689,12 @@ export async function insertMaintenanceRequest({ unit, category, priority, descr
     unit_id: unitRow?.id || null,
     category,
     priority,
-    status: 'submitted',
+    status: initialStatus,
     description,
-    assigned_to: null,
+    assigned_to: assignedTo || null,
+    vendor_id: vendorId || null,
+    source: reqSource,
+    requester_name: requesterName || null,
   }).select().single();
   if (error) throw error;
   return { ...data, id: data.code };
@@ -686,9 +704,15 @@ export async function updateMaintenanceRequest(code, changes) {
   const updateData = {};
   if (changes.status !== undefined) updateData.status = changes.status;
   if (changes.assignedTo !== undefined) updateData.assigned_to = changes.assignedTo || null;
+  if (changes.vendorId !== undefined) updateData.vendor_id = changes.vendorId || null;
+  if (changes.priority !== undefined) updateData.priority = changes.priority;
+  if (changes.category !== undefined) updateData.category = changes.category;
+  if (changes.description !== undefined) updateData.description = changes.description;
   if (changes.completedDate !== undefined) updateData.completed_date = changes.completedDate;
   if (changes.projectedComplete !== undefined) updateData.projected_complete = changes.projectedComplete;
   if (changes.queuePos !== undefined) updateData.queue_pos = changes.queuePos;
+  if (changes.rejectionReason !== undefined) updateData.rejection_reason = changes.rejectionReason;
+  if (changes.convertedAt !== undefined) updateData.converted_at = changes.convertedAt;
   if (changes.notes !== undefined) updateData.notes = JSON.stringify(changes.notes);
   updateData.updated_at = new Date().toISOString();
 
