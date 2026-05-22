@@ -4951,7 +4951,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   const tabs = isAdmin ? ["Inbox", "Compose", "Templates"] : isMaint ? ["Messages"] : ["Messages", "Compose", "Preferences"];
   const [tab, setTab] = useState(tabs[0]);
   const [selectedThread, setSelectedThread] = useState(null);
-  const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
+  const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "single", recipients: [], propertyId: "" });
   const [residentAttachments, setResidentAttachments] = useState([]);
   const [sending, setSending] = useState(false);
   const [success, showSuccess] = useSuccess();
@@ -5046,13 +5046,39 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       )}
 
       {/* COMPOSE TAB (Admin) */}
-      {tab === "Compose" && isAdmin && (
+      {tab === "Compose" && isAdmin && (() => {
+        const audience = composeData.audience || "single";
+        const propertyList = LIVE_PROPERTIES || [];
+        const residentsForProperty = audience === "property" && composeData.propertyId
+          ? LIVE_RESIDENTS.filter(r => r.propertyId === composeData.propertyId)
+          : LIVE_RESIDENTS;
+        const resolveRecipients = () => {
+          if (audience === "all") return LIVE_RESIDENTS;
+          if (audience === "property") return LIVE_RESIDENTS.filter(r => r.propertyId === composeData.propertyId);
+          if (audience === "multi") return LIVE_RESIDENTS.filter(r => composeData.recipients.includes(r.id));
+          if (audience === "single") return composeData.to ? LIVE_RESIDENTS.filter(r => r.id === composeData.to) : [];
+          return [];
+        };
+        const recipientCount = resolveRecipients().length;
+        const isBroadcastLike = audience === "all" || audience === "property" || (audience === "multi" && composeData.recipients.length > 1);
+        return (
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>New Message</div>
           <div style={{ marginBottom: 14 }}>
-            <Toggle label="Broadcast to all residents" checked={composeData.broadcast} onChange={() => setComposeData(prev => ({ ...prev, broadcast: !prev.broadcast, to: "" }))} />
+            <label style={s.label}>Audience</label>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {[["single", "One resident"], ["multi", "Multiple residents"], ["property", "Entire building"], ["all", "Everyone"]].map(([k, label]) => {
+                const active = audience === k;
+                return (
+                  <button key={k} onClick={() => setComposeData(prev => ({ ...prev, audience: k, to: "", recipients: [], propertyId: "", broadcast: k === "all" }))} style={{
+                    padding: "8px 14px", fontSize: 13, fontWeight: 600, borderRadius: T.radiusSm, cursor: "pointer",
+                    background: active ? T.accent : T.bg, color: active ? "#fff" : T.text, border: `1px solid ${active ? T.accent : T.border}`,
+                  }}>{label}</button>
+                );
+              })}
+            </div>
           </div>
-          {!composeData.broadcast && (
+          {audience === "single" && (
             <div style={{ marginBottom: 14 }}>
               <label style={s.label}>To</label>
               <select style={{ ...s.select, width: "100%" }} value={composeData.to} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))}>
@@ -5061,6 +5087,50 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                   <option key={r.id} value={r.id}>{r.name} — Unit {r.unit} ({r.preferredChannel})</option>
                 ))}
               </select>
+            </div>
+          )}
+          {audience === "multi" && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Recipients ({composeData.recipients.length} selected)</label>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: LIVE_RESIDENTS.map(r => r.id) }))}>Select all</button>
+                <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: [] }))}>Clear</button>
+              </div>
+              <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 8 }}>
+                {LIVE_RESIDENTS.map(r => {
+                  const checked = composeData.recipients.includes(r.id);
+                  return (
+                    <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
+                      <input type="checkbox" checked={checked} onChange={e => {
+                        setComposeData(prev => ({
+                          ...prev,
+                          recipients: e.target.checked
+                            ? [...prev.recipients, r.id]
+                            : prev.recipients.filter(id => id !== r.id),
+                        }));
+                      }} />
+                      <span>{r.name} — Unit {r.unit} <span style={{ color: T.dim }}>({propertyList.find(p => p.id === r.propertyId)?.name || r.propertyId || "—"})</span></span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {audience === "property" && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Building / Property</label>
+              <select style={{ ...s.select, width: "100%" }} value={composeData.propertyId} onChange={e => setComposeData(prev => ({ ...prev, propertyId: e.target.value }))}>
+                <option value="">Select property...</option>
+                {propertyList.map(p => {
+                  const count = LIVE_RESIDENTS.filter(r => r.propertyId === p.id).length;
+                  return <option key={p.id} value={p.id}>{p.name} ({count} residents)</option>;
+                })}
+              </select>
+            </div>
+          )}
+          {audience === "all" && (
+            <div style={{ padding: 12, background: T.warnDim, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, color: T.warn }}>
+              This message will be sent to all {LIVE_RESIDENTS.length} residents.
             </div>
           )}
           <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
@@ -5096,27 +5166,30 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             <label style={s.label}>Message</label>
             <textarea style={{ ...s.input, minHeight: 120, resize: "vertical" }} value={composeData.body} onChange={e => setComposeData(prev => ({ ...prev, body: e.target.value }))} placeholder="Type your message..." />
           </div>
-          {composeData.broadcast && (
-            <div style={{ padding: 12, background: T.warnDim, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, color: T.warn }}>
-              This message will be sent to all {LIVE_RESIDENTS.length} residents via their preferred channel.
-            </div>
-          )}
+          <div style={{ padding: 12, background: T.bg, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, color: T.muted }}>
+            {recipientCount === 0
+              ? "No recipients selected yet."
+              : `Will be sent to ${recipientCount} resident${recipientCount === 1 ? "" : "s"}.`}
+          </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button disabled={sending} style={s.btn()} onClick={async () => {
+            <button disabled={sending || recipientCount === 0 || !composeData.subject.trim() || !composeData.body.trim()} style={s.btn()} onClick={async () => {
               if (!composeData.subject.trim() || !composeData.body.trim() || sending) return;
+              const recipients = resolveRecipients();
+              if (recipients.length === 0) { showSuccess("No recipients selected."); return; }
               setSending(true);
               const threadId = `THR-${Date.now()}`;
               const ch = composeData.channel === "auto" ? "email" : composeData.channel;
-              // Save thread + message to database (await thread so message can reference it)
+              const isBroadcast = isBroadcastLike;
+              // Save thread + message to database
               await onAddThread({
                 id: threadId,
-                participants: composeData.broadcast ? ["all"] : [composeData.to],
+                participants: isBroadcast && audience === "all" ? ["all"] : recipients.map(r => r.id),
                 subject: composeData.subject.trim(),
                 lastMessage: composeData.body.trim().slice(0, 80),
                 lastDate: new Date().toISOString(),
                 unread: 0,
-                channel: composeData.broadcast ? "multi" : ch,
-                type: composeData.broadcast ? "broadcast" : "direct",
+                channel: isBroadcast ? "multi" : ch,
+                type: isBroadcast ? "broadcast" : "direct",
                 priority: composeData.priority,
               });
               await onAddMessage({
@@ -5126,7 +5199,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 body: composeData.body.trim(),
                 date: new Date().toISOString(),
               });
-              // Actually send the message via SMS/email — track results so we can report
+              // Deliver via SMS/email
               const deliveryReport = { emailSent: 0, emailFailed: 0, smsSent: 0, smsFailed: 0, errors: [] };
               const trySend = async (label, fn) => {
                 try { const res = await fn(); if (res && res.success === false) throw new Error(res.error || "send failed"); return true; }
@@ -5148,12 +5221,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                   (await trySend(`sms to ${r.phone}`, () => sendSMS(r.phone, composeData.body.trim()))) ? deliveryReport.smsSent++ : deliveryReport.smsFailed++;
                 }
               };
-              if (composeData.broadcast) {
-                for (const r of LIVE_RESIDENTS) await sendToRecipient(r);
-              } else {
-                await sendToRecipient(LIVE_RESIDENTS.find(res => res.id === composeData.to));
-              }
-              setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
+              for (const r of recipients) await sendToRecipient(r);
+              setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "single", recipients: [], propertyId: "" });
               setSending(false);
               setTab("Inbox");
               const totalSent = deliveryReport.emailSent + deliveryReport.smsSent;
@@ -5164,13 +5233,14 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               } else if (totalSent === 0) {
                 showSuccess("Saved to inbox, but no email/phone on file to deliver to.");
               } else {
-                showSuccess(`Message sent! ${deliveryReport.emailSent ? `📧 ${deliveryReport.emailSent} email${deliveryReport.emailSent > 1 ? "s" : ""}` : ""}${deliveryReport.emailSent && deliveryReport.smsSent ? " · " : ""}${deliveryReport.smsSent ? `💬 ${deliveryReport.smsSent} SMS` : ""}`);
+                showSuccess(`Message sent to ${recipients.length} recipient${recipients.length > 1 ? "s" : ""}! ${deliveryReport.emailSent ? `📧 ${deliveryReport.emailSent} email${deliveryReport.emailSent > 1 ? "s" : ""}` : ""}${deliveryReport.emailSent && deliveryReport.smsSent ? " · " : ""}${deliveryReport.smsSent ? `💬 ${deliveryReport.smsSent} SMS` : ""}`);
               }
-            }}>{sending ? "Sending..." : "Send Message"}</button>
-            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" })}>Clear</button>
+            }}>{sending ? "Sending..." : `Send to ${recipientCount} recipient${recipientCount === 1 ? "" : "s"}`}</button>
+            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "single", recipients: [], propertyId: "" })}>Clear</button>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* COMPOSE TAB — Resident */}
       {tab === "Compose" && !isAdmin && !isMaint && (
