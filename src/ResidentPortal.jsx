@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -923,16 +923,14 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
   const handleSubmit = async () => {
     if (!formData.description.trim()) return;
     setUploading(true);
-    let photoPaths = [];
-    try {
-      for (const file of photoFiles) {
-        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const path = `maintenance/${rc?.unit || 'unknown'}/${Date.now()}_${safeName}`;
-        const { error } = await supabase.storage.from('lease-documents').upload(path, file);
-        if (!error) photoPaths.push(path);
+    const uploadedPhotos = [];
+    for (const file of photoFiles) {
+      try {
+        const photo = await uploadMaintenancePhoto(file, rc?.unit || 'unknown');
+        if (photo?.url) uploadedPhotos.push({ url: photo.url, name: photo.name, path: photo.path });
+      } catch (err) {
+        console.warn(`Photo ${file.name} upload failed:`, err);
       }
-    } catch (err) {
-      console.warn("Photo upload error:", err);
     }
     const newReq = {
       id: `MR-${2406 + maintenance.length}`,
@@ -948,7 +946,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
       queuePos: maintenance.filter(m => MAINT_OPEN(m)).length + 1,
       projectedComplete: null,
       notes: [],
-      photos: photoPaths.length > 0 ? photoPaths : undefined,
+      photos: uploadedPhotos,
     };
     onSubmit(newReq);
     setFormData({ category: "Plumbing", urgency: "routine", description: "", permission: "Yes, enter anytime" });
@@ -5438,6 +5436,24 @@ const MaintenanceDetailModal = ({ row, onClose, onUpdate, staffMembers, vendors,
           {row.rejectionReason && <div style={{ gridColumn: "1 / -1", color: T.danger }}><span style={{ color: T.muted }}>Rejection reason: </span>{row.rejectionReason}</div>}
         </div>
 
+        {Array.isArray(row.photos) && row.photos.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 8 }}>Photos ({row.photos.length})</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {row.photos.map((p, i) => {
+                const url = typeof p === "string" ? p : p.url;
+                const name = typeof p === "string" ? `photo-${i + 1}` : (p.name || `photo-${i + 1}`);
+                if (!url) return null;
+                return (
+                  <a key={i} href={url} target="_blank" rel="noreferrer" title={name} style={{ display: "block", width: 96, height: 96, borderRadius: T.radiusSm, overflow: "hidden", border: `1px solid ${T.border}` }}>
+                    <img src={url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {notes.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 8 }}>Notes History</div>
@@ -7468,7 +7484,7 @@ export default function App() {
       const saved = await insertMaintenanceRequest({
         unit: req.unit, category: req.category, priority: req.priority, description: req.description,
         propertySlug: req.propertyId, source: req.source, requesterName: req.requesterName,
-        assignedTo: req.assignedTo, vendorId: req.vendorId, status: req.status,
+        assignedTo: req.assignedTo, vendorId: req.vendorId, status: req.status, photos: req.photos,
       });
       if (saved?.code) setMaintenance(prev => prev.map(m => m.id === optimistic.id ? { ...optimistic, id: saved.code } : m));
     } catch (err) { console.warn('Supabase insert maintenance failed:', err); }

@@ -653,10 +653,22 @@ export async function fetchMaintenanceRequests() {
     convertedAt: m.converted_at,
     rejectionReason: m.rejection_reason,
     notes: Array.isArray(m.notes) ? m.notes : (typeof m.notes === 'string' ? (() => { try { return JSON.parse(m.notes); } catch { return []; } })() : []),
+    photos: Array.isArray(m.photos) ? m.photos : (typeof m.photos === 'string' ? (() => { try { return JSON.parse(m.photos); } catch { return []; } })() : []),
   }));
 }
 
-export async function insertMaintenanceRequest({ unit, category, priority, description, propertySlug, source, requesterName, assignedTo, vendorId, status }) {
+// Upload a maintenance photo to the public maintenance-photos bucket.
+// Returns the public URL we store on the row.
+export async function uploadMaintenancePhoto(file, unit) {
+  const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+  const path = `${unit || 'unknown'}/${Date.now()}_${safeName}`;
+  const { error } = await supabase.storage.from('maintenance-photos').upload(path, file, { upsert: false });
+  if (error) throw error;
+  const { data } = supabase.storage.from('maintenance-photos').getPublicUrl(path);
+  return { path, url: data?.publicUrl || null, name: file.name };
+}
+
+export async function insertMaintenanceRequest({ unit, category, priority, description, propertySlug, source, requesterName, assignedTo, vendorId, status, photos }) {
   // Look up property first so we can scope the unit lookup
   let propertyId = null;
   if (propertySlug) {
@@ -707,6 +719,7 @@ export async function insertMaintenanceRequest({ unit, category, priority, descr
     vendor_id: vendorId || null,
     source: reqSource,
     requester_name: requesterName || null,
+    photos: Array.isArray(photos) && photos.length > 0 ? photos : [],
   }).select().single();
   if (error) throw error;
   return { ...data, id: data.code };
