@@ -40,9 +40,14 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: `Unknown notification type: ${type}` });
     }
 
-    // Include thread code in subject so replies can be matched back
+    // Encode the thread code in the reply-to address via Gmail plus-addressing.
+    // Replies go to "residentportal+THR-xxx@bolinaslandtrust.org" which Gmail routes
+    // to the base inbox while preserving the +tag in the To: header — the Apps Script
+    // reads it back to match the thread. Keeps the visible subject clean.
     const threadCode = data.threadCode;
-    const subject = threadCode ? `[${threadCode}] ${email.subject}` : email.subject;
+    const replyTo = threadCode
+      ? `residentportal+${threadCode}@bolinaslandtrust.org`
+      : 'residentportal@bolinaslandtrust.org';
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -52,9 +57,9 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         from: fromEmail,
-        reply_to: 'residentportal@bolinaslandtrust.org',
+        reply_to: replyTo,
         to: email.to,
-        subject,
+        subject: email.subject,
         html: wrapHtml(email.body),
       }),
     });
