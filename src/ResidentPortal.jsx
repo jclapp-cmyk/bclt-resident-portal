@@ -93,9 +93,9 @@ T.radiusSm = 8;
 
 // Maintenance status helpers — recognise both legacy ("submitted"/"completed")
 // and new pipeline ("new"/"needs-info"/"todo"/"in-progress"/"done"/"rejected").
-const MAINT_OPEN = (m) => m && m.status !== "done" && MAINT_OPEN(m) && m.status !== "rejected";
-const MAINT_DONE = (m) => m && (m.status === "done" || MAINT_DONE(m));
-const MAINT_AWAITING = (m) => m && (m.status === "new" || m.status === "needs-info" || MAINT_AWAITING(m));
+const MAINT_OPEN = (m) => m && m.status !== "done" && m.status !== "completed" && m.status !== "rejected";
+const MAINT_DONE = (m) => m && (m.status === "done" || m.status === "completed");
+const MAINT_AWAITING = (m) => m && (m.status === "new" || m.status === "needs-info" || m.status === "submitted");
 const MAINT_ACTIVE_WO = (m) => m && (m.status === "todo" || m.status === "in-progress");
 const MAINT_INPROGRESS = (m) => m && m.status === "in-progress";
 
