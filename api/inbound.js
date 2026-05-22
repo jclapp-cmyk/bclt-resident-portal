@@ -3,13 +3,14 @@
 import { createClient } from '@supabase/supabase-js';
 
 function getSupabase() {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  // Report which key we chose so failures are debuggable
+  // Trim defensively — Vercel UI sometimes captures stray newlines on paste,
+  // which would silently produce a malformed URL (and an empty query result).
+  const url = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
   let key = null;
   let keySource = 'none';
-  if (process.env.SUPABASE_SERVICE_ROLE_KEY) { key = process.env.SUPABASE_SERVICE_ROLE_KEY; keySource = 'SUPABASE_SERVICE_ROLE_KEY'; }
-  else if (process.env.Supabase_service_row_key) { key = process.env.Supabase_service_row_key; keySource = 'Supabase_service_row_key (legacy name)'; }
-  else if (process.env.VITE_SUPABASE_ANON_KEY) { key = process.env.VITE_SUPABASE_ANON_KEY; keySource = 'VITE_SUPABASE_ANON_KEY (anon — RLS will block!)'; }
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) { key = process.env.SUPABASE_SERVICE_ROLE_KEY.trim(); keySource = 'SUPABASE_SERVICE_ROLE_KEY'; }
+  else if (process.env.Supabase_service_row_key) { key = process.env.Supabase_service_row_key.trim(); keySource = 'Supabase_service_row_key (legacy name)'; }
+  else if (process.env.VITE_SUPABASE_ANON_KEY) { key = process.env.VITE_SUPABASE_ANON_KEY.trim(); keySource = 'VITE_SUPABASE_ANON_KEY (anon — RLS will block!)'; }
   if (!url || !key) return { client: null, keySource };
   return { client: createClient(url, key), keySource };
 }
