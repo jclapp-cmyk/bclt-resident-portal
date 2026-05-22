@@ -7112,7 +7112,17 @@ export default function App() {
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const role = profile?.role || "resident";
+  const actualRole = profile?.role || "resident";
+  // Admins can "View As" another role for testing. Persist across reloads.
+  const [viewAsRole, setViewAsRole] = useState(() => localStorage.getItem("bclt_viewAsRole") || null);
+  const [viewAsResident, setViewAsResident] = useState(() => localStorage.getItem("bclt_viewAsResident") || null);
+  useEffect(() => {
+    if (viewAsRole) localStorage.setItem("bclt_viewAsRole", viewAsRole); else localStorage.removeItem("bclt_viewAsRole");
+  }, [viewAsRole]);
+  useEffect(() => {
+    if (viewAsResident) localStorage.setItem("bclt_viewAsResident", viewAsResident); else localStorage.removeItem("bclt_viewAsResident");
+  }, [viewAsResident]);
+  const role = actualRole === "admin" && viewAsRole ? viewAsRole : actualRole;
   const [page, setPage] = useState("dashboard");
   const [commPrefs, setCommPrefs] = useState(DEFAULT_COMM_PREFS);
   const [leaseDocs, setLeaseDocs] = useState(DEFAULT_LEASE_DOCS);
@@ -7226,14 +7236,17 @@ export default function App() {
 
   // Resident context — derived from profile for logged-in residents, or from View As for admins
   const residentCtx = (() => {
-    if (role === "resident") {
-      if (profile?.role === "resident" && profile.residentSlug) {
-        return { id: profile.residentSlug, name: profile.residentName, firstName: profile.residentName?.split(" ")[0], unit: profile.unit, propertyId: profile.propertySlug };
-      }
-      // Resident not linked to a resident record — show minimal context
-      return { id: "", name: profile?.displayName || "Resident", firstName: profile?.displayName?.split(" ")[0] || "Resident", unit: "—", propertyId: "" };
+    if (role !== "resident") return null;
+    // Admin viewing as a specific resident
+    if (actualRole === "admin" && viewAsRole === "resident" && viewAsResident) {
+      const r = LIVE_RESIDENTS.find(x => x.id === viewAsResident || x._uuid === viewAsResident || x.slug === viewAsResident);
+      if (r) return { id: r.id, name: r.name, firstName: r.name?.split(" ")[0], unit: r.unit, propertyId: r.propertyId, email: r.email, phone: r.phone };
     }
-    return null;
+    if (profile?.role === "resident" && profile.residentSlug) {
+      return { id: profile.residentSlug, name: profile.residentName, firstName: profile.residentName?.split(" ")[0], unit: profile.unit, propertyId: profile.propertySlug };
+    }
+    // Resident not linked to a resident record — show minimal context
+    return { id: "", name: profile?.displayName || "Resident", firstName: profile?.displayName?.split(" ")[0] || "Resident", unit: "—", propertyId: "" };
   })();
 
   // Note: LIVE_PROPERTIES / LIVE_RESIDENTS / LIVE_RESIDENTS_EXTENDED are module-level
@@ -7517,7 +7530,29 @@ export default function App() {
           {mobile && <button onClick={() => setSidebarOpen(false)} style={{ background: "none", border: "none", fontSize: 22, color: T.muted, cursor: "pointer", padding: 4 }}>✕</button>}
         </div>
       </div>
-      {/* Role is set by auth — no View As switcher needed */}
+      {/* View As switcher — only visible to actual admins */}
+      {actualRole === "admin" && (
+        <div style={{ padding: "10px 12px 0" }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: T.dim, textTransform: "uppercase", letterSpacing: "1px", padding: "0 6px", marginBottom: 6 }}>View As</div>
+          <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+            {[["admin", "Admin"], ["maintenance", "Maint"], ["resident", "Resident"]].map(([k, label]) => {
+              const active = (k === "admin" && !viewAsRole) || viewAsRole === k;
+              return (
+                <button key={k} onClick={() => { setViewAsRole(k === "admin" ? null : k); if (k !== "resident") setViewAsResident(null); setPage("dashboard"); }} style={{
+                  flex: 1, padding: "6px 4px", fontSize: 11, fontWeight: 600, borderRadius: T.radiusSm, cursor: "pointer",
+                  background: active ? T.accent : T.bg, color: active ? "#fff" : T.text, border: `1px solid ${active ? T.accent : T.border}`,
+                }}>{label}</button>
+              );
+            })}
+          </div>
+          {viewAsRole === "resident" && (
+            <select value={viewAsResident || ""} onChange={e => setViewAsResident(e.target.value || null)} style={{ ...s.select, width: "100%", fontSize: 12, marginBottom: 6 }}>
+              <option value="">Pick a resident…</option>
+              {LIVE_RESIDENTS.map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
+            </select>
+          )}
+        </div>
+      )}
       {role === "admin" && (
         <div style={{ padding: "10px 12px 0" }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: T.dim, textTransform: "uppercase", letterSpacing: "1px", padding: "0 6px", marginBottom: 6 }}>Property</div>
