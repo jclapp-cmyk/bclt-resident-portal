@@ -770,12 +770,16 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Recent Work Orders</div>
         <table style={s.table}>
-          <thead><tr>{["ID", "Unit", "Category", "Priority", "Status", "Assigned"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{["Issue", "Requester", "Unit", "Category", "Priority", "Status", "Assigned"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>
             {maintenance.filter(m => MAINT_OPEN(m)).map(m => (
               <tr key={m.id}>
-                <td style={s.td}><span style={{ fontWeight: 600 }}>{m.id}</span></td>
-                <td style={s.td}>{m.unit}</td>
+                <td style={s.td}>
+                  <div style={{ fontWeight: 600, color: T.accent }}>{m.description}</div>
+                  <div style={{ fontSize: 10, color: T.dim, marginTop: 2 }}>{m.id}</div>
+                </td>
+                <td style={s.td}>{m.residentName || m.requesterName || "—"}</td>
+                <td style={s.td}>{m.unit || "—"}</td>
                 <td style={s.td}>{m.category}</td>
                 <td style={s.td}><Badge status={m.priority} type="priority" /></td>
                 <td style={s.td}><Badge status={m.status} /></td>
