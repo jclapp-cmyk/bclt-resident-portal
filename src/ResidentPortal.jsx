@@ -2026,17 +2026,12 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                         timestamp: new Date().toISOString(),
                         roles: ["admin"],
                       });
-                      // Email all admins
-                      fetchUserProfiles().then(profiles => {
-                        const admins = (profiles || []).filter(p => p.role === "admin" && p.email);
-                        admins.forEach(admin => {
-                          sendNotification("custom", {
-                            to: admin.email,
-                            subject: `Income Certification Submitted — ${activeCert.residentName} (${activeCert.unit})`,
-                            body: `${activeCert.residentName} in Unit ${activeCert.unit} has submitted their income certification for review.\n\nTotal Annual Household Income: $${incomeForDetermination.toLocaleString()}\nAMI Category: ${eligibility.category}\n\nPlease log in to the Resident Portal to review and approve.`,
-                          }).catch((err) => { console.error('Admin notification failed:', err); });
-                        });
-                      }).catch((err) => { console.error('Failed to fetch admin profiles for notification:', err); });
+                      // Email the shared portal mailbox — admins read from there, not personal email
+                      sendNotification("custom", {
+                        to: "residentportal@bolinaslandtrust.org",
+                        subject: `Income Certification Submitted — ${activeCert.residentName} (${activeCert.unit})`,
+                        body: `${activeCert.residentName} in Unit ${activeCert.unit} has submitted their income certification for review.\n\nTotal Annual Household Income: $${incomeForDetermination.toLocaleString()}\nAMI Category: ${eligibility.category}\n\nPlease log in to the Resident Portal to review and approve.`,
+                      }).catch((err) => { console.error('Income cert notification failed:', err); });
                     }
                     // Refresh certs before clearing active cert to avoid stale list
                     const refreshed = await fetchIncomeCertifications();
@@ -7904,17 +7899,12 @@ export default function App() {
   const addMaintenanceN = (req) => {
     addMaintenance(req);
     pushNotif({ id: `N-${Date.now()}`, type: "maintenance", icon: "🔧", message: `New request: ${req.description.slice(0, 50)} (${req.unit})${req.priority === "critical" ? " — Critical" : ""}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance"] });
-    // Email notify admin team about new maintenance request (dynamically from user_profiles)
-    fetchUserProfiles().then(profiles => {
-      const admins = (profiles || []).filter(p => (p.role === "admin" || p.role === "maintenance") && p.email);
-      admins.forEach(admin => {
-        sendNotification("custom", {
-          to: admin.email,
-          subject: `New Maintenance Request — ${req.unit}`,
-          body: `A new ${req.priority} priority maintenance request has been submitted for Unit ${req.unit}.\n\nCategory: ${req.category}\nDescription: ${req.description}\n\nPlease log in to the Resident Portal to review and assign.`,
-        }).catch((err) => { console.error('Admin maintenance notification failed:', err); });
-      });
-    }).catch((err) => { console.error('Failed to fetch admin profiles for maintenance notification:', err); });
+    // Notify the shared portal mailbox — one email, not one per admin's personal inbox
+    sendNotification("custom", {
+      to: "residentportal@bolinaslandtrust.org",
+      subject: `New Maintenance Request — ${req.unit}`,
+      body: `A new ${req.priority} priority maintenance request has been submitted for Unit ${req.unit}.\n\nCategory: ${req.category}\nDescription: ${req.description}\n\nPlease log in to the Resident Portal to review and assign.`,
+    }).catch((err) => { console.error('Maintenance notification failed:', err); });
   };
   const updateMaintenanceN = (id, changes) => {
     updateMaintenance(id, changes);
