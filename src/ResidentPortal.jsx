@@ -5087,34 +5087,46 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 body: composeData.body.trim(),
                 date: new Date().toISOString(),
               });
-              // Actually send the message via SMS/email
-              try {
-                const emailData = { subject: composeData.subject.trim(), body: composeData.body.trim(), threadCode: threadId };
-                if (composeData.broadcast) {
-                  for (const r of LIVE_RESIDENTS) {
-                    if (ch === "sms" && r.phone) await sendSMS(r.phone, composeData.body.trim());
-                    else if (ch === "email" && r.email) await sendNotification("custom", { ...emailData, to: r.email });
-                    else {
-                      if (r.phone) await sendSMS(r.phone, composeData.body.trim());
-                      if (r.email) await sendNotification("custom", { ...emailData, to: r.email });
-                    }
-                  }
-                } else {
-                  const r = LIVE_RESIDENTS.find(res => res.id === composeData.to);
-                  if (r) {
-                    if (ch === "sms" && r.phone) await sendSMS(r.phone, composeData.body.trim());
-                    else if (ch === "email" && r.email) await sendNotification("custom", { ...emailData, to: r.email });
-                    else {
-                      if (r.phone) await sendSMS(r.phone, composeData.body.trim());
-                      if (r.email) await sendNotification("custom", { ...emailData, to: r.email });
-                    }
-                  }
+              // Actually send the message via SMS/email — track results so we can report
+              const deliveryReport = { emailSent: 0, emailFailed: 0, smsSent: 0, smsFailed: 0, errors: [] };
+              const trySend = async (label, fn) => {
+                try { const res = await fn(); if (res && res.success === false) throw new Error(res.error || "send failed"); return true; }
+                catch (err) { deliveryReport.errors.push(`${label}: ${err.message || err}`); return false; }
+              };
+              const emailData = { subject: composeData.subject.trim(), body: composeData.body.trim(), threadCode: threadId };
+              const sendToRecipient = async (r) => {
+                if (!r) return;
+                const wantsEmail = ch === "email" || ch === "auto";
+                const wantsSms = ch === "sms" || ch === "auto";
+                if (wantsEmail) {
+                  if (!r.email) { deliveryReport.emailFailed++; deliveryReport.errors.push(`${r.name || r.id}: no email on file`); }
+                  else (await trySend(`email to ${r.email}`, () => sendNotification("custom", { ...emailData, to: r.email }))) ? deliveryReport.emailSent++ : deliveryReport.emailFailed++;
                 }
-              } catch (err) { console.warn("Send delivery failed:", err); }
+                if (wantsSms && ch === "sms") {
+                  if (!r.phone) { deliveryReport.smsFailed++; deliveryReport.errors.push(`${r.name || r.id}: no phone on file`); }
+                  else (await trySend(`sms to ${r.phone}`, () => sendSMS(r.phone, composeData.body.trim()))) ? deliveryReport.smsSent++ : deliveryReport.smsFailed++;
+                } else if (wantsSms && ch === "auto" && r.phone) {
+                  (await trySend(`sms to ${r.phone}`, () => sendSMS(r.phone, composeData.body.trim()))) ? deliveryReport.smsSent++ : deliveryReport.smsFailed++;
+                }
+              };
+              if (composeData.broadcast) {
+                for (const r of LIVE_RESIDENTS) await sendToRecipient(r);
+              } else {
+                await sendToRecipient(LIVE_RESIDENTS.find(res => res.id === composeData.to));
+              }
               setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
               setSending(false);
               setTab("Inbox");
-              showSuccess("Message sent!");
+              const totalSent = deliveryReport.emailSent + deliveryReport.smsSent;
+              const totalFailed = deliveryReport.emailFailed + deliveryReport.smsFailed;
+              if (totalFailed > 0) {
+                console.warn("Send delivery report:", deliveryReport);
+                showSuccess(`Saved, but ${totalFailed} delivery failure${totalFailed > 1 ? "s" : ""}: ${deliveryReport.errors.slice(0, 2).join("; ")}${deliveryReport.errors.length > 2 ? "…" : ""}`);
+              } else if (totalSent === 0) {
+                showSuccess("Saved to inbox, but no email/phone on file to deliver to.");
+              } else {
+                showSuccess(`Message sent! ${deliveryReport.emailSent ? `📧 ${deliveryReport.emailSent} email${deliveryReport.emailSent > 1 ? "s" : ""}` : ""}${deliveryReport.emailSent && deliveryReport.smsSent ? " · " : ""}${deliveryReport.smsSent ? `💬 ${deliveryReport.smsSent} SMS` : ""}`);
+              }
             }}>{sending ? "Sending..." : "Send Message"}</button>
             <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" })}>Clear</button>
           </div>
