@@ -7274,7 +7274,38 @@ export default function App() {
     if (viewAsResident) localStorage.setItem("bclt_viewAsResident", viewAsResident); else localStorage.removeItem("bclt_viewAsResident");
   }, [viewAsResident]);
   const role = actualRole === "admin" && viewAsRole ? viewAsRole : actualRole;
-  const [page, setPage] = useState("dashboard");
+  // Page state is synced with the URL hash so the browser Back/Forward
+  // buttons navigate the portal like a traditional website. Initial value
+  // comes from the current hash (if any) so deep-links also work.
+  const [page, setPageState] = useState(() => {
+    if (typeof window === "undefined") return "dashboard";
+    const h = window.location.hash.replace(/^#/, "").trim();
+    return h || "dashboard";
+  });
+  const setPage = useCallback((id) => {
+    setPageState(id);
+    if (typeof window !== "undefined") {
+      const target = `#${id}`;
+      if (window.location.hash !== target) {
+        // pushState (not replaceState) so each navigation becomes a back-button entry
+        window.history.pushState({ page: id }, "", target);
+      }
+    }
+  }, []);
+  // Listen for browser back/forward — sync the page state to whatever hash is now active.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPop = () => {
+      const h = window.location.hash.replace(/^#/, "").trim();
+      setPageState(h || "dashboard");
+    };
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("hashchange", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("hashchange", onPop);
+    };
+  }, []);
   const [commPrefs, setCommPrefs] = useState(DEFAULT_COMM_PREFS);
   const [leaseDocs, setLeaseDocs] = useState(DEFAULT_LEASE_DOCS);
   const [sidebarOpen, setSidebarOpen] = useState(false);
