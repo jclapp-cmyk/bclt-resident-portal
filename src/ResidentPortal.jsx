@@ -3367,6 +3367,34 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   if (!p) return <EmptyState icon="🏘️" text="Property not found" />;
   const propResidents = LIVE_RESIDENTS.filter(r => r.propertyId === selectedProperty);
 
+  // Financials roll-up for this property
+  const propLedger = LIVE_RENT_LEDGER.filter(l => l.propertyId === selectedProperty);
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonthLedger = propLedger.filter(l => l.month === currentMonth);
+  // Fallback: if no current-month entries exist, use the most recent month per resident
+  const ledgerForRollup = currentMonthLedger.length > 0
+    ? currentMonthLedger
+    : Object.values(propLedger.reduce((acc, l) => {
+        if (!acc[l.residentId] || acc[l.residentId].month < l.month) acc[l.residentId] = l;
+        return acc;
+      }, {}));
+  const monthlyRent = ledgerForRollup.reduce((s, l) => s + (l.rentDue || 0), 0);
+  const collected = ledgerForRollup.reduce((s, l) => s + (l.tenantPaid || 0) + (l.hapReceived || 0), 0);
+  const tenantCollected = ledgerForRollup.reduce((s, l) => s + (l.tenantPaid || 0), 0);
+  const hapCollected = ledgerForRollup.reduce((s, l) => s + (l.hapReceived || 0), 0);
+  const outstanding = propLedger.reduce((s, l) => s + Math.max(0, l.balance || 0), 0);
+  const collectionRate = monthlyRent > 0 ? Math.round((collected / monthlyRent) * 100) : 0;
+  const delinquent = propLedger
+    .filter(l => (l.balance || 0) > 0)
+    .reduce((acc, l) => {
+      if (!acc[l.residentId] || acc[l.residentId].month < l.month) acc[l.residentId] = l;
+      return acc;
+    }, {});
+  const topDelinquent = Object.values(delinquent)
+    .sort((a, b) => (b.balance || 0) - (a.balance || 0))
+    .slice(0, 3)
+    .map(l => ({ ...l, resident: LIVE_RESIDENTS.find(r => r.id === l.residentId) }));
+
   return (
     <div>
       {onSelectProperty && <button onClick={() => onSelectProperty("all", "property")} style={{ ...s.btn("ghost"), marginBottom: 12, fontSize: 13 }}>← All Properties</button>}
@@ -3392,6 +3420,40 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
           </div>
         )}
       </div>
+      {/* Financials roll-up for this property */}
+      <div style={{ ...s.card, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>💰 Financials <span style={{ fontSize: 11, color: T.muted, fontWeight: 400 }}>· current month</span></div>
+          {onSelectProperty && <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => onSelectProperty(selectedProperty, "financial")}>Full report →</button>}
+        </div>
+        <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: outstanding > 0 ? 16 : 0 }}>
+          <StatCard label="Monthly Rent" value={`$${monthlyRent.toLocaleString()}`} accent={T.accent} mobile={mobile} />
+          <StatCard label="Collected" value={`$${collected.toLocaleString()}`} accent={T.success} mobile={mobile} />
+          <StatCard label="Tenant Paid" value={`$${tenantCollected.toLocaleString()}`} accent={T.info} mobile={mobile} />
+          <StatCard label="HAP / Subsidy" value={`$${hapCollected.toLocaleString()}`} accent={T.info} mobile={mobile} />
+          <StatCard label="Collection Rate" value={`${collectionRate}%`} accent={collectionRate >= 95 ? T.success : collectionRate >= 80 ? T.warn : T.danger} mobile={mobile} />
+          <StatCard label="Outstanding" value={`$${outstanding.toLocaleString()}`} accent={outstanding > 0 ? T.danger : T.success} mobile={mobile} />
+        </div>
+        {topDelinquent.length > 0 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 8 }}>Top delinquencies</div>
+            <table style={s.table}>
+              <thead><tr>{["Resident", "Unit", "Month", "Balance"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {topDelinquent.map((l, i) => (
+                  <tr key={i} onClick={() => l.resident && onSelectProperty?.(selectedProperty, "residents", l.resident.id)} style={{ cursor: l.resident && onSelectProperty ? "pointer" : "default" }}>
+                    <td style={s.td}>{l.resident?.name || "—"}</td>
+                    <td style={s.td}>{l.resident?.unit || "—"}</td>
+                    <td style={s.td}>{l.month}</td>
+                    <td style={{ ...s.td, fontWeight: 600, color: T.danger }}>${(l.balance || 0).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {showAddProp && (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>New Property</div>
