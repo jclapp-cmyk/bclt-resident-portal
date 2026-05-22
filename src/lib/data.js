@@ -470,6 +470,18 @@ export async function fetchAuditLog(limit = 50) {
 
 // ── FILE STORAGE (Lease Documents) ──
 
+// ── MESSAGE ATTACHMENTS ──
+// Public bucket; uploads return a long-lived public URL we can paste into
+// message bodies and outgoing emails.
+export async function uploadMessageAttachment(file, threadCode) {
+  const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+  const path = `${threadCode || 'misc'}/${Date.now()}_${safeName}`;
+  const { error } = await supabase.storage.from('message-attachments').upload(path, file, { upsert: false });
+  if (error) throw error;
+  const { data } = supabase.storage.from('message-attachments').getPublicUrl(path);
+  return { path, url: data?.publicUrl || null, name: file.name };
+}
+
 export async function uploadLeaseFile(file, residentSlug) {
   const path = `${residentSlug}/${Date.now()}_${file.name}`;
   const { error } = await supabase.storage.from('lease-documents').upload(path, file);

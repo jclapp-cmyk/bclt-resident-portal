@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -4923,7 +4923,13 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
               <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 12 }}>
                 <div style={{ maxWidth: mobile ? "85%" : "70%", padding: "10px 14px", borderRadius: 12, background: isMe ? T.accent : T.bg, color: isMe ? T.white : T.text, borderBottomRightRadius: isMe ? 4 : 12, borderBottomLeftRadius: isMe ? 12 : 4 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, opacity: 0.7 }}>{sender}</div>
-                  <div style={{ fontSize: 14, lineHeight: 1.5 }}>{msg.body}</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{
+                    msg.body.split(/(https?:\/\/[^\s)]+)/g).map((part, i) =>
+                      part.match(/^https?:\/\//)
+                        ? <a key={i} href={part} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>{part}</a>
+                        : part
+                    )
+                  }</div>
                   <div style={{ fontSize: 10, marginTop: 6, opacity: 0.6, textAlign: "right" }}>{new Date(msg.date).toLocaleString()}</div>
                 </div>
               </div>
@@ -4948,6 +4954,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   const [tab, setTab] = useState(tabs[0]);
   const [selectedThread, setSelectedThread] = useState(null);
   const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
+  const [residentAttachments, setResidentAttachments] = useState([]);
   const [sending, setSending] = useState(false);
   const [success, showSuccess] = useSuccess();
 
@@ -5191,6 +5198,15 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             <label style={s.label}>Message</label>
             <textarea style={{ ...s.input, minHeight: 140, resize: "vertical" }} value={composeData.body} onChange={e => setComposeData(prev => ({ ...prev, body: e.target.value }))} placeholder="Type your message..." />
           </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={s.label}>Attachments (optional)</label>
+            <input type="file" multiple onChange={e => setResidentAttachments(Array.from(e.target.files || []))} style={{ display: "block", fontSize: 13, color: T.muted }} />
+            {residentAttachments.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 12, color: T.muted }}>
+                {residentAttachments.map((f, i) => <div key={i}>📎 {f.name} ({(f.size / 1024).toFixed(1)} KB)</div>)}
+              </div>
+            )}
+          </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button disabled={sending || !composeData.subject.trim() || !composeData.body.trim()} style={s.btn()} onClick={async () => {
               if (sending) return;
@@ -5201,6 +5217,16 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               const recipientLabels = { management: "BCLT Management", property_manager: "Property Manager", maintenance: "Maintenance Team", rent: "Rent / Billing" };
               const recipientLabel = recipientLabels[recipientKey] || "BCLT Management";
               const taggedSubject = `[${recipientLabel}] ${composeData.subject.trim()}`;
+              // Upload attachments (if any)
+              const uploaded = [];
+              for (const f of residentAttachments) {
+                try { uploaded.push(await uploadMessageAttachment(f, threadId)); }
+                catch (err) { console.warn(`Attachment ${f.name} failed:`, err); }
+              }
+              const attachmentText = uploaded.length > 0
+                ? "\n\n— Attachments —\n" + uploaded.map(a => `📎 ${a.name}: ${a.url}`).join("\n")
+                : "";
+              const bodyWithAttachments = composeData.body.trim() + attachmentText;
               await onAddThread({
                 id: threadId,
                 participants: [rc?.id || "resident"],
@@ -5216,25 +5242,29 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 id: `MSG-${Date.now()}`,
                 threadId,
                 from: rc?.id || "resident",
-                body: composeData.body.trim(),
+                body: bodyWithAttachments,
                 date: now,
               });
               let emailStatus = "no email sent";
               try {
+                const attachmentsHtml = uploaded.length > 0
+                  ? `<p><strong>Attachments:</strong></p><ul>${uploaded.map(a => `<li>📎 <a href="${a.url}">${a.name}</a></li>`).join("")}</ul>`
+                  : "";
                 await sendNotification("custom", {
                   to: "residentportal@bolinaslandtrust.org",
                   subject: taggedSubject,
-                  body: `<p><strong>From: ${rc?.name || "Resident"} (Unit ${rc?.unit || "—"})</strong></p><p><strong>To: ${recipientLabel}</strong></p><p>${composeData.body.trim().replace(/\n/g, "<br>")}</p>`,
+                  body: `<p><strong>From: ${rc?.name || "Resident"} (Unit ${rc?.unit || "—"})</strong></p><p><strong>To: ${recipientLabel}</strong></p><p>${composeData.body.trim().replace(/\n/g, "<br>")}</p>${attachmentsHtml}`,
                   threadCode: threadId,
                 });
-                emailStatus = `routed to ${recipientLabel}`;
+                emailStatus = `routed to ${recipientLabel}${uploaded.length > 0 ? ` with ${uploaded.length} attachment${uploaded.length > 1 ? "s" : ""}` : ""}`;
               } catch (err) { console.warn("Compose email failed:", err); }
               setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
+              setResidentAttachments([]);
               setSending(false);
               setTab("Messages");
               showSuccess(`Message sent — ${emailStatus}`);
             }}>{sending ? "Sending..." : "Send Message"}</button>
-            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" })}>Clear</button>
+            <button style={s.btn("ghost")} onClick={() => { setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" }); setResidentAttachments([]); }}>Clear</button>
           </div>
         </div>
       )}
