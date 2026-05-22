@@ -2706,9 +2706,22 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                         // If no unit UUID, look it up from the resident's unit_id in Supabase
                         await insertLease({ residentId: selectedResident._uuid, unitId: unitUuid, rentAmount: parseFloat(ef.rentAmount) || 0, tenantPortion: parseFloat(ef.tenantPortion) || 0, hapPayment: parseFloat(ef.hapPayment) || 0, startDate: ef.leaseStart || new Date().toISOString().slice(0, 10), endDate: ef.leaseType === "month-to-month" ? null : (ef.leaseEnd || null), leaseType: ef.leaseType || "fixed" });
                       }
+                      // Optimistically update the visible record so the page reflects the save immediately
+                      setSelectedResident(prev => prev ? {
+                        ...prev,
+                        name: ef.name, phone: ef.phone, email: ef.email,
+                        preferredChannel: ef.preferredChannel, smsConsent: ef.smsConsent,
+                        mailingStreet: ef.mailingStreet, mailingCity: ef.mailingCity, mailingState: ef.mailingState, mailingZip: ef.mailingZip,
+                        mailingAddress: [ef.mailingStreet, ef.mailingCity, ef.mailingState, ef.mailingZip].filter(Boolean).join(", "),
+                      } : prev);
                       showSuccess("Resident updated!");
                       setEditing(false);
-                      if (onResidentAdded) onResidentAdded();
+                      if (onResidentAdded) {
+                        await onResidentAdded();
+                        // Re-pull the freshly-loaded record so derived fields (joins, lease) reflect the latest server data
+                        const updated = LIVE_RESIDENTS.find(r => r._uuid === selectedResident._uuid);
+                        if (updated) setSelectedResident(updated);
+                      }
                     } catch (err) { showSuccess("Error: " + err.message); }
                   }}>Save Changes</button>
                 </>) : (<>
