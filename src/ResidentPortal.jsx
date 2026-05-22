@@ -7966,7 +7966,18 @@ export default function App() {
     // SMS the configured notify list (Admin Settings → Maintenance → Notify Phones)
     const notifyPhones = (settings?.maint?.notifyPhones || []).filter(Boolean);
     if (notifyPhones.length > 0) {
-      const smsBody = `BCLT: New ${req.priority} maintenance request — Unit ${req.unit || "—"} · ${req.category}. ${req.description.slice(0, 120)}${req.description.length > 120 ? "…" : ""}`;
+      const building = LIVE_PROPERTIES.find(p => p.id === req.propertyId)?.name || "";
+      const requester = req.requesterName
+        || LIVE_RESIDENTS.find(r => r.unit === req.unit && r.propertyId === req.propertyId)?.name
+        || LIVE_RESIDENTS.find(r => r.unit === req.unit)?.name
+        || "";
+      const locParts = [building, req.unit ? `Unit ${req.unit}` : ""].filter(Boolean).join(" · ");
+      const requesterLine = requester ? `From: ${requester}\n` : "";
+      const smsBody =
+        `BCLT: New ${req.priority} maintenance request\n` +
+        (locParts ? `${locParts}\n` : "") +
+        requesterLine +
+        `${req.category}: ${req.description.slice(0, 120)}${req.description.length > 120 ? "…" : ""}`;
       for (const phone of notifyPhones) {
         sendSMS(phone, smsBody).catch(err => console.warn(`SMS notify ${phone} failed:`, err));
       }
