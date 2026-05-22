@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS = {
     quietHoursStart: "21:00", quietHoursEnd: "08:00",
   },
   rent: { dueDay: "1", gracePeriodDays: "5", lateFeeAmount: "50", leaseTermDefault: "12", autoRenewal: true },
-  maint: { categories: ["Plumbing", "Electrical", "HVAC", "Appliance", "Structural", "Pest", "Other"], defaultPriority: "routine", autoAssign: false, emergencyPhone: "(415) 555-0199" },
+  maint: { categories: ["Plumbing", "Electrical", "HVAC", "Appliance", "Structural", "Pest", "Other"], defaultPriority: "routine", autoAssign: false, emergencyPhone: "(415) 555-0199", notifyPhones: [] },
   rvFields: [
     { key: "rvMake", label: "RV Make", type: "text", placeholder: "e.g. Winnebago" },
     { key: "rvModel", label: "RV Model", type: "text", placeholder: "e.g. Vista 31BE" },
@@ -6616,6 +6616,42 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
             </div>
             <button style={s.btn()} onClick={() => showSuccess("Maintenance settings saved")}>Save Changes</button>
           </div>
+
+          <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>New-Request SMS Notifications</div>
+            <div style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>Each phone number here gets a text whenever a resident submits a maintenance request. US numbers; +1 is added automatically if missing.</div>
+            {(settings.maint.notifyPhones || []).length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+                {(settings.maint.notifyPhones || []).map((phone, i) => (
+                  <span key={i} style={{ ...s.badge(T.accentDim, T.accent), display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px" }}>
+                    {phone}
+                    <button onClick={() => upd("maint", "notifyPhones", settings.maint.notifyPhones.filter((_, idx) => idx !== i))} style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", padding: 0, fontSize: 14, lineHeight: 1 }}>✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input style={{ ...s.mInput(mobile), flex: 1 }} placeholder="(415) 555-0123" id="new-notify-phone" onKeyDown={e => {
+                if (e.key === "Enter" && e.target.value.trim()) {
+                  const list = settings.maint.notifyPhones || [];
+                  if (!list.includes(e.target.value.trim())) upd("maint", "notifyPhones", [...list, e.target.value.trim()]);
+                  e.target.value = "";
+                }
+              }} />
+              <button style={s.btn()} onClick={() => {
+                const input = document.getElementById("new-notify-phone");
+                const val = input?.value?.trim();
+                if (val) {
+                  const list = settings.maint.notifyPhones || [];
+                  if (!list.includes(val)) upd("maint", "notifyPhones", [...list, val]);
+                  if (input) input.value = "";
+                }
+              }}>Add Phone</button>
+            </div>
+            {(settings.maint.notifyPhones || []).length === 0 && (
+              <div style={{ fontSize: 12, color: T.dim, marginTop: 10, fontStyle: "italic" }}>No numbers yet — new requests won't trigger SMS until you add one.</div>
+            )}
+          </div>
         </div>
       )}
 
@@ -7653,7 +7689,29 @@ export default function App() {
   const [notifReadAt, setNotifReadAt] = useState({ resident: "2026-03-10T00:00:00", admin: "2026-03-12T00:00:00", maintenance: "2026-03-12T00:00:00" });
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  // Settings persisted to localStorage so admin tweaks survive reloads. Merged
+  // with DEFAULT_SETTINGS so new fields added later (like maint.notifyPhones)
+  // always have a value even on existing browsers.
+  const [settings, setSettings] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_SETTINGS;
+    try {
+      const raw = window.localStorage.getItem("bclt_settings");
+      if (!raw) return DEFAULT_SETTINGS;
+      const parsed = JSON.parse(raw);
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        maint: { ...DEFAULT_SETTINGS.maint, ...(parsed.maint || {}) },
+        property: { ...DEFAULT_SETTINGS.property, ...(parsed.property || {}) },
+        notifications: { ...DEFAULT_SETTINGS.notifications, ...(parsed.notifications || {}) },
+        rent: { ...DEFAULT_SETTINGS.rent, ...(parsed.rent || {}) },
+      };
+    } catch { return DEFAULT_SETTINGS; }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem("bclt_settings", JSON.stringify(settings)); } catch {}
+  }, [settings]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState("all");
@@ -7905,6 +7963,14 @@ export default function App() {
       subject: `New Maintenance Request — ${req.unit}`,
       body: `A new ${req.priority} priority maintenance request has been submitted for Unit ${req.unit}.\n\nCategory: ${req.category}\nDescription: ${req.description}\n\nPlease log in to the Resident Portal to review and assign.`,
     }).catch((err) => { console.error('Maintenance notification failed:', err); });
+    // SMS the configured notify list (Admin Settings → Maintenance → Notify Phones)
+    const notifyPhones = (settings?.maint?.notifyPhones || []).filter(Boolean);
+    if (notifyPhones.length > 0) {
+      const smsBody = `BCLT: New ${req.priority} maintenance request — Unit ${req.unit || "—"} · ${req.category}. ${req.description.slice(0, 120)}${req.description.length > 120 ? "…" : ""}`;
+      for (const phone of notifyPhones) {
+        sendSMS(phone, smsBody).catch(err => console.warn(`SMS notify ${phone} failed:`, err));
+      }
+    }
   };
   const updateMaintenanceN = (id, changes) => {
     updateMaintenance(id, changes);
