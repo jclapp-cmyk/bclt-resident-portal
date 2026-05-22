@@ -4976,7 +4976,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             <span style={{ fontSize: 12, color: T.dim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }}>{t.lastMessage}</span>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
               <span style={s.badge(chBadge.bg, chBadge.text)}>{chBadge.label}</span>
-              {t.priority === "high" && <span style={s.badge(T.dangerDim, T.danger)}>!</span>}
+              {t.priority === "high" && <span style={s.badge(T.warnDim, T.warn)} title="High priority">High</span>}
+              {t.priority === "urgent" && <span style={s.badge(T.dangerDim, T.danger)} title="Urgent">Urgent</span>}
               {t.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent }} />}
               {isAdmin && onDeleteThread && <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete this thread?")) onDeleteThread(t.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: T.dim, fontSize: 14, padding: "2px 4px", marginLeft: 4 }} title="Delete thread">🗑</button>}
             </div>
