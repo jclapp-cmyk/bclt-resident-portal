@@ -711,10 +711,69 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
   const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
   const totalUnits = selectedProperty === "all" ? LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0) : getProperty(selectedProperty).totalUnits;
+  // Financials roll-up scoped to selectedProperty (or all)
+  const finLedger = selectedProperty === "all" ? LIVE_RENT_LEDGER : LIVE_RENT_LEDGER.filter(l => l.propertyId === selectedProperty);
+  const finCurrentMonth = new Date().toISOString().slice(0, 7);
+  const finCurrent = finLedger.filter(l => l.month === finCurrentMonth);
+  const finRollupLedger = finCurrent.length > 0
+    ? finCurrent
+    : Object.values(finLedger.reduce((acc, l) => {
+        if (!acc[l.residentId] || acc[l.residentId].month < l.month) acc[l.residentId] = l;
+        return acc;
+      }, {}));
+  const finRent = finRollupLedger.reduce((s, l) => s + (l.rentDue || 0), 0);
+  const finCollected = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0) + (l.hapReceived || 0), 0);
+  const finTenantPaid = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0), 0);
+  const finHap = finRollupLedger.reduce((s, l) => s + (l.hapReceived || 0), 0);
+  const finOutstanding = finLedger.reduce((s, l) => s + Math.max(0, l.balance || 0), 0);
+  const finRate = finRent > 0 ? Math.round((finCollected / finRent) * 100) : 0;
+  const finDelinquent = finLedger.filter(l => (l.balance || 0) > 0).reduce((acc, l) => {
+    if (!acc[l.residentId] || acc[l.residentId].month < l.month) acc[l.residentId] = l;
+    return acc;
+  }, {});
+  const finTopDelinquent = Object.values(finDelinquent)
+    .sort((a, b) => (b.balance || 0) - (a.balance || 0))
+    .slice(0, 3)
+    .map(l => ({ ...l, resident: LIVE_RESIDENTS.find(r => r.id === l.residentId) }));
+
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Admin Dashboard</h1>
       <p style={s.sectionSub}>{propLabel} — {totalUnits} Units</p>
+
+      {/* Financials roll-up */}
+      <div style={{ ...s.card, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>💰 Financials <span style={{ fontSize: 11, color: T.muted, fontWeight: 400 }}>· {selectedProperty === "all" ? "all properties" : propLabel} · current month</span></div>
+          {onSelectProperty && <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => onSelectProperty(selectedProperty, "financial")}>Full report →</button>}
+        </div>
+        <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: finTopDelinquent.length > 0 ? 16 : 0 }}>
+          <StatCard label="Monthly Rent" value={`$${finRent.toLocaleString()}`} accent={T.accent} mobile={mobile} />
+          <StatCard label="Collected" value={`$${finCollected.toLocaleString()}`} accent={T.success} mobile={mobile} />
+          <StatCard label="Tenant Paid" value={`$${finTenantPaid.toLocaleString()}`} accent={T.info} mobile={mobile} />
+          <StatCard label="HAP / Subsidy" value={`$${finHap.toLocaleString()}`} accent={T.info} mobile={mobile} />
+          <StatCard label="Collection Rate" value={`${finRate}%`} accent={finRate >= 95 ? T.success : finRate >= 80 ? T.warn : T.danger} mobile={mobile} />
+          <StatCard label="Outstanding" value={`$${finOutstanding.toLocaleString()}`} accent={finOutstanding > 0 ? T.danger : T.success} mobile={mobile} />
+        </div>
+        {finTopDelinquent.length > 0 && (
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 8 }}>Top delinquencies</div>
+            <table style={s.table}>
+              <thead><tr>{["Resident", "Unit", "Month", "Balance"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {finTopDelinquent.map((l, i) => (
+                  <tr key={i}>
+                    <td style={s.td}>{l.resident?.name || "—"}</td>
+                    <td style={s.td}>{l.resident?.unit || "—"}</td>
+                    <td style={s.td}>{l.month}</td>
+                    <td style={{ ...s.td, fontWeight: 600, color: T.danger }}>${(l.balance || 0).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Per-property performance cards — portfolio view */}
       {selectedProperty === "all" && (
