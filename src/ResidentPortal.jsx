@@ -705,7 +705,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
 };
 
 // --- ADMIN DASHBOARD ---
-const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notifications, selectedProperty, onSelectProperty }) => {
+const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notifications, selectedProperty, onSelectProperty, onOpenMaintenance }) => {
   const [dashCerts, setDashCerts] = useState([]);
   useEffect(() => { fetchIncomeCertifications().then(c => setDashCerts(c || [])).catch((err) => { console.error('Failed to fetch certifications:', err); }); }, []);
   const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
@@ -773,7 +773,9 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
           <thead><tr>{["Issue", "Requester", "Unit", "Category", "Priority", "Status", "Assigned"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>
             {maintenance.filter(m => MAINT_OPEN(m)).map(m => (
-              <tr key={m.id}>
+              <tr key={m.id} onClick={() => onOpenMaintenance && onOpenMaintenance(m.id)} style={{ cursor: onOpenMaintenance ? "pointer" : "default" }}
+                onMouseEnter={e => { e.currentTarget.style.background = T.surfaceHover; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
                 <td style={s.td}>
                   <div style={{ fontWeight: 600, color: T.accent }}>{m.description}</div>
                   <div style={{ fontSize: 10, color: T.dim, marginTop: 2 }}>{m.id}</div>
@@ -5756,7 +5758,7 @@ const MaintenanceDetailModal = ({ row, onClose, onUpdate, staffMembers, vendors,
   );
 };
 
-const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers = [], vendors = [], profile }) => {
+const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers = [], vendors = [], profile, pendingOpenId, onClearPendingOpen }) => {
   const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin" || s.role === "property_manager")).filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i);
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || null;
   const isMaintStaff = !!(staffName && maintStaff.some(m => m.name === staffName));
@@ -5775,6 +5777,20 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
     const updated = maintenance.find(m => m.id === selected.id);
     if (updated && updated !== selected) setSelected(updated);
   }, [maintenance, selected]);
+
+  // If we arrived here from a dashboard click, open the detail modal for that work order.
+  useEffect(() => {
+    if (!pendingOpenId) return;
+    const row = maintenance.find(m => m.id === pendingOpenId);
+    if (row) {
+      // Switch to whichever tab makes the row visible
+      const isIntake = row.status === "new" || row.status === "needs-info";
+      setTopTab(isIntake ? "intake" : "workorders");
+      if (!isIntake) setWoTab(row.status === "done" || row.status === "rejected" ? "done" : "todo");
+      setSelected(row);
+    }
+    if (onClearPendingOpen) onClearPendingOpen();
+  }, [pendingOpenId, maintenance]);
 
   const intakeRows = maintenance.filter(m => m.status === "new" || m.status === "needs-info");
   const todoRows = maintenance.filter(m => m.status === "todo" || m.status === "in-progress");
@@ -7518,6 +7534,7 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState("all");
   const [pendingResidentView, setPendingResidentView] = useState(null);
+  const [pendingMaintenanceId, setPendingMaintenanceId] = useState(null);
   const [sbProperties, setSbProperties] = useState(null);
   const [sbResidents, setSbResidents] = useState(null);
   const [sbResidentsExt, setSbResidentsExt] = useState(null);
@@ -7869,13 +7886,13 @@ export default function App() {
       const fMaint = filterByProperty(maintenance, sp);
       const fInsp = filterByProperty(unitInspections, sp);
       switch (page) {
-        case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} />;
+        case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
         case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onDataChanged={reloadData} leaseDocs={leaseDocs} sbRentLedger={sbRentLedger} pendingResidentView={pendingResidentView} onClearPendingResident={() => setPendingResidentView(null)} onAddThread={addThreadN} onAddMessage={addMessageN} onResidentAdded={async () => {
           try { const [res, resExt] = await Promise.all([fetchResidents(), fetchResidentsExtended()]); LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt; setSbResidents(res); setSbResidentsExt(resExt); } catch(e) { console.warn(e); }
         }} />;
         case "onboarding": return <OnboardingChecklist mobile={mobile} selectedProperty={sp} initialRecords={onboardingData} />;
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
-        case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} vendors={vendors} profile={profile} />;
+        case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} vendors={vendors} profile={profile} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} />;
@@ -7885,7 +7902,7 @@ export default function App() {
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} />;
         case "settings": return <AdminSettings mobile={mobile} settings={settings} setSettings={setSettings} darkMode={darkMode} setDarkMode={setDarkMode} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onReset={resetAllState} staffMembers={staffMembers} allUnits={allUnits} />;
-        default: return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} />;
+        default: return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
       }
     }
     if (role === "maintenance") {
