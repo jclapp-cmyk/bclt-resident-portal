@@ -58,7 +58,17 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Thread lookup failed', details: threadErr.message, keySource });
     }
     if (!thread) {
-      return res.status(404).json({ error: `Thread ${threadId} not found`, keySource });
+      // Diagnostic: count threads + sample to confirm we're connected to the right project
+      const { count } = await supabase.from('message_threads').select('*', { count: 'exact', head: true });
+      const { data: sample } = await supabase.from('message_threads').select('code').order('created_at', { ascending: false }).limit(3);
+      const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+      return res.status(404).json({
+        error: `Thread ${threadId} not found`,
+        keySource,
+        supabaseUrl: url,
+        threadCountInDb: count,
+        recentCodes: (sample || []).map(s => s.code),
+      });
     }
 
     // Determine sender slug from email
