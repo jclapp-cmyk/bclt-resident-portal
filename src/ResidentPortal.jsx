@@ -5010,7 +5010,9 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               {t.priority === "high" && <span style={s.badge(T.warnDim, T.warn)} title="High priority">High</span>}
               {t.priority === "urgent" && <span style={s.badge(T.dangerDim, T.danger)} title="Urgent">Urgent</span>}
               {t.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent }} />}
-              {isAdmin && onDeleteThread && <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete this thread?")) onDeleteThread(t.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: T.dim, fontSize: 14, padding: "2px 4px", marginLeft: 4 }} title="Delete thread">🗑</button>}
+              {onDeleteThread && (isAdmin || (role === "resident" && !t.type?.includes("broadcast") && t.participants?.includes(rc?.id || ""))) && (
+                <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete this thread?")) onDeleteThread(t.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: T.dim, fontSize: 14, padding: "2px 4px", marginLeft: 4 }} title="Delete thread">🗑</button>
+              )}
             </div>
           </div>
         </div>
@@ -5168,10 +5170,22 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       {/* COMPOSE TAB — Resident */}
       {tab === "Compose" && !isAdmin && !isMaint && (
         <div style={s.card}>
-          <div style={{ fontSize: 14, color: T.muted, marginBottom: 14 }}>Send a message to BCLT management. They'll reply via email or in the portal.</div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={s.label}>Subject</label>
-            <input style={s.input} value={composeData.subject} onChange={e => setComposeData(prev => ({ ...prev, subject: e.target.value }))} placeholder="What's this about?" />
+          <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>Send a message. We'll reply as soon as we can.</div>
+          <div style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>If this is a maintenance request, please submit a maintenance request from the <strong>Maintenance</strong> tab instead.</div>
+          <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={s.label}>Send to</label>
+              <select style={{ ...s.select, width: "100%" }} value={composeData.to || "management"} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))}>
+                <option value="management">BCLT Management</option>
+                <option value="property_manager">Property Manager</option>
+                <option value="maintenance">Maintenance Team</option>
+                <option value="rent">Rent / Billing</option>
+              </select>
+            </div>
+            <div>
+              <label style={s.label}>Subject</label>
+              <input style={s.input} value={composeData.subject} onChange={e => setComposeData(prev => ({ ...prev, subject: e.target.value }))} placeholder="What's this about?" />
+            </div>
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={s.label}>Message</label>
@@ -5183,10 +5197,14 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               setSending(true);
               const threadId = `THR-${Date.now()}`;
               const now = new Date().toISOString();
+              const recipientKey = composeData.to || "management";
+              const recipientLabels = { management: "BCLT Management", property_manager: "Property Manager", maintenance: "Maintenance Team", rent: "Rent / Billing" };
+              const recipientLabel = recipientLabels[recipientKey] || "BCLT Management";
+              const taggedSubject = `[${recipientLabel}] ${composeData.subject.trim()}`;
               await onAddThread({
                 id: threadId,
                 participants: [rc?.id || "resident"],
-                subject: composeData.subject.trim(),
+                subject: taggedSubject,
                 lastMessage: composeData.body.trim().slice(0, 80),
                 lastDate: now,
                 unread: 1,
@@ -5203,13 +5221,13 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               });
               let emailStatus = "no email sent";
               try {
-                const res = await sendNotification("custom", {
+                await sendNotification("custom", {
                   to: "residentportal@bolinaslandtrust.org",
-                  subject: composeData.subject.trim(),
-                  body: `<p><strong>From: ${rc?.name || "Resident"} (Unit ${rc?.unit || "—"})</strong></p><p>${composeData.body.trim().replace(/\n/g, "<br>")}</p>`,
+                  subject: taggedSubject,
+                  body: `<p><strong>From: ${rc?.name || "Resident"} (Unit ${rc?.unit || "—"})</strong></p><p><strong>To: ${recipientLabel}</strong></p><p>${composeData.body.trim().replace(/\n/g, "<br>")}</p>`,
                   threadCode: threadId,
                 });
-                emailStatus = "emailed management";
+                emailStatus = `routed to ${recipientLabel}`;
               } catch (err) { console.warn("Compose email failed:", err); }
               setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
               setSending(false);
