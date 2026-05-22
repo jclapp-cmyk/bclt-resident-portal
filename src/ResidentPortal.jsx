@@ -4955,6 +4955,9 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   const [residentAttachments, setResidentAttachments] = useState([]);
   const [sending, setSending] = useState(false);
   const [success, showSuccess] = useSuccess();
+  // Inbox sort + filter (admin only — but keep in shared state for simplicity)
+  const [inboxSort, setInboxSort] = useState("recent"); // recent | resident | building
+  const [inboxPropertyFilter, setInboxPropertyFilter] = useState("");
 
   const getInitials = (name) => name.split(" ").map(w => w[0]).join("").slice(0, 2);
   const formatTime = (dateStr) => {
@@ -4967,10 +4970,38 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   };
 
   // Filter threads by role
-  const threads = isAdmin ? threadData
+  const baseThreads = isAdmin ? threadData
     : isMaint ? threadData.filter(t => t.type === "broadcast" || t.subject.toLowerCase().includes("maintenance"))
     : threadData.filter(t => t.type === "broadcast" || t.participants.includes(rc?.id || ""));
-  const sortedThreads = [...threads].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate));
+
+  // Helpers used for sort/filter and headers
+  const threadResident = (t) => t.participants
+    .map(pid => LIVE_RESIDENTS.find(r => r.id === pid))
+    .find(Boolean) || null;
+  const threadResidentName = (t) => t.type === "broadcast" ? "" : (threadResident(t)?.name || "");
+  const threadPropertySlug = (t) => threadResident(t)?.propertyId || "";
+  const threadBuildingName = (t) => {
+    if (t.type === "broadcast") return "";
+    const slug = threadPropertySlug(t);
+    return LIVE_PROPERTIES.find(p => p.id === slug)?.name || slug || "";
+  };
+
+  // Apply admin-only filters
+  const filteredThreads = isAdmin && inboxPropertyFilter
+    ? baseThreads.filter(t => threadPropertySlug(t) === inboxPropertyFilter)
+    : baseThreads;
+
+  // Sort
+  const sortedThreads = [...filteredThreads].sort((a, b) => {
+    if (isAdmin && inboxSort === "resident") {
+      const cmp = threadResidentName(a).localeCompare(threadResidentName(b));
+      if (cmp !== 0) return cmp;
+    } else if (isAdmin && inboxSort === "building") {
+      const cmp = threadBuildingName(a).localeCompare(threadBuildingName(b));
+      if (cmp !== 0) return cmp;
+    }
+    return new Date(b.lastDate) - new Date(a.lastDate);
+  });
   const unreadCount = sortedThreads.filter(t => t.unread > 0).length;
 
   // If viewing a thread
@@ -5038,10 +5069,53 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
 
       {/* INBOX / MESSAGES TAB */}
       {(tab === "Inbox" || tab === "Messages") && (
-        <div style={{ ...s.card, padding: 0, overflow: "hidden" }}>
-          {sortedThreads.length === 0 ? (
-            <EmptyState icon="💬" text="No messages yet" />
-          ) : sortedThreads.map(t => <ThreadItem key={t.id} thread={t} />)}
+        <div>
+          {isAdmin && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, color: T.muted, fontWeight: 600 }}>Sort by</span>
+                <select style={{ ...s.select, fontSize: 13, padding: "6px 8px" }} value={inboxSort} onChange={e => setInboxSort(e.target.value)}>
+                  <option value="recent">Most recent</option>
+                  <option value="resident">Resident (A–Z)</option>
+                  <option value="building">Building (A–Z)</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, color: T.muted, fontWeight: 600 }}>Building</span>
+                <select style={{ ...s.select, fontSize: 13, padding: "6px 8px" }} value={inboxPropertyFilter} onChange={e => setInboxPropertyFilter(e.target.value)}>
+                  <option value="">All buildings</option>
+                  {LIVE_PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              <span style={{ fontSize: 12, color: T.dim, marginLeft: "auto" }}>{sortedThreads.length} thread{sortedThreads.length === 1 ? "" : "s"}</span>
+            </div>
+          )}
+          <div style={{ ...s.card, padding: 0, overflow: "hidden" }}>
+            {sortedThreads.length === 0 ? (
+              <EmptyState icon="💬" text="No messages yet" />
+            ) : (() => {
+              // Group with header rows when grouping by resident or building
+              const groupKey = (t) => {
+                if (!isAdmin) return null;
+                if (inboxSort === "resident") return threadResidentName(t) || (t.type === "broadcast" ? "Broadcasts" : "—");
+                if (inboxSort === "building") return threadBuildingName(t) || (t.type === "broadcast" ? "Broadcasts" : "—");
+                return null;
+              };
+              const items = [];
+              let lastGroup = null;
+              for (const t of sortedThreads) {
+                const g = groupKey(t);
+                if (g !== null && g !== lastGroup) {
+                  items.push(
+                    <div key={`hdr-${g}`} style={{ padding: "10px 16px", background: T.bg, borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>{g}</div>
+                  );
+                  lastGroup = g;
+                }
+                items.push(<ThreadItem key={t.id} thread={t} />);
+              }
+              return items;
+            })()}
+          </div>
         </div>
       )}
 
