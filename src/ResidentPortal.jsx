@@ -5028,7 +5028,8 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
     await onAddMessage({ id: `MSG-${Date.now()}`, threadId: thread.id, from: currentSender, body, date: now });
     onUpdateThread(thread.id, { lastMessage: body, lastDate: now });
     setReply("");
-    // Notify the other side via email
+    // Notify the other side via the original channel
+    const isSmsChannel = thread.channel === "sms";
     try {
       if (role === "resident") {
         // Resident → staff: email the portal mailbox so admins see it in Gmail too
@@ -5038,16 +5039,23 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
           body: `<p><strong>From: ${rc?.name || "Resident"} (Unit ${rc?.unit || "—"})</strong></p><p>${body.replace(/\n/g, "<br>")}</p>`,
           threadCode: thread.id,
         });
-      } else if (resident?.email) {
-        // Admin/staff → resident
-        await sendNotification("custom", {
-          to: resident.email,
-          subject: `Re: ${thread.subject}`,
-          body: `<p>${body.replace(/\n/g, "<br>")}</p>`,
-          threadCode: thread.id,
-        });
+      } else {
+        // Admin/staff → resident — use the thread's original channel
+        if (isSmsChannel && resident?.phone) {
+          await sendSMS(resident.phone, body);
+        } else if (resident?.email) {
+          await sendNotification("custom", {
+            to: resident.email,
+            subject: `Re: ${thread.subject}`,
+            body: `<p>${body.replace(/\n/g, "<br>")}</p>`,
+            threadCode: thread.id,
+          });
+        } else if (resident?.phone) {
+          // No email on file — fall back to SMS regardless of channel
+          await sendSMS(resident.phone, body);
+        }
       }
-    } catch (err) { console.warn("Reply email failed:", err); }
+    } catch (err) { console.warn("Reply delivery failed:", err); }
   };
 
   return (
