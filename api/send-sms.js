@@ -7,10 +7,10 @@ export default async function handler(req, res) {
   const { to, body } = req.body;
   if (!to || !body) return res.status(400).json({ error: 'Missing to or body' });
 
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
-  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+  const accountSid = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+  const authToken = (process.env.TWILIO_AUTH_TOKEN || '').trim();
+  const messagingServiceSid = (process.env.TWILIO_MESSAGING_SERVICE_SID || '').trim();
+  const fromNumber = (process.env.TWILIO_PHONE_NUMBER || '').trim();
 
   if (!accountSid || !authToken) {
     return res.status(500).json({ error: 'Twilio credentials not configured' });
