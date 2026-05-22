@@ -4,9 +4,14 @@ import { createClient } from '@supabase/supabase-js';
 
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_row_key || process.env.VITE_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key);
+  // Report which key we chose so failures are debuggable
+  let key = null;
+  let keySource = 'none';
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) { key = process.env.SUPABASE_SERVICE_ROLE_KEY; keySource = 'SUPABASE_SERVICE_ROLE_KEY'; }
+  else if (process.env.Supabase_service_row_key) { key = process.env.Supabase_service_row_key; keySource = 'Supabase_service_row_key (legacy name)'; }
+  else if (process.env.VITE_SUPABASE_ANON_KEY) { key = process.env.VITE_SUPABASE_ANON_KEY; keySource = 'VITE_SUPABASE_ANON_KEY (anon — RLS will block!)'; }
+  if (!url || !key) return { client: null, keySource };
+  return { client: createClient(url, key), keySource };
 }
 
 export default async function handler(req, res) {
@@ -24,17 +29,17 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing from or body' });
   }
 
-  const supabase = getSupabase();
+  const { client: supabase, keySource } = getSupabase();
   if (!supabase) {
-    return res.status(500).json({ error: 'Supabase not configured' });
+    return res.status(500).json({ error: 'Supabase not configured', keySource });
   }
 
   try {
     // Find the thread by code (e.g. THR-1234567890)
     let threadId = threadCode;
     if (!threadId) {
-      // Try to extract thread code from subject line (Re: [THR-123] Subject)
-      const match = subject?.match(/\[?(THR-\d+)\]?/);
+      // Match THR- followed by digits OR base36 chars (timestamp.toString(36))
+      const match = subject?.match(/\[?(THR-[A-Za-z0-9]+)\]?/);
       threadId = match ? match[1] : null;
     }
 
@@ -43,14 +48,17 @@ export default async function handler(req, res) {
     }
 
     // Look up the thread UUID
-    const { data: thread } = await supabase
+    const { data: thread, error: threadErr } = await supabase
       .from('message_threads')
       .select('id, code, participants')
       .eq('code', threadId)
-      .single();
+      .maybeSingle();
 
+    if (threadErr) {
+      return res.status(500).json({ error: 'Thread lookup failed', details: threadErr.message, keySource });
+    }
     if (!thread) {
-      return res.status(404).json({ error: `Thread ${threadId} not found` });
+      return res.status(404).json({ error: `Thread ${threadId} not found`, keySource });
     }
 
     // Determine sender slug from email
