@@ -962,11 +962,23 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 10 }}>
-        <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Maintenance Requests</h1>
-        <button style={s.btn()} onClick={() => setShowForm(!showForm)}>{showForm ? "Cancel" : "+ New Request"}</button>
-      </div>
+      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22, marginBottom: 4 }}>Maintenance Requests</h1>
       <p style={s.sectionSub}>Submit and track maintenance issues for your unit</p>
+      {!showForm && (
+        <button onClick={() => setShowForm(true)} style={{
+          width: "100%", padding: mobile ? "16px" : "18px 22px", marginBottom: 16,
+          background: T.accent, color: "#fff", border: "none", borderRadius: T.radius,
+          fontSize: mobile ? 15 : 16, fontWeight: 700, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+        }}>
+          <span style={{ fontSize: 22, lineHeight: 1 }}>＋</span>
+          <span>Submit a New Maintenance Request</span>
+        </button>
+      )}
+      {showForm && (
+        <button onClick={() => setShowForm(false)} style={{ ...s.btn("ghost"), marginBottom: 12 }}>Cancel</button>
+      )}
       <div style={{ marginBottom: 12 }}>
         <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => setShowQr(!showQr)}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><rect x="19" y="14" width="2" height="2"/><rect x="14" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
