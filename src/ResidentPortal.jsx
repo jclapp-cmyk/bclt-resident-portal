@@ -4864,11 +4864,41 @@ const Vendors = ({ role, mobile, vendors: vendorData, onAddVendor, onUpdateVendo
 // --- COMMUNICATIONS (Unified — All Roles) ---
 const CHANNEL_BADGES = { sms: { bg: T.successDim, text: T.success, label: "SMS" }, email: { bg: T.infoDim, text: T.info, label: "Email" }, phone: { bg: T.warnDim, text: T.warn, label: "Phone" }, multi: { bg: T.accentDim, text: T.accent, label: "All" }, portal: { bg: T.dimLight, text: T.muted, label: "Portal" } };
 
-const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessage, onUpdateThread }) => {
+const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessage, onUpdateThread, role, rc }) => {
   const [reply, setReply] = useState("");
   const messages = allMessages.filter(m => m.threadId === thread.id);
   const resident = LIVE_RESIDENTS.find(r => thread.participants.includes(r.id));
   const isBroadcast = thread.type === "broadcast";
+  const currentSender = role === "resident" ? (rc?.id || "resident") : "admin";
+
+  const sendReply = async () => {
+    const body = reply.trim();
+    if (!body) return;
+    const now = new Date().toISOString();
+    await onAddMessage({ id: `MSG-${Date.now()}`, threadId: thread.id, from: currentSender, body, date: now });
+    onUpdateThread(thread.id, { lastMessage: body, lastDate: now });
+    setReply("");
+    // Notify the other side via email
+    try {
+      if (role === "resident") {
+        // Resident → staff: email the portal mailbox so admins see it in Gmail too
+        await sendNotification("custom", {
+          to: "residentportal@bolinaslandtrust.org",
+          subject: `Re: ${thread.subject}`,
+          body: `<p><strong>From: ${rc?.name || "Resident"} (Unit ${rc?.unit || "—"})</strong></p><p>${body.replace(/\n/g, "<br>")}</p>`,
+          threadCode: thread.id,
+        });
+      } else if (resident?.email) {
+        // Admin/staff → resident
+        await sendNotification("custom", {
+          to: resident.email,
+          subject: `Re: ${thread.subject}`,
+          body: `<p>${body.replace(/\n/g, "<br>")}</p>`,
+          threadCode: thread.id,
+        });
+      }
+    } catch (err) { console.warn("Reply email failed:", err); }
+  };
 
   return (
     <div>
@@ -4877,7 +4907,7 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
         <div>
           <h2 style={{ fontSize: mobile ? 16 : 18, fontWeight: 700, marginBottom: 4 }}>{thread.subject}</h2>
           <div style={{ fontSize: 13, color: T.muted }}>
-            {isBroadcast ? "Broadcast to all residents" : `${resident?.name || "Unknown"} — Unit ${resident?.unit || "?"}`}
+            {isBroadcast ? "Broadcast to all residents" : role === "resident" ? "Management" : `${resident?.name || "Unknown"} — Unit ${resident?.unit || "?"}`}
             <span style={{ ...s.badge(CHANNEL_BADGES[thread.channel].bg, CHANNEL_BADGES[thread.channel].text), marginLeft: 10 }}>{CHANNEL_BADGES[thread.channel].label}</span>
           </div>
         </div>
@@ -4886,11 +4916,12 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
       <div style={{ ...s.card, padding: 0, overflow: "hidden" }}>
         <div style={{ padding: mobile ? 12 : 20, maxHeight: mobile ? "60vh" : 400, overflowY: "auto" }}>
           {messages.map(msg => {
-            const isAdmin = msg.from === "admin";
-            const sender = isAdmin ? "Management" : (LIVE_RESIDENTS.find(r => r.id === msg.from)?.name || msg.from);
+            const isMe = msg.from === currentSender;
+            const isStaffMsg = msg.from === "admin";
+            const sender = isStaffMsg ? "Management" : (LIVE_RESIDENTS.find(r => r.id === msg.from)?.name || msg.from);
             return (
-              <div key={msg.id} style={{ display: "flex", justifyContent: isAdmin ? "flex-end" : "flex-start", marginBottom: 12 }}>
-                <div style={{ maxWidth: mobile ? "85%" : "70%", padding: "10px 14px", borderRadius: 12, background: isAdmin ? T.accent : T.bg, color: isAdmin ? T.white : T.text, borderBottomRightRadius: isAdmin ? 4 : 12, borderBottomLeftRadius: isAdmin ? 12 : 4 }}>
+              <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 12 }}>
+                <div style={{ maxWidth: mobile ? "85%" : "70%", padding: "10px 14px", borderRadius: 12, background: isMe ? T.accent : T.bg, color: isMe ? T.white : T.text, borderBottomRightRadius: isMe ? 4 : 12, borderBottomLeftRadius: isMe ? 12 : 4 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, opacity: 0.7 }}>{sender}</div>
                   <div style={{ fontSize: 14, lineHeight: 1.5 }}>{msg.body}</div>
                   <div style={{ fontSize: 10, marginTop: 6, opacity: 0.6, textAlign: "right" }}>{new Date(msg.date).toLocaleString()}</div>
@@ -4901,8 +4932,8 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
         </div>
         {!isBroadcast && (
           <div style={{ padding: mobile ? "10px 12px" : "12px 20px", borderTop: `1px solid ${T.border}`, display: "flex", flexDirection: mobile ? "column" : "row", gap: 10 }}>
-            <input style={{ ...s.mInput(mobile), flex: 1 }} placeholder="Type a reply..." value={reply} onChange={e => setReply(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && reply.trim()) { onAddMessage({ id: `MSG-${Date.now()}`, threadId: thread.id, from: "admin", body: reply.trim(), date: new Date().toISOString() }); onUpdateThread(thread.id, { lastMessage: reply.trim(), lastDate: new Date().toISOString() }); setReply(""); } }} />
-            <button style={s.mBtn(undefined, mobile)} onClick={() => { if (!reply.trim()) return; onAddMessage({ id: `MSG-${Date.now()}`, threadId: thread.id, from: "admin", body: reply.trim(), date: new Date().toISOString() }); onUpdateThread(thread.id, { lastMessage: reply.trim(), lastDate: new Date().toISOString() }); setReply(""); }}>Send</button>
+            <input style={{ ...s.mInput(mobile), flex: 1 }} placeholder="Type a reply..." value={reply} onChange={e => setReply(e.target.value)} onKeyDown={e => { if (e.key === "Enter") sendReply(); }} />
+            <button style={s.mBtn(undefined, mobile)} onClick={sendReply}>Send</button>
           </div>
         )}
       </div>
@@ -4913,7 +4944,7 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
 const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, onAddThread, onAddMessage, onUpdateThread, onDeleteThread, rc }) => {
   const isAdmin = role === "admin";
   const isMaint = role === "maintenance";
-  const tabs = isAdmin ? ["Inbox", "Compose", "Templates"] : isMaint ? ["Messages"] : ["Messages", "Preferences"];
+  const tabs = isAdmin ? ["Inbox", "Compose", "Templates"] : isMaint ? ["Messages"] : ["Messages", "Compose", "Preferences"];
   const [tab, setTab] = useState(tabs[0]);
   const [selectedThread, setSelectedThread] = useState(null);
   const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
@@ -4943,7 +4974,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       <div>
         <h1 style={s.sectionTitle}>{isAdmin ? "Communications" : "Messages"}</h1>
         <p style={s.sectionSub}>{isAdmin ? "Manage resident communications" : isMaint ? "Maintenance-related messages" : "Your messages"}</p>
-        <ThreadView thread={selectedThread} onBack={() => setSelectedThread(null)} mobile={mobile} messages={messageData} onAddMessage={onAddMessage} onUpdateThread={onUpdateThread} />
+        <ThreadView thread={selectedThread} onBack={() => setSelectedThread(null)} mobile={mobile} messages={messageData} onAddMessage={onAddMessage} onUpdateThread={onUpdateThread} role={role} rc={rc} />
       </div>
     );
   }
@@ -5128,6 +5159,62 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               } else {
                 showSuccess(`Message sent! ${deliveryReport.emailSent ? `📧 ${deliveryReport.emailSent} email${deliveryReport.emailSent > 1 ? "s" : ""}` : ""}${deliveryReport.emailSent && deliveryReport.smsSent ? " · " : ""}${deliveryReport.smsSent ? `💬 ${deliveryReport.smsSent} SMS` : ""}`);
               }
+            }}>{sending ? "Sending..." : "Send Message"}</button>
+            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" })}>Clear</button>
+          </div>
+        </div>
+      )}
+
+      {/* COMPOSE TAB — Resident */}
+      {tab === "Compose" && !isAdmin && !isMaint && (
+        <div style={s.card}>
+          <div style={{ fontSize: 14, color: T.muted, marginBottom: 14 }}>Send a message to BCLT management. They'll reply via email or in the portal.</div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={s.label}>Subject</label>
+            <input style={s.input} value={composeData.subject} onChange={e => setComposeData(prev => ({ ...prev, subject: e.target.value }))} placeholder="What's this about?" />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={s.label}>Message</label>
+            <textarea style={{ ...s.input, minHeight: 140, resize: "vertical" }} value={composeData.body} onChange={e => setComposeData(prev => ({ ...prev, body: e.target.value }))} placeholder="Type your message..." />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button disabled={sending || !composeData.subject.trim() || !composeData.body.trim()} style={s.btn()} onClick={async () => {
+              if (sending) return;
+              setSending(true);
+              const threadId = `THR-${Date.now()}`;
+              const now = new Date().toISOString();
+              await onAddThread({
+                id: threadId,
+                participants: [rc?.id || "resident"],
+                subject: composeData.subject.trim(),
+                lastMessage: composeData.body.trim().slice(0, 80),
+                lastDate: now,
+                unread: 1,
+                channel: "email",
+                type: "direct",
+                priority: "normal",
+              });
+              await onAddMessage({
+                id: `MSG-${Date.now()}`,
+                threadId,
+                from: rc?.id || "resident",
+                body: composeData.body.trim(),
+                date: now,
+              });
+              let emailStatus = "no email sent";
+              try {
+                const res = await sendNotification("custom", {
+                  to: "residentportal@bolinaslandtrust.org",
+                  subject: composeData.subject.trim(),
+                  body: `<p><strong>From: ${rc?.name || "Resident"} (Unit ${rc?.unit || "—"})</strong></p><p>${composeData.body.trim().replace(/\n/g, "<br>")}</p>`,
+                  threadCode: threadId,
+                });
+                emailStatus = "emailed management";
+              } catch (err) { console.warn("Compose email failed:", err); }
+              setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" });
+              setSending(false);
+              setTab("Messages");
+              showSuccess(`Message sent — ${emailStatus}`);
             }}>{sending ? "Sending..." : "Send Message"}</button>
             <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" })}>Clear</button>
           </div>
