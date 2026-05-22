@@ -7218,6 +7218,21 @@ export default function App() {
   // H6 fix: Removed standalone reloadData() on mount.
   // Data is loaded after auth succeeds inside loadProfile via reloadData().
 
+  // Auto-poll threads & messages every 30s so inbound email replies appear
+  // without requiring the user to reload. Only runs once authenticated.
+  useEffect(() => {
+    if (!profile) return;
+    const tick = async () => {
+      try {
+        const [thr, msgs] = await Promise.all([fetchThreads(), fetchMessages()]);
+        if (thr) setThreads(thr);
+        if (msgs) setMessages(msgs);
+      } catch (err) { /* silent — next tick will retry */ }
+    };
+    const id = setInterval(tick, 30000);
+    return () => clearInterval(id);
+  }, [profile]);
+
   // Auth: check session on mount, listen for changes
   useEffect(() => {
     const loadProfile = async (user) => {
