@@ -972,8 +972,20 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
   const [formData, setFormData] = useState({ category: "Plumbing", urgency: "routine", description: "", permission: "Yes, enter anytime" });
   const [photoFiles, setPhotoFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("active");
   const photoInputRef = useRef(null);
-  const myRequests = maintenance.filter(m => m.unit === (rc?.unit || ""));
+  const allMyRequests = maintenance.filter(m => m.unit === (rc?.unit || ""));
+  const myRequests = (() => {
+    if (statusFilter === "all") return allMyRequests;
+    if (statusFilter === "done") return allMyRequests.filter(m => MAINT_DONE(m) || m.status === "rejected");
+    // "active" — everything that's still open (new, needs-info, todo, in-progress, legacy submitted)
+    return allMyRequests.filter(m => MAINT_OPEN(m));
+  })();
+  const counts = {
+    active: allMyRequests.filter(m => MAINT_OPEN(m)).length,
+    done: allMyRequests.filter(m => MAINT_DONE(m) || m.status === "rejected").length,
+    all: allMyRequests.length,
+  };
 
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []);
@@ -1094,6 +1106,22 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
           </div>
           <button style={s.btn()} onClick={handleSubmit} disabled={uploading}>{uploading ? "Uploading..." : "Submit Request"}</button>
         </div>
+      )}
+      {allMyRequests.length > 0 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+          {[["active", `Active (${counts.active})`], ["done", `Done (${counts.done})`], ["all", `All (${counts.all})`]].map(([k, label]) => {
+            const active = statusFilter === k;
+            return (
+              <button key={k} onClick={() => setStatusFilter(k)} style={{
+                padding: "6px 14px", fontSize: 13, fontWeight: 600, borderRadius: T.radiusSm, cursor: "pointer",
+                background: active ? T.accent : T.bg, color: active ? "#fff" : T.text, border: `1px solid ${active ? T.accent : T.border}`,
+              }}>{label}</button>
+            );
+          })}
+        </div>
+      )}
+      {allMyRequests.length > 0 && myRequests.length === 0 && (
+        <EmptyState icon="✅" text={statusFilter === "done" ? "No completed requests yet." : "No active requests right now."} />
       )}
       {myRequests.map(m => (
         <div key={m.id} style={s.card}>
