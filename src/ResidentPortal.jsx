@@ -1022,16 +1022,19 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
       )}
       {myRequests.map(m => (
         <div key={m.id} style={s.card}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div><span style={{ fontWeight: 700, marginRight: 10 }}>{m.id}</span><span style={{ color: T.muted }}>{m.category}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10, gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 4 }}>{m.description}</div>
+              <div style={{ fontSize: 12, color: T.muted }}>{m.category}</div>
+            </div>
             <div style={{ display: "flex", gap: 8 }}><Badge status={m.priority} type="priority" /><Badge status={m.status} /></div>
           </div>
-          <div style={{ color: T.text, fontSize: 14, marginBottom: 10 }}>{m.description}</div>
-          <div style={{ display: "flex", gap: 20, fontSize: 13, color: T.muted }}>
+          <div style={{ display: "flex", gap: 20, fontSize: 13, color: T.muted, flexWrap: "wrap" }}>
             <span>Submitted: {m.submitted}</span>
             {m.assignedTo && <span>Assigned: {m.assignedTo}</span>}
             {m.queuePos && MAINT_OPEN(m) && <span style={{ color: T.accent }}>Queue position: #{m.queuePos}</span>}
             {m.projectedComplete && <span>Est. complete: {m.projectedComplete}</span>}
+            <span style={{ color: T.dim, fontSize: 11, marginLeft: "auto" }}>#{m.id}</span>
           </div>
           {(Array.isArray(m.notes) ? m.notes : []).length > 0 && (
             <div style={{ marginTop: 12, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
