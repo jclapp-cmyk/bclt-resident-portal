@@ -6842,7 +6842,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               <button style={s.btn()} onClick={() => {
                 const printWindow = window.open("", "_blank");
                 const baseUrl = window.location.origin + window.location.pathname;
-                let html = `<html><head><title>BCLT Unit QR Codes</title><style>
+                let html = `<html><head><title>BCLT HomeBase — Unit QR Codes</title><style>
                   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; }
                   .qr-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
                   .qr-card { text-align: center; border: 2px solid #e0e0e0; border-radius: 12px; padding: 20px; page-break-inside: avoid; }
@@ -6851,7 +6851,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                   .qr-card .url { font-size: 10px; color: #999; margin-top: 8px; word-break: break-all; }
                   @media print { .no-print { display: none; } .qr-grid { gap: 20px; } }
                 </style></head><body>
-                <h1>BCLT Portal — Unit QR Codes</h1>
+                <h1>BCLT HomeBase — Unit QR Codes</h1>
                 <p class="no-print">Print this page or save as PDF. Each resident can scan their unit's code to access the portal.</p>
                 <button class="no-print" onclick="window.print()" style="padding:8px 20px;margin:10px 0 20px;font-size:14px;cursor:pointer;">Print All</button>
                 <div class="qr-grid">`;
@@ -7880,7 +7880,7 @@ const LoginPage = () => {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: T.bg, padding: 20 }}>
       <div style={{ ...s.card, maxWidth: 420, width: "100%", padding: 32, textAlign: "center" }}>
-        <div style={{ fontSize: 28, fontWeight: 800, color: T.accent, marginBottom: 4 }}>BCLT Resident Portal</div>
+        <div style={{ fontSize: 28, fontWeight: 800, color: T.accent, marginBottom: 4 }}>BCLT HomeBase</div>
         <div style={{ fontSize: 13, color: T.muted, marginBottom: 28 }}>Bolinas Community Land Trust</div>
         {sent ? (
           <div>
@@ -7988,7 +7988,7 @@ const PublicMaintenanceForm = ({ unitId, mobile, themeVars }) => {
     <div style={{ minHeight: "100vh", background: "#f5f7f9", padding: mobile ? "20px 16px" : "40px 20px" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontWeight: 800, fontSize: 20, color: "#2563eb", marginBottom: 4 }}>BCLT Resident Portal</div>
+          <div style={{ fontWeight: 800, fontSize: 20, color: "#2563eb", marginBottom: 4 }}>BCLT HomeBase</div>
           <h1 style={{ margin: "0 0 4px", fontSize: mobile ? 22 : 26 }}>Maintenance Request</h1>
           {unitInfo && <p style={{ color: "#666", fontSize: 14, margin: 0 }}>{unitInfo.properties?.name || ""} — Unit {unitInfo.number}</p>}
           {!unitInfo && <p style={{ color: "#666", fontSize: 14, margin: 0 }}>Unit: {unitId}</p>}
@@ -8597,8 +8597,8 @@ export default function App() {
     <>
       <div style={{ padding: "20px 18px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: T.accent, letterSpacing: "-0.3px" }}>BCLT Resident Portal</div>
-          <div style={{ fontSize: 11, color: T.dim, marginTop: 2 }}>Resident Management</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: T.accent, letterSpacing: "-0.3px" }}>BCLT HomeBase</div>
+          <div style={{ fontSize: 11, color: T.dim, marginTop: 2 }}>Bolinas Community Land Trust</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button onClick={() => setDarkMode(d => !d)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", padding: 4, color: T.muted }} title={darkMode ? "Light mode" : "Dark mode"}>{darkMode ? "☀️" : "🌙"}</button>
@@ -8699,7 +8699,7 @@ export default function App() {
       {/* MOBILE TOP BAR */}
       {mobile && (
         <div data-print-hide style={{ position: "sticky", top: 0, zIndex: 900, background: T.surface, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px", height: 56, flexShrink: 0 }}>
-          <div style={{ fontWeight: 800, color: T.accent, fontSize: 15 }}>BCLT Resident Portal</div>
+          <div style={{ fontWeight: 800, color: T.accent, fontSize: 15 }}>BCLT HomeBase</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button onClick={() => setDarkMode(d => !d)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", padding: 4, minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }} title={darkMode ? "Light mode" : "Dark mode"}>{darkMode ? "☀️" : "🌙"}</button>
             <NotificationBell count={unreadCount} onClick={() => setShowNotifPanel(!showNotifPanel)} mobile={mobile} />
