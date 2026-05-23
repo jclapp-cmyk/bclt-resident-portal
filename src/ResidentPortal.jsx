@@ -4067,13 +4067,13 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   const subTabs = isResident
     ? null
     : isAdmin
-      ? (topTab === "regulatory" ? ["Upcoming", "Log", "Schedule"] : ["Schedule", "Unit History", "Procedures", "Categories"])
-      : (topTab === "regulatory" ? ["Upcoming", "Log"] : ["Unit History", "Procedures", "Categories", "My Assigned"]);
+      ? (topTab === "regulatory" ? ["Upcoming", "Log", "Schedule"] : ["Schedule", "Unit History", "Checklists", "Categories"])
+      : (topTab === "regulatory" ? ["Upcoming", "Log"] : ["Unit History", "Checklists", "Categories", "My Assigned"]);
   const [tab, setTab] = useState(isResident ? null : subTabs[0]);
   // Reset sub-tab when top-tab flips
   useEffect(() => { if (!isResident) setTab(subTabs[0]); }, [topTab]);
   const [success, showSuccess] = useSuccess();
-  const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "", notify: "Yes — 48hr notice" });
+  const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", timeWindow: "", inspector: "", notify: "Yes — 48hr notice" });
   const [regSchedForm, setRegSchedForm] = useState({ type: "HQS", authority: "", propertyId: "", date: "", timeWindow: "", nextDue: "", units: "", notifyResidents: true });
   const [selectedInsp, setSelectedInsp] = useState(null);
   const [selectedReg, setSelectedReg] = useState(null);
@@ -4150,7 +4150,8 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
               <div><label style={s.label}>Unit</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option value="">Select unit...</option>{unitOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
               <div><label style={s.label}>Date</label><input style={s.mInput(mobile)} type="date" value={schedForm.date} onChange={e => setSchedForm(p => ({ ...p, date: e.target.value }))} /></div>
             </div>
-            <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
+            <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
+              <div><label style={s.label}>Time / Window</label><input style={s.mInput(mobile)} placeholder="e.g. 9am–12pm or 10:30 AM" value={schedForm.timeWindow} onChange={e => setSchedForm(p => ({ ...p, timeWindow: e.target.value }))} /></div>
               <div><label style={s.label}>Inspector</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.inspector} onChange={e => setSchedForm(p => ({ ...p, inspector: e.target.value }))}>{inspectorOptions.map(n => <option key={n} value={n}>{n}</option>)}<option value="External Vendor">External Vendor</option></select></div>
               <div><label style={s.label}>Notify Resident</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.notify} onChange={e => setSchedForm(p => ({ ...p, notify: e.target.value }))}><option>Yes — 48hr notice</option><option>Yes — 24hr notice</option><option>No notification</option></select></div>
             </div>
@@ -4163,13 +4164,14 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 propertyId: schedResident?.propertyId || LIVE_PROPERTIES[0]?.id || "wharf",
                 category: schedForm.category,
                 date: schedForm.date,
+                timeWindow: schedForm.timeWindow || null,
                 inspector: schedForm.inspector,
                 result: "Scheduled",
                 score: null,
                 failedItems: [],
                 notes: `Notification: ${schedForm.notify}`,
               });
-              setSchedForm({ category: "", unit: "", date: "", inspector: "", notify: "Yes — 48hr notice" });
+              setSchedForm({ category: "", unit: "", date: "", timeWindow: "", inspector: "", notify: "Yes — 48hr notice" });
               showSuccess("Inspection scheduled!");
             }}>Schedule Inspection</button>
           </div>
@@ -4211,7 +4213,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
           <SortableTable
             mobile={mobile}
             columns={[
-              { key: "date", label: "Date" },
+              { key: "date", label: "Date", render: (v, row) => v ? <span>{v}{row.timeWindow ? <span style={{ color: T.dim, fontSize: 11 }}> · {row.timeWindow}</span> : ""}</span> : "—" },
               ...(isResident ? [] : [
                 { key: "propertyId", label: "Property", render: v => { const p = LIVE_PROPERTIES.find(pr => pr.id === v); return <span style={{ fontWeight: 600 }}>{p?.name || v || "—"}</span>; }, filterOptions: [...new Set(unitData.map(i => i.propertyId).filter(Boolean))], filterValue: row => row.propertyId },
                 { key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
@@ -4250,7 +4252,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16, fontSize: 14 }}>
               <div><span style={{ color: T.dim }}>Unit:</span> <strong>{selectedInsp.unit}</strong></div>
               <div><span style={{ color: T.dim }}>Category:</span> <strong>{selectedInsp.category}</strong></div>
-              <div><span style={{ color: T.dim }}>Date:</span> <strong>{selectedInsp.date}</strong></div>
+              <div><span style={{ color: T.dim }}>Date:</span> <strong>{selectedInsp.date}{selectedInsp.timeWindow ? ` · ${selectedInsp.timeWindow}` : ""}</strong></div>
               <div><span style={{ color: T.dim }}>Inspector:</span> <strong>{selectedInsp.inspector}</strong></div>
               <div><span style={{ color: T.dim }}>Current Status:</span> <span style={s.badge(
                 selectedInsp.result === "Pass" ? T.successDim : selectedInsp.result === "Scheduled" ? (T.accentDim || "rgba(99,102,241,0.12)") : T.dangerDim,
@@ -4328,7 +4330,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
       )}
 
       {/* Procedures tab */}
-      {tab === "Procedures" && (() => {
+      {tab === "Checklists" && (() => {
         const RV_PROCEDURE = {
           id: "PROC-RV-2025",
           name: "Annual RV Inspection Form",
