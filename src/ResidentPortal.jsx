@@ -4082,7 +4082,17 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   const [activeChecklist, setActiveChecklist] = useState(null);
   const [viewingChecklist, setViewingChecklist] = useState(null);
   const [editingChecklist, setEditingChecklist] = useState(false); // true when editing a completed checklist
-  const [templateEditor, setTemplateEditor] = useState(null); // { code, name, description, frequency, scoring, sections } or null
+  const [templateEditor, setTemplateEditor] = useState(null); // { code, name, description, frequency, scoring, sections, isBuiltin } or null
+  // Built-in templates can't be deleted from the DB (they're code), so we
+  // soft-delete them per browser via localStorage. Stored as an array of IDs.
+  const [hiddenBuiltins, setHiddenBuiltins] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(window.localStorage.getItem("bclt_hiddenBuiltinTemplates") || "[]"); } catch { return []; }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { window.localStorage.setItem("bclt_hiddenBuiltinTemplates", JSON.stringify(hiddenBuiltins)); } catch {}
+  }, [hiddenBuiltins]);
 
   const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "")) : unitInspections;
   const regInsp = selectedProperty && selectedProperty !== "all"
@@ -4536,7 +4546,8 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
             sections: t.sections || [],
             custom: true,
           }));
-        const ALL_PROCEDURES = [...CUSTOM_TEMPLATES, ...CATEGORY_PROCEDURES, RV_PROCEDURE, QUARTERLY_PROCEDURE];
+        const ALL_PROCEDURES = [...CUSTOM_TEMPLATES, ...CATEGORY_PROCEDURES, RV_PROCEDURE, QUARTERLY_PROCEDURE]
+          .filter(p => p.custom || !hiddenBuiltins.includes(p.id));
         const lookupId = activeChecklist?.procedureId || viewingChecklist?.procedureId;
         const currentProc = lookupId
           ? ALL_PROCEDURES.find(p => p.id === lookupId) || RV_PROCEDURE
@@ -4634,22 +4645,55 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                               const procSel = document.getElementById("proc-type");
                               if (procSel) { procSel.value = proc.id; procSel.scrollIntoView({ behavior: "smooth", block: "center" }); }
                             }}>Use this template</button>
-                            {isCustom && onUpdateTemplate && (
-                              <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => setTemplateEditor({ code: proc.code, name: proc.name, description: proc.description || "", frequency: proc.frequency || "", scoring: proc.scoring || "yesNoNa", sections: JSON.parse(JSON.stringify(proc.sections || [])) })}>Edit</button>
+                            {onSaveTemplate && (
+                              <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => setTemplateEditor({
+                                code: isCustom ? proc.code : null,            // null → save creates a new row
+                                name: isCustom ? proc.name : `${proc.name} (custom)`,
+                                description: proc.description || "",
+                                frequency: proc.frequency || "",
+                                scoring: proc.scoring || "yesNoNa",
+                                sections: JSON.parse(JSON.stringify(proc.sections || [])),
+                                isBuiltin: !isCustom,
+                              })}>{isCustom ? "Edit" : "Edit / Duplicate"}</button>
                             )}
-                            {isCustom && onDeleteTemplate && (
-                              <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", color: T.danger }} onClick={async () => {
+                            <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", color: T.danger }} onClick={async () => {
+                              if (isCustom) {
+                                if (!onDeleteTemplate) return;
                                 if (!confirm(`Delete the "${proc.name}" template? Completed checklists using it will keep their data.`)) return;
                                 try { await onDeleteTemplate(proc.code); showSuccess("Template deleted"); }
                                 catch (err) { showSuccess("Error: " + err.message); }
-                              }}>🗑️</button>
-                            )}
+                              } else {
+                                if (!confirm(`Hide the built-in "${proc.name}" template? You can restore it from Settings later.`)) return;
+                                setHiddenBuiltins(prev => prev.includes(proc.id) ? prev : [...prev, proc.id]);
+                                showSuccess("Template hidden");
+                              }
+                            }}>🗑️</button>
                           </div>
                         )}
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Hidden built-in templates — admins can restore them */}
+                {isAdmin && hiddenBuiltins.length > 0 && (
+                  <div style={{ marginTop: 16, padding: 12, background: T.bg, borderRadius: T.radiusSm, fontSize: 13 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 8, color: T.muted }}>Hidden built-in templates ({hiddenBuiltins.length})</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {hiddenBuiltins.map(id => {
+                        // Look up the original built-in by id to display a name
+                        const all = [...CATEGORY_PROCEDURES, RV_PROCEDURE, QUARTERLY_PROCEDURE];
+                        const found = all.find(p => p.id === id);
+                        return (
+                          <span key={id} style={{ ...s.badge(T.dimLight, T.muted), display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 10px" }}>
+                            {found?.name || id}
+                            <button onClick={() => setHiddenBuiltins(prev => prev.filter(x => x !== id))} style={{ background: "none", border: "none", color: T.accent, cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 600 }}>↺ Restore</button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Completed checklists history */}
                 {savedChecklists.length > 0 && (
