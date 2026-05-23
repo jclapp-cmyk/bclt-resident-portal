@@ -2257,7 +2257,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
         </div>
       ) : (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 15 }}>Annual Income Certification</div>
               <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Complete your income recertification for housing compliance.</div>
@@ -2282,6 +2282,30 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                 showSuccess("Certification started!");
               } catch (err) { showSuccess("Error: " + err.message); }
             }} style={s.mBtn("primary", mobile)}>📋 Start My Certification</button>
+          </div>
+          <div style={{ marginTop: 14, padding: 14, background: T.bg, borderRadius: T.radiusSm, fontSize: 13, lineHeight: 1.55 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8, color: T.text }}>📑 What you'll need before you start</div>
+            <div style={{ color: T.text, marginBottom: 8 }}>Have these documents ready to upload — you can attach them inside the form:</div>
+            <ul style={{ margin: "0 0 10px 18px", padding: 0, color: T.text }}>
+              <li>Copy of your most recent <strong>Tax Return</strong> (2024 or 2025)</li>
+              <li>Your <strong>2 most recent bank statements</strong></li>
+            </ul>
+            <div style={{ color: T.text, marginTop: 10, marginBottom: 4, fontWeight: 600 }}>If you are employed:</div>
+            <ul style={{ margin: "0 0 10px 18px", padding: 0, color: T.text }}>
+              <li>Your <strong>2 most recent pay stubs</strong></li>
+            </ul>
+            <div style={{ color: T.text, marginBottom: 4, fontWeight: 600 }}>If you are self-employed:</div>
+            <ul style={{ margin: "0 0 10px 18px", padding: 0, color: T.text }}>
+              <li>Any documentation of monthly income</li>
+            </ul>
+            <div style={{ color: T.text, marginTop: 10, marginBottom: 4, fontWeight: 600 }}>Other income documents (only if they apply to you — it's fine if you don't have any):</div>
+            <ul style={{ margin: "0 0 0 18px", padding: 0, color: T.muted }}>
+              <li>Social Security / Disability statement</li>
+              <li>Investment account statements</li>
+              <li>Pension income statement</li>
+              <li>Child Support / Alimony document</li>
+            </ul>
+            <div style={{ marginTop: 10, fontSize: 12, color: T.muted, fontStyle: "italic" }}>Tip: snap photos with your phone if you don't have PDFs — JPG, PNG, HEIC, and PDF are all fine.</div>
           </div>
         </div>
       )}
