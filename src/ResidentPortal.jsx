@@ -1480,7 +1480,25 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
   const [newDeadline, setNewDeadline] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); });
   const [newNotify, setNewNotify] = useState(true);
 
-  const stepLabels = ["Household", "Income", "Assets", "Eligibility", "Rent & Program", "Review & Sign"];
+  // All possible steps (0–5). Residents skip Eligibility (3) and Rent & Program (4) —
+  // admins handle those when they review/approve. The submit on step 5 still
+  // computes eligibility automatically from the math.
+  const ALL_STEP_LABELS = ["Household", "Income", "Assets", "Eligibility", "Rent & Program", "Review & Sign"];
+  const visibleStepIndices = isAdmin ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 5];
+  const stepLabels = visibleStepIndices.map(i => ALL_STEP_LABELS[i]);
+  // helpers to move forward/back through only the visible steps
+  const goNext = () => {
+    const pos = visibleStepIndices.indexOf(step);
+    const next = visibleStepIndices[pos + 1];
+    if (next !== undefined) setStep(next);
+  };
+  const goPrev = () => {
+    const pos = visibleStepIndices.indexOf(step);
+    const prev = visibleStepIndices[pos - 1];
+    if (prev !== undefined) setStep(prev);
+  };
+  const isLastVisibleStep = step === visibleStepIndices[visibleStepIndices.length - 1];
+  const lastBeforeReview = visibleStepIndices[visibleStepIndices.length - 2]; // used to label "Next"
 
   useEffect(() => {
     setLoading(true);
@@ -1747,16 +1765,22 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
         <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Income Certification — {activeCert.residentName}</h1>
         <p style={s.sectionSub}>Unit {activeCert.unit} · {activeCert.certType === "annual" ? "Annual Recertification" : activeCert.certType} · {activeCert.status}</p>
 
-        {/* Step indicator */}
+        {/* Step indicator — only shows the steps relevant to the current role */}
         <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
-          {stepLabels.map((lbl, i) => (
-            <button key={i} onClick={() => setStep(i)} style={{
-              flex: 1, minWidth: mobile ? 80 : 100, padding: "8px 4px", border: `1px solid ${i === step ? T.accent : T.border}`,
-              borderRadius: T.radiusSm, background: i === step ? T.accentDim : i < step ? T.successDim : T.bg,
-              color: i === step ? T.accent : i < step ? T.success : T.muted, fontWeight: i === step ? 700 : 500,
-              fontSize: 11, cursor: "pointer", textAlign: "center",
-            }}>{i < step ? "✓ " : ""}{lbl}</button>
-          ))}
+          {stepLabels.map((lbl, i) => {
+            const stepIdx = visibleStepIndices[i];
+            const currentPos = visibleStepIndices.indexOf(step);
+            const isCurrent = stepIdx === step;
+            const isDone = i < currentPos;
+            return (
+              <button key={stepIdx} onClick={() => setStep(stepIdx)} style={{
+                flex: 1, minWidth: mobile ? 80 : 100, padding: "8px 4px", border: `1px solid ${isCurrent ? T.accent : T.border}`,
+                borderRadius: T.radiusSm, background: isCurrent ? T.accentDim : isDone ? T.successDim : T.bg,
+                color: isCurrent ? T.accent : isDone ? T.success : T.muted, fontWeight: isCurrent ? 700 : 500,
+                fontSize: 11, cursor: "pointer", textAlign: "center",
+              }}>{isDone ? "✓ " : ""}{lbl}</button>
+            );
+          })}
         </div>
         <SuccessMessage message={success} />
 
@@ -1900,7 +1924,9 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
               <button onClick={() => setStep(1)} style={s.btn("ghost")}>← Income</button>
-              <button onClick={() => { saveCertTotals(); setStep(3); }} style={s.mBtn("primary", mobile)}>Next: Eligibility →</button>
+              <button onClick={() => { saveCertTotals(); goNext(); }} style={s.mBtn("primary", mobile)}>
+                {isAdmin ? "Next: Eligibility →" : "Next: Review & Sign →"}
+              </button>
             </div>
           </div>
         )}
@@ -2043,7 +2069,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, flexWrap: "wrap", gap: 8 }}>
-              <button onClick={() => setStep(4)} style={s.btn("ghost")}>← Rent & Program</button>
+              <button onClick={goPrev} style={s.btn("ghost")}>← {isAdmin ? "Rent & Program" : "Assets"}</button>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={async () => {
                   try {
