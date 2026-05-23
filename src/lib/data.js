@@ -569,7 +569,7 @@ export async function fetchUnitInspections() {
   if (error) throw error;
   return (data || []).map(i => ({
     id: i.code, _uuid: i.id, propertyId: i.properties?.slug || '', unit: i.units?.number || '',
-    category: i.category, date: i.inspection_date, inspector: i.inspector,
+    category: i.category, date: i.inspection_date, timeWindow: i.time_window || '', inspector: i.inspector,
     result: i.result, score: i.score,
     failedItems: Array.isArray(i.failed_items) ? i.failed_items : (typeof i.failed_items === 'string' ? (() => { try { return JSON.parse(i.failed_items); } catch { return []; } })() : []),
     notes: i.notes || '',
@@ -587,7 +587,8 @@ export async function insertUnitInspection(insp) {
   const code = `UI-${Date.now().toString(36)}`;
   const { data, error } = await supabase.from('unit_inspections').insert({
     code, property_id: prop.id, unit_id: unitRow?.id || null,
-    category: insp.category, inspection_date: insp.date, inspector: insp.inspector || 'Mike R.',
+    category: insp.category, inspection_date: insp.date, time_window: insp.timeWindow || null,
+    inspector: insp.inspector || 'Mike R.',
     result: insp.result || 'Pass', score: insp.score || null,
     failed_items: insp.failedItems || [], notes: insp.notes || '',
   }).select().single();
@@ -602,6 +603,7 @@ export async function updateUnitInspection(code, changes) {
   if (changes.failedItems !== undefined) mapped.failed_items = changes.failedItems;
   if (changes.notes !== undefined) mapped.notes = changes.notes;
   if (changes.date !== undefined) mapped.inspection_date = changes.date;
+  if (changes.timeWindow !== undefined) mapped.time_window = changes.timeWindow || null;
   if (changes.inspector !== undefined) mapped.inspector = changes.inspector;
   const { error } = await supabase.from('unit_inspections').update(mapped).eq('code', code);
   if (error) throw error;
@@ -618,6 +620,7 @@ export async function fetchRegInspections() {
   return (data || []).map(i => ({
     id: i.code, _uuid: i.id, propertyId: i.properties?.slug || '',
     type: i.type, authority: i.authority, date: i.inspection_date,
+    timeWindow: i.time_window || '',
     result: i.result, score: i.score, nextDue: i.next_due,
     units: i.units_inspected, deficiencies: i.deficiencies,
   }));
@@ -641,6 +644,7 @@ export async function insertRegInspection(insp) {
     type: insp.type,
     authority: insp.authority,
     inspection_date: insp.date || null,
+    time_window: insp.timeWindow || null,
     result: insp.result || 'Scheduled',
     score: insp.score || null,
     next_due: insp.nextDue || null,
@@ -656,6 +660,7 @@ export async function updateRegInspection(code, changes) {
   if (changes.type !== undefined) mapped.type = changes.type;
   if (changes.authority !== undefined) mapped.authority = changes.authority;
   if (changes.date !== undefined) mapped.inspection_date = changes.date || null;
+  if (changes.timeWindow !== undefined) mapped.time_window = changes.timeWindow || null;
   if (changes.result !== undefined) mapped.result = changes.result;
   if (changes.score !== undefined) mapped.score = changes.score;
   if (changes.nextDue !== undefined) mapped.next_due = changes.nextDue || null;

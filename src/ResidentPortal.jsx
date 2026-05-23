@@ -4074,7 +4074,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   useEffect(() => { if (!isResident) setTab(subTabs[0]); }, [topTab]);
   const [success, showSuccess] = useSuccess();
   const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "", notify: "Yes — 48hr notice" });
-  const [regSchedForm, setRegSchedForm] = useState({ type: "HQS", authority: "", propertyId: "", date: "", nextDue: "", units: "", notifyResidents: true });
+  const [regSchedForm, setRegSchedForm] = useState({ type: "HQS", authority: "", propertyId: "", date: "", timeWindow: "", nextDue: "", units: "", notifyResidents: true });
   const [selectedInsp, setSelectedInsp] = useState(null);
   const [selectedReg, setSelectedReg] = useState(null);
   const [regUpdateForm, setRegUpdateForm] = useState({ result: "Pass", date: "", score: "", deficiencies: "0", nextDue: "" });
@@ -4870,19 +4870,26 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
       {/* Regulatory — admin only */}
       {/* ────────────────────────── REGULATORY ────────────────────────── */}
       {topTab === "regulatory" && tab === "Upcoming" && (() => {
-        const upcoming = regInsp.filter(i => i.nextDue && new Date(i.nextDue) >= new Date(new Date().toISOString().slice(0, 10))).sort((a, b) => new Date(a.nextDue) - new Date(b.nextDue));
-        const overdue = regInsp.filter(i => i.nextDue && new Date(i.nextDue) < new Date(new Date().toISOString().slice(0, 10))).sort((a, b) => new Date(a.nextDue) - new Date(b.nextDue));
+        const today = new Date(new Date().toISOString().slice(0, 10));
+        // Effective due date = nextDue if set, otherwise inspection date (for scheduled/future-dated ones)
+        const effectiveDate = (i) => i.nextDue || (i.result === "Scheduled" ? i.date : null);
+        const upcoming = regInsp
+          .filter(i => { const d = effectiveDate(i); return d && new Date(d) >= today; })
+          .sort((a, b) => new Date(effectiveDate(a)) - new Date(effectiveDate(b)));
+        const overdue = regInsp
+          .filter(i => { const d = effectiveDate(i); return d && new Date(d) < today && i.result !== "Pass"; })
+          .sort((a, b) => new Date(effectiveDate(a)) - new Date(effectiveDate(b)));
         return (
           <div>
             {overdue.length > 0 && (
               <div style={{ ...s.card, borderLeft: `3px solid ${T.danger}`, marginBottom: 16 }}>
                 <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15, color: T.danger }}>⚠ Overdue ({overdue.length})</div>
                 <SortableTable mobile={mobile} columns={[
+                  { key: "_when", label: "Was Due", render: (_, row) => <span style={{ color: T.danger, fontWeight: 600 }}>{effectiveDate(row)}{row.timeWindow ? ` · ${row.timeWindow}` : ""}</span>, sortValue: row => effectiveDate(row) || "" },
                   { key: "type", label: "Type", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
                   { key: "authority", label: "Authority" },
                   { key: "propertyId", label: "Property", render: v => LIVE_PROPERTIES.find(p => p.id === v)?.name || v || "—" },
-                  { key: "nextDue", label: "Was Due", render: v => <span style={{ color: T.danger, fontWeight: 600 }}>{v}</span> },
-                ]} data={overdue} onRowClick={row => { setSelectedReg(row); setRegUpdateForm({ result: "Pass", date: new Date().toISOString().slice(0, 10), score: row.score || "", deficiencies: String(row.deficiencies || 0), nextDue: "" }); }} />
+                ]} data={overdue} onRowClick={row => { setSelectedReg(row); setRegUpdateForm({ result: "Pass", date: new Date().toISOString().slice(0, 10), timeWindow: row.timeWindow || "", score: row.score || "", deficiencies: String(row.deficiencies || 0), nextDue: "" }); }} />
               </div>
             )}
             <div style={s.card}>
@@ -4891,13 +4898,13 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 <EmptyState icon="📋" text="Nothing on the books. Use the Schedule tab to add one." />
               ) : (
                 <SortableTable mobile={mobile} columns={[
-                  { key: "nextDue", label: "Due Date", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+                  { key: "_when", label: "Date / Time", render: (_, row) => <span style={{ fontWeight: 600 }}>{effectiveDate(row)}{row.timeWindow ? ` · ${row.timeWindow}` : ""}</span>, sortValue: row => effectiveDate(row) || "" },
                   { key: "type", label: "Type" },
                   { key: "authority", label: "Authority" },
                   { key: "propertyId", label: "Property", render: v => LIVE_PROPERTIES.find(p => p.id === v)?.name || v || "—", filterOptions: [...new Set(upcoming.map(i => LIVE_PROPERTIES.find(p => p.id === i.propertyId)?.name).filter(Boolean))] },
                   { key: "units", label: "Units", render: v => v || "—" },
                   { key: "result", label: "Status", render: v => <Badge status={v === "Scheduled" ? "todo" : v.toLowerCase()} /> },
-                ]} data={upcoming} onRowClick={row => { setSelectedReg(row); setRegUpdateForm({ result: "Pass", date: new Date().toISOString().slice(0, 10), score: row.score || "", deficiencies: String(row.deficiencies || 0), nextDue: "" }); }} />
+                ]} data={upcoming} onRowClick={row => { setSelectedReg(row); setRegUpdateForm({ result: row.result === "Scheduled" ? "Pass" : row.result, date: row.date || new Date().toISOString().slice(0, 10), timeWindow: row.timeWindow || "", score: row.score || "", deficiencies: String(row.deficiencies || 0), nextDue: row.nextDue || "" }); }} />
               )}
             </div>
           </div>
@@ -4919,14 +4926,14 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
               { key: "type", label: "Type", render: v => <span style={{ fontWeight: 600 }}>{v}</span>, filterOptions: [...new Set(regInsp.map(i => i.type))] },
               { key: "authority", label: "Authority" },
               { key: "propertyId", label: "Property", render: v => LIVE_PROPERTIES.find(p => p.id === v)?.name || v || "—", filterOptions: [...new Set(regInsp.map(i => LIVE_PROPERTIES.find(p => p.id === i.propertyId)?.name).filter(Boolean))] },
-              { key: "date", label: "Last Date" },
+              { key: "date", label: "Date", render: (v, row) => v ? <span>{v}{row.timeWindow ? <span style={{ color: T.dim, fontSize: 11 }}> · {row.timeWindow}</span> : ""}</span> : "—" },
               { key: "result", label: "Result", render: v => <span style={s.badge(v === "Pass" ? T.successDim : v === "Scheduled" ? T.accentDim : T.dangerDim, v === "Pass" ? T.success : v === "Scheduled" ? T.accent : T.danger)}>{v}</span>, filterOptions: ["Pass", "Fail", "Scheduled"], filterValue: row => row.result },
               { key: "score", label: "Score", render: v => v || "—", filterable: false },
               { key: "nextDue", label: "Next Due", tdStyle: row => ({ color: row.nextDue && new Date(row.nextDue) < new Date() ? T.warn : T.text, fontWeight: row.nextDue && new Date(row.nextDue) < new Date() ? 600 : 400 }) },
               { key: "deficiencies", label: "Deficiencies", render: v => v > 0 ? <span style={s.badge(T.dangerDim, T.danger)}>{v}</span> : <span style={{ color: T.dim }}>0</span>, sortValue: row => row.deficiencies, filterable: false },
             ]}
             data={regInsp}
-            onRowClick={row => { setSelectedReg(row); setRegUpdateForm({ result: row.result === "Scheduled" ? "Pass" : row.result, date: row.date || new Date().toISOString().slice(0, 10), score: row.score || "", deficiencies: String(row.deficiencies || 0), nextDue: row.nextDue || "" }); }}
+            onRowClick={row => { setSelectedReg(row); setRegUpdateForm({ result: row.result === "Scheduled" ? "Pass" : row.result, date: row.date || new Date().toISOString().slice(0, 10), timeWindow: row.timeWindow || "", score: row.score || "", deficiencies: String(row.deficiencies || 0), nextDue: row.nextDue || "" }); }}
           />
         </div>
       )}
@@ -4957,6 +4964,10 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
               <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={regSchedForm.date} onChange={e => setRegSchedForm(p => ({ ...p, date: e.target.value }))} />
             </div>
             <div>
+              <label style={s.label}>Time / Window</label>
+              <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. 9am–12pm or 10:30 AM" value={regSchedForm.timeWindow} onChange={e => setRegSchedForm(p => ({ ...p, timeWindow: e.target.value }))} />
+            </div>
+            <div>
               <label style={s.label}>Next Due (after this one)</label>
               <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={regSchedForm.nextDue} onChange={e => setRegSchedForm(p => ({ ...p, nextDue: e.target.value }))} />
             </div>
@@ -4978,6 +4989,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 type: regSchedForm.type,
                 authority: regSchedForm.authority || regSchedForm.type,
                 date: regSchedForm.date,
+                timeWindow: regSchedForm.timeWindow || null,
                 nextDue: regSchedForm.nextDue || null,
                 units: regSchedForm.units ? parseInt(regSchedForm.units, 10) : null,
                 result: "Scheduled",
@@ -4986,7 +4998,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
               };
               await onScheduleReg(sched);
               showSuccess(regSchedForm.notifyResidents ? "Scheduled — residents notified" : "Scheduled");
-              setRegSchedForm({ type: "HQS", authority: "", propertyId: "", date: "", nextDue: "", units: "", notifyResidents: true });
+              setRegSchedForm({ type: "HQS", authority: "", propertyId: "", date: "", timeWindow: "", nextDue: "", units: "", notifyResidents: true });
             } catch (err) { showSuccess("Error: " + (err.message || "Failed to schedule")); }
           }}>Schedule Inspection</button>
         </div>
@@ -5002,7 +5014,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
             </div>
             <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 10, padding: 12, background: T.bg, borderRadius: T.radiusSm, marginBottom: 16, fontSize: 13 }}>
               <div><span style={{ color: T.muted }}>Authority:</span> <strong>{selectedReg.authority || "—"}</strong></div>
-              <div><span style={{ color: T.muted }}>Last Date:</span> <strong>{selectedReg.date || "—"}</strong></div>
+              <div><span style={{ color: T.muted }}>Date:</span> <strong>{selectedReg.date || "—"}{selectedReg.timeWindow ? ` · ${selectedReg.timeWindow}` : ""}</strong></div>
               <div><span style={{ color: T.muted }}>Status:</span> <Badge status={selectedReg.result === "Scheduled" ? "todo" : (selectedReg.result || "").toLowerCase()} /></div>
               <div><span style={{ color: T.muted }}>Units:</span> <strong>{selectedReg.units || "—"}</strong></div>
               <div><span style={{ color: T.muted }}>Next Due:</span> <strong>{selectedReg.nextDue || "—"}</strong></div>
@@ -5025,6 +5037,10 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                     <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={regUpdateForm.date} onChange={e => setRegUpdateForm(p => ({ ...p, date: e.target.value }))} />
                   </div>
                   <div>
+                    <label style={s.label}>Time / Window</label>
+                    <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. 9am–12pm" value={regUpdateForm.timeWindow || ""} onChange={e => setRegUpdateForm(p => ({ ...p, timeWindow: e.target.value }))} />
+                  </div>
+                  <div>
                     <label style={s.label}>Score (optional)</label>
                     <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. 88" value={regUpdateForm.score} onChange={e => setRegUpdateForm(p => ({ ...p, score: e.target.value }))} />
                   </div>
@@ -5044,6 +5060,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                         await onUpdateReg(selectedReg.id, {
                           result: regUpdateForm.result,
                           date: regUpdateForm.date || null,
+                          timeWindow: regUpdateForm.timeWindow || null,
                           score: regUpdateForm.score ? parseInt(regUpdateForm.score, 10) : null,
                           deficiencies: parseInt(regUpdateForm.deficiencies, 10) || 0,
                           nextDue: regUpdateForm.nextDue || null,
@@ -8275,13 +8292,15 @@ export default function App() {
     // Notify residents of the affected property if requested
     if (sched.notifyResidents) {
       const residents = LIVE_RESIDENTS.filter(r => r.propertyId === sched.propertyId);
-      const subject = `Notice: ${sched.type} Inspection at ${property?.name || "your building"} on ${sched.date}`;
+      const whenStr = `${sched.date}${sched.timeWindow ? ` · ${sched.timeWindow}` : ""}`;
+      const subject = `Notice: ${sched.type} Inspection at ${property?.name || "your building"} on ${whenStr}`;
       const body =
         `<p>Hello,</p>` +
         `<p>This is a notice that a <strong>${sched.type}</strong> inspection by <strong>${sched.authority || sched.type}</strong> ` +
-        `has been scheduled at <strong>${property?.name || "your building"}</strong> on <strong>${sched.date}</strong>.</p>` +
+        `has been scheduled at <strong>${property?.name || "your building"}</strong> on <strong>${sched.date}</strong>` +
+        `${sched.timeWindow ? ` between <strong>${sched.timeWindow}</strong>` : ""}.</p>` +
         `<p>Please ensure access to your unit as needed. Reach out to BCLT management with any questions.</p>`;
-      const smsText = `BCLT: ${sched.type} inspection (${sched.authority || sched.type}) scheduled at ${property?.name || "your building"} on ${sched.date}.`;
+      const smsText = `BCLT: ${sched.type} inspection (${sched.authority || sched.type}) at ${property?.name || "your building"} on ${whenStr}.`;
       for (const r of residents) {
         if (r.email) sendNotification("custom", { to: r.email, subject, body }).catch(err => console.warn(`Reg notify email ${r.email} failed:`, err));
         if (r.phone) sendSMS(r.phone, smsText).catch(err => console.warn(`Reg notify SMS ${r.phone} failed:`, err));
