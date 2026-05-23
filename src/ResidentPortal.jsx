@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -4051,7 +4051,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 };
 
 // --- INSPECTIONS (All Roles — Unified) ---
-const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [], savedChecklists = [], onSaveChecklist, onUpdateChecklist, staffMembers = [] }) => {
+const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [], savedChecklists = [], onSaveChecklist, onUpdateChecklist, staffMembers = [], onScheduleReg, onUpdateReg, onDeleteReg }) => {
   const inspectorOptions = useMemo(() => {
     const list = (staffMembers || [])
       .filter(s => s && s.active !== false && (s.role === "admin" || s.role === "maintenance" || s.role === "property_manager"))
@@ -4062,11 +4062,22 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   }, [staffMembers]);
   const isResident = role === "resident";
   const isAdmin = role === "admin";
-  const tabs = isResident ? null : isAdmin ? ["Schedule", "Unit History", "Procedures", "Regulatory", "Categories"] : ["Unit History", "Procedures", "Categories", "My Assigned"];
-  const [tab, setTab] = useState(isResident ? null : tabs[0]);
+  // Two top-level processes: Regulatory and Maintenance. Each gets its own sub-tabs.
+  const [topTab, setTopTab] = useState("maintenance");
+  const subTabs = isResident
+    ? null
+    : isAdmin
+      ? (topTab === "regulatory" ? ["Upcoming", "Log", "Schedule"] : ["Schedule", "Unit History", "Procedures", "Categories"])
+      : (topTab === "regulatory" ? ["Upcoming", "Log"] : ["Unit History", "Procedures", "Categories", "My Assigned"]);
+  const [tab, setTab] = useState(isResident ? null : subTabs[0]);
+  // Reset sub-tab when top-tab flips
+  useEffect(() => { if (!isResident) setTab(subTabs[0]); }, [topTab]);
   const [success, showSuccess] = useSuccess();
   const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", inspector: "", notify: "Yes — 48hr notice" });
+  const [regSchedForm, setRegSchedForm] = useState({ type: "HQS", authority: "", propertyId: "", date: "", nextDue: "", units: "", notifyResidents: true });
   const [selectedInsp, setSelectedInsp] = useState(null);
+  const [selectedReg, setSelectedReg] = useState(null);
+  const [regUpdateForm, setRegUpdateForm] = useState({ result: "Pass", date: "", score: "", deficiencies: "0", nextDue: "" });
   const [updateForm, setUpdateForm] = useState({ result: "", score: "", failedItems: "", notes: "" });
   const [activeChecklist, setActiveChecklist] = useState(null);
   const [viewingChecklist, setViewingChecklist] = useState(null);
@@ -4113,11 +4124,24 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
         </div>
       )}
 
-      {tabs && <TabBar tabs={tabs} active={tab} onChange={setTab} mobile={mobile} />}
+      {/* Top-level: Regulatory vs Maintenance — each has its own process */}
+      {!isResident && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
+          {[["maintenance", "🛠️ Maintenance / Preventive"], ["regulatory", "📋 Regulatory"]].map(([k, label]) => (
+            <button key={k} onClick={() => setTopTab(k)} style={{
+              background: "transparent", border: "none", padding: "10px 14px",
+              fontWeight: 600, cursor: "pointer", fontSize: 14,
+              borderBottom: topTab === k ? `2px solid ${T.accent}` : "2px solid transparent",
+              color: topTab === k ? T.accent : T.text,
+            }}>{label}</button>
+          ))}
+        </div>
+      )}
+      {subTabs && <TabBar tabs={subTabs} active={tab} onChange={setTab} mobile={mobile} />}
       <SuccessMessage message={success} />
 
-      {/* Schedule — admin only (now first tab) */}
-      {tab === "Schedule" && isAdmin && (
+      {/* Schedule — admin only (Maintenance flow) */}
+      {tab === "Schedule" && isAdmin && topTab === "maintenance" && (
         <div>
           <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Schedule New Inspection</div>
@@ -4844,12 +4868,48 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
       })()}
 
       {/* Regulatory — admin only */}
-      {tab === "Regulatory" && (
+      {/* ────────────────────────── REGULATORY ────────────────────────── */}
+      {topTab === "regulatory" && tab === "Upcoming" && (() => {
+        const upcoming = regInsp.filter(i => i.nextDue && new Date(i.nextDue) >= new Date(new Date().toISOString().slice(0, 10))).sort((a, b) => new Date(a.nextDue) - new Date(b.nextDue));
+        const overdue = regInsp.filter(i => i.nextDue && new Date(i.nextDue) < new Date(new Date().toISOString().slice(0, 10))).sort((a, b) => new Date(a.nextDue) - new Date(b.nextDue));
+        return (
+          <div>
+            {overdue.length > 0 && (
+              <div style={{ ...s.card, borderLeft: `3px solid ${T.danger}`, marginBottom: 16 }}>
+                <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15, color: T.danger }}>⚠ Overdue ({overdue.length})</div>
+                <SortableTable mobile={mobile} columns={[
+                  { key: "type", label: "Type", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+                  { key: "authority", label: "Authority" },
+                  { key: "propertyId", label: "Property", render: v => LIVE_PROPERTIES.find(p => p.id === v)?.name || v || "—" },
+                  { key: "nextDue", label: "Was Due", render: v => <span style={{ color: T.danger, fontWeight: 600 }}>{v}</span> },
+                ]} data={overdue} onRowClick={row => { setSelectedReg(row); setRegUpdateForm({ result: "Pass", date: new Date().toISOString().slice(0, 10), score: row.score || "", deficiencies: String(row.deficiencies || 0), nextDue: "" }); }} />
+              </div>
+            )}
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Upcoming Regulatory Inspections ({upcoming.length})</div>
+              {upcoming.length === 0 ? (
+                <EmptyState icon="📋" text="Nothing on the books. Use the Schedule tab to add one." />
+              ) : (
+                <SortableTable mobile={mobile} columns={[
+                  { key: "nextDue", label: "Due Date", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+                  { key: "type", label: "Type" },
+                  { key: "authority", label: "Authority" },
+                  { key: "propertyId", label: "Property", render: v => LIVE_PROPERTIES.find(p => p.id === v)?.name || v || "—", filterOptions: [...new Set(upcoming.map(i => LIVE_PROPERTIES.find(p => p.id === i.propertyId)?.name).filter(Boolean))] },
+                  { key: "units", label: "Units", render: v => v || "—" },
+                  { key: "result", label: "Status", render: v => <Badge status={v === "Scheduled" ? "todo" : v.toLowerCase()} /> },
+                ]} data={upcoming} onRowClick={row => { setSelectedReg(row); setRegUpdateForm({ result: "Pass", date: new Date().toISOString().slice(0, 10), score: row.score || "", deficiencies: String(row.deficiencies || 0), nextDue: "" }); }} />
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {topTab === "regulatory" && tab === "Log" && (
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Regulatory Inspection Log</div>
             <ExportButton mobile={mobile} onClick={() => generateCSV(
-              [{ label: "Type", key: "type" }, { label: "Authority", key: "authority" }, { label: "Last Date", key: "date" }, { label: "Result", key: "result" }, { label: "Score", key: "score" }, { label: "Next Due", key: "nextDue" }, { label: "Deficiencies", key: "deficiencies" }],
+              [{ label: "Type", key: "type" }, { label: "Authority", key: "authority" }, { label: "Property", key: "propertyId", exportValue: r => LIVE_PROPERTIES.find(p => p.id === r.propertyId)?.name || r.propertyId }, { label: "Last Date", key: "date" }, { label: "Result", key: "result" }, { label: "Score", key: "score" }, { label: "Next Due", key: "nextDue" }, { label: "Deficiencies", key: "deficiencies" }],
               regInsp, "regulatory_inspections"
             )} />
           </div>
@@ -4858,14 +4918,156 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
             columns={[
               { key: "type", label: "Type", render: v => <span style={{ fontWeight: 600 }}>{v}</span>, filterOptions: [...new Set(regInsp.map(i => i.type))] },
               { key: "authority", label: "Authority" },
+              { key: "propertyId", label: "Property", render: v => LIVE_PROPERTIES.find(p => p.id === v)?.name || v || "—", filterOptions: [...new Set(regInsp.map(i => LIVE_PROPERTIES.find(p => p.id === i.propertyId)?.name).filter(Boolean))] },
               { key: "date", label: "Last Date" },
-              { key: "result", label: "Result", render: v => <span style={s.badge(v === "Pass" ? T.successDim : T.dangerDim, v === "Pass" ? T.success : T.danger)}>{v}</span>, filterOptions: ["Pass", "Fail"], filterValue: row => row.result },
+              { key: "result", label: "Result", render: v => <span style={s.badge(v === "Pass" ? T.successDim : v === "Scheduled" ? T.accentDim : T.dangerDim, v === "Pass" ? T.success : v === "Scheduled" ? T.accent : T.danger)}>{v}</span>, filterOptions: ["Pass", "Fail", "Scheduled"], filterValue: row => row.result },
               { key: "score", label: "Score", render: v => v || "—", filterable: false },
-              { key: "nextDue", label: "Next Due", tdStyle: row => ({ color: new Date(row.nextDue) < new Date("2026-06-01") ? T.warn : T.text, fontWeight: new Date(row.nextDue) < new Date("2026-06-01") ? 600 : 400 }) },
+              { key: "nextDue", label: "Next Due", tdStyle: row => ({ color: row.nextDue && new Date(row.nextDue) < new Date() ? T.warn : T.text, fontWeight: row.nextDue && new Date(row.nextDue) < new Date() ? 600 : 400 }) },
               { key: "deficiencies", label: "Deficiencies", render: v => v > 0 ? <span style={s.badge(T.dangerDim, T.danger)}>{v}</span> : <span style={{ color: T.dim }}>0</span>, sortValue: row => row.deficiencies, filterable: false },
             ]}
             data={regInsp}
+            onRowClick={row => { setSelectedReg(row); setRegUpdateForm({ result: row.result === "Scheduled" ? "Pass" : row.result, date: row.date || new Date().toISOString().slice(0, 10), score: row.score || "", deficiencies: String(row.deficiencies || 0), nextDue: row.nextDue || "" }); }}
           />
+        </div>
+      )}
+
+      {topTab === "regulatory" && tab === "Schedule" && isAdmin && (
+        <div style={s.card}>
+          <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Schedule a Regulatory Inspection</div>
+          <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={s.label}>Type *</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={regSchedForm.type} onChange={e => setRegSchedForm(p => ({ ...p, type: e.target.value }))}>
+                {["HQS", "REAC/NSPIRE", "Fire & Safety", "LIHTC Compliance", "Lead-Based Paint", "Marin County HHS", "EHS", "MHA", "Other"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={s.label}>Authority</label>
+              <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. Marin County Housing Authority" value={regSchedForm.authority} onChange={e => setRegSchedForm(p => ({ ...p, authority: e.target.value }))} />
+            </div>
+            <div>
+              <label style={s.label}>Property *</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={regSchedForm.propertyId} onChange={e => setRegSchedForm(p => ({ ...p, propertyId: e.target.value }))}>
+                <option value="">Select property...</option>
+                {LIVE_PROPERTIES.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={s.label}>Inspection Date *</label>
+              <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={regSchedForm.date} onChange={e => setRegSchedForm(p => ({ ...p, date: e.target.value }))} />
+            </div>
+            <div>
+              <label style={s.label}>Next Due (after this one)</label>
+              <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={regSchedForm.nextDue} onChange={e => setRegSchedForm(p => ({ ...p, nextDue: e.target.value }))} />
+            </div>
+            <div>
+              <label style={s.label}>Units to Inspect</label>
+              <input type="number" min="0" style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. 42 or leave blank" value={regSchedForm.units} onChange={e => setRegSchedForm(p => ({ ...p, units: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14 }}>
+              <input type="checkbox" checked={regSchedForm.notifyResidents} onChange={e => setRegSchedForm(p => ({ ...p, notifyResidents: e.target.checked }))} />
+              <span><strong>Notify residents of this property</strong> — emails (and texts, if phone on file) every resident with date, type, and authority</span>
+            </label>
+          </div>
+          <button disabled={!regSchedForm.type || !regSchedForm.propertyId || !regSchedForm.date} style={s.btn()} onClick={async () => {
+            try {
+              const sched = {
+                propertyId: regSchedForm.propertyId,
+                type: regSchedForm.type,
+                authority: regSchedForm.authority || regSchedForm.type,
+                date: regSchedForm.date,
+                nextDue: regSchedForm.nextDue || null,
+                units: regSchedForm.units ? parseInt(regSchedForm.units, 10) : null,
+                result: "Scheduled",
+                deficiencies: 0,
+                notifyResidents: regSchedForm.notifyResidents,
+              };
+              await onScheduleReg(sched);
+              showSuccess(regSchedForm.notifyResidents ? "Scheduled — residents notified" : "Scheduled");
+              setRegSchedForm({ type: "HQS", authority: "", propertyId: "", date: "", nextDue: "", units: "", notifyResidents: true });
+            } catch (err) { showSuccess("Error: " + (err.message || "Failed to schedule")); }
+          }}>Schedule Inspection</button>
+        </div>
+      )}
+
+      {/* Regulatory detail / record modal */}
+      {selectedReg && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setSelectedReg(null)}>
+          <div style={{ ...s.card, maxWidth: 560, width: "100%", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <h2 style={{ margin: 0, fontSize: 18 }}>{selectedReg.type} · {LIVE_PROPERTIES.find(p => p.id === selectedReg.propertyId)?.name || selectedReg.propertyId}</h2>
+              <button style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.text }} onClick={() => setSelectedReg(null)}>×</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 10, padding: 12, background: T.bg, borderRadius: T.radiusSm, marginBottom: 16, fontSize: 13 }}>
+              <div><span style={{ color: T.muted }}>Authority:</span> <strong>{selectedReg.authority || "—"}</strong></div>
+              <div><span style={{ color: T.muted }}>Last Date:</span> <strong>{selectedReg.date || "—"}</strong></div>
+              <div><span style={{ color: T.muted }}>Status:</span> <Badge status={selectedReg.result === "Scheduled" ? "todo" : (selectedReg.result || "").toLowerCase()} /></div>
+              <div><span style={{ color: T.muted }}>Units:</span> <strong>{selectedReg.units || "—"}</strong></div>
+              <div><span style={{ color: T.muted }}>Next Due:</span> <strong>{selectedReg.nextDue || "—"}</strong></div>
+              <div><span style={{ color: T.muted }}>Deficiencies:</span> <strong>{selectedReg.deficiencies || 0}</strong></div>
+            </div>
+            {isAdmin && (
+              <>
+                <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15 }}>Record Results</div>
+                <div style={{ ...s.grid("1fr 1fr", mobile), gap: 12, marginBottom: 14 }}>
+                  <div>
+                    <label style={s.label}>Result</label>
+                    <select style={{ ...s.mSelect(mobile), width: "100%" }} value={regUpdateForm.result} onChange={e => setRegUpdateForm(p => ({ ...p, result: e.target.value }))}>
+                      <option value="Pass">Pass</option>
+                      <option value="Fail">Fail</option>
+                      <option value="Scheduled">Scheduled</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={s.label}>Inspection Date</label>
+                    <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={regUpdateForm.date} onChange={e => setRegUpdateForm(p => ({ ...p, date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Score (optional)</label>
+                    <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. 88" value={regUpdateForm.score} onChange={e => setRegUpdateForm(p => ({ ...p, score: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Deficiencies</label>
+                    <input type="number" min="0" style={{ ...s.mInput(mobile), width: "100%" }} value={regUpdateForm.deficiencies} onChange={e => setRegUpdateForm(p => ({ ...p, deficiencies: e.target.value }))} />
+                  </div>
+                  <div style={{ gridColumn: mobile ? "1" : "1 / -1" }}>
+                    <label style={s.label}>Next Due Date</label>
+                    <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={regUpdateForm.nextDue} onChange={e => setRegUpdateForm(p => ({ ...p, nextDue: e.target.value }))} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button style={s.btn()} onClick={async () => {
+                      try {
+                        await onUpdateReg(selectedReg.id, {
+                          result: regUpdateForm.result,
+                          date: regUpdateForm.date || null,
+                          score: regUpdateForm.score ? parseInt(regUpdateForm.score, 10) : null,
+                          deficiencies: parseInt(regUpdateForm.deficiencies, 10) || 0,
+                          nextDue: regUpdateForm.nextDue || null,
+                        });
+                        showSuccess("Inspection updated");
+                        setSelectedReg(null);
+                      } catch (err) { showSuccess("Error: " + err.message); }
+                    }}>Save</button>
+                    <button style={s.btn("ghost")} onClick={() => setSelectedReg(null)}>Cancel</button>
+                  </div>
+                  {onDeleteReg && (
+                    <button style={{ ...s.btn("ghost"), color: T.danger }} onClick={async () => {
+                      if (!confirm(`Delete this ${selectedReg.type} inspection?`)) return;
+                      try {
+                        await onDeleteReg(selectedReg.id);
+                        showSuccess("Deleted");
+                        setSelectedReg(null);
+                      } catch (err) { showSuccess("Error: " + err.message); }
+                    }}>🗑️ Delete</button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -8056,6 +8258,48 @@ export default function App() {
     }
   };
 
+  // ── Regulatory inspections ──
+  const scheduleRegInspection = async (sched) => {
+    const saved = await insertRegInspection(sched);
+    const fresh = await fetchRegInspections().catch(() => null);
+    if (fresh) { LIVE_REG_INSPECTIONS = fresh; }
+    const property = LIVE_PROPERTIES.find(p => p.id === sched.propertyId);
+    pushNotif({
+      id: `N-${Date.now()}`,
+      type: "inspection",
+      icon: "📋",
+      message: `${sched.type} inspection scheduled at ${property?.name || sched.propertyId} for ${sched.date}`,
+      timestamp: new Date().toISOString(),
+      roles: ["admin", "maintenance", "resident"],
+    });
+    // Notify residents of the affected property if requested
+    if (sched.notifyResidents) {
+      const residents = LIVE_RESIDENTS.filter(r => r.propertyId === sched.propertyId);
+      const subject = `Notice: ${sched.type} Inspection at ${property?.name || "your building"} on ${sched.date}`;
+      const body =
+        `<p>Hello,</p>` +
+        `<p>This is a notice that a <strong>${sched.type}</strong> inspection by <strong>${sched.authority || sched.type}</strong> ` +
+        `has been scheduled at <strong>${property?.name || "your building"}</strong> on <strong>${sched.date}</strong>.</p>` +
+        `<p>Please ensure access to your unit as needed. Reach out to BCLT management with any questions.</p>`;
+      const smsText = `BCLT: ${sched.type} inspection (${sched.authority || sched.type}) scheduled at ${property?.name || "your building"} on ${sched.date}.`;
+      for (const r of residents) {
+        if (r.email) sendNotification("custom", { to: r.email, subject, body }).catch(err => console.warn(`Reg notify email ${r.email} failed:`, err));
+        if (r.phone) sendSMS(r.phone, smsText).catch(err => console.warn(`Reg notify SMS ${r.phone} failed:`, err));
+      }
+    }
+    return saved;
+  };
+  const updateRegInspectionN = async (code, changes) => {
+    await updateRegInspection(code, changes);
+    const fresh = await fetchRegInspections().catch(() => null);
+    if (fresh) { LIVE_REG_INSPECTIONS = fresh; setDataVersion(v => v + 1); }
+  };
+  const deleteRegInspectionN = async (code) => {
+    await deleteRegInspection(code);
+    const fresh = await fetchRegInspections().catch(() => null);
+    if (fresh) { LIVE_REG_INSPECTIONS = fresh; setDataVersion(v => v + 1); }
+  };
+
   const nav = NAV[role] || [];
   const navBadges = {};
   if (role === "admin") {
@@ -8118,7 +8362,7 @@ export default function App() {
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} vendors={vendors} profile={profile} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
-        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} />;
+        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} onScheduleReg={scheduleRegInspection} onUpdateReg={updateRegInspectionN} onDeleteReg={deleteRegInspectionN} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
@@ -8133,7 +8377,7 @@ export default function App() {
       switch (page) {
         case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
-        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} />;
+        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} />;

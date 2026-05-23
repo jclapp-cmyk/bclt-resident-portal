@@ -623,6 +623,53 @@ export async function fetchRegInspections() {
   }));
 }
 
+export async function insertRegInspection(insp) {
+  // Resolve property UUID from slug
+  let propertyId = null;
+  if (insp.propertyId) {
+    const { data: prop } = await supabase.from('properties').select('id').eq('slug', insp.propertyId).maybeSingle();
+    propertyId = prop?.id || null;
+  }
+  if (!propertyId) {
+    const { data: fallback } = await supabase.from('properties').select('id').limit(1).maybeSingle();
+    propertyId = fallback?.id || null;
+  }
+  const code = insp.code || `RI-${Date.now().toString(36)}`;
+  const { data, error } = await supabase.from('reg_inspections').insert({
+    code,
+    property_id: propertyId,
+    type: insp.type,
+    authority: insp.authority,
+    inspection_date: insp.date || null,
+    result: insp.result || 'Scheduled',
+    score: insp.score || null,
+    next_due: insp.nextDue || null,
+    units_inspected: insp.units || null,
+    deficiencies: insp.deficiencies || 0,
+  }).select().single();
+  if (error) throw error;
+  return { ...insp, id: code, _uuid: data.id };
+}
+
+export async function updateRegInspection(code, changes) {
+  const mapped = {};
+  if (changes.type !== undefined) mapped.type = changes.type;
+  if (changes.authority !== undefined) mapped.authority = changes.authority;
+  if (changes.date !== undefined) mapped.inspection_date = changes.date || null;
+  if (changes.result !== undefined) mapped.result = changes.result;
+  if (changes.score !== undefined) mapped.score = changes.score;
+  if (changes.nextDue !== undefined) mapped.next_due = changes.nextDue || null;
+  if (changes.units !== undefined) mapped.units_inspected = changes.units;
+  if (changes.deficiencies !== undefined) mapped.deficiencies = changes.deficiencies;
+  const { error } = await supabase.from('reg_inspections').update(mapped).eq('code', code);
+  if (error) throw error;
+}
+
+export async function deleteRegInspection(code) {
+  const { error } = await supabase.from('reg_inspections').delete().eq('code', code);
+  if (error) throw error;
+}
+
 // ── MAINTENANCE REQUESTS ──
 
 export async function fetchMaintenanceRequests() {
