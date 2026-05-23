@@ -4067,8 +4067,8 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   const subTabs = isResident
     ? null
     : isAdmin
-      ? (topTab === "regulatory" ? ["Upcoming", "Log", "Schedule"] : ["Schedule", "Unit History", "Checklists", "Categories"])
-      : (topTab === "regulatory" ? ["Upcoming", "Log"] : ["Unit History", "Checklists", "Categories", "My Assigned"]);
+      ? (topTab === "regulatory" ? ["Upcoming", "Log", "Schedule"] : ["Schedule", "Unit History", "Checklists"])
+      : (topTab === "regulatory" ? ["Upcoming", "Log"] : ["Unit History", "Checklists", "My Assigned"]);
   const [tab, setTab] = useState(isResident ? null : subTabs[0]);
   // Reset sub-tab when top-tab flips
   useEffect(() => { if (!isResident) setTab(subTabs[0]); }, [topTab]);
@@ -4099,7 +4099,17 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
     ? LIVE_REG_INSPECTIONS.filter(i => i.propertyId === selectedProperty)
     : LIVE_REG_INSPECTIONS;
   const regDueSoon = regInsp.filter(i => new Date(i.nextDue) < new Date("2026-09-01")).length;
-  const catNames = [...new Set(DEFAULT_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => c.name))];
+  // Template names available for scheduling — pulls from the built-in
+  // categories (filtered by hide-state) plus any active custom templates,
+  // so the Categories tab is no longer needed as a separate source of truth.
+  const scheduleTemplateNames = useMemo(() => {
+    const builtinNames = DEFAULT_UNIT_INSPECTION_CATEGORIES
+      .filter(c => c.active && !hiddenBuiltins.includes(`PROC-CAT-${c.id}`))
+      .map(c => c.name);
+    const customNames = (inspectionTemplates || []).filter(t => t.active !== false).map(t => t.name);
+    return [...new Set([...builtinNames, ...customNames])];
+  }, [hiddenBuiltins, inspectionTemplates]);
+  const catNames = scheduleTemplateNames;
   const scheduled = unitInspections.filter(i => i.result === "Scheduled");
   const availableResidents = selectedProperty && selectedProperty !== "all"
     ? LIVE_RESIDENTS.filter(r => r.propertyId === selectedProperty)
@@ -4157,7 +4167,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
           <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Schedule New Inspection</div>
             <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
-              <div><label style={s.label}>Category</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.category} onChange={e => setSchedForm(p => ({ ...p, category: e.target.value }))}><option value="">Select...</option>{DEFAULT_UNIT_INSPECTION_CATEGORIES.filter(c => c.active).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
+              <div><label style={s.label}>Template</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.category} onChange={e => setSchedForm(p => ({ ...p, category: e.target.value }))}><option value="">Select...</option>{scheduleTemplateNames.map(n => <option key={n} value={n}>{n}</option>)}</select></div>
               <div><label style={s.label}>Unit</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option value="">Select unit...</option>{unitOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
               <div><label style={s.label}>Date</label><input style={s.mInput(mobile)} type="date" value={schedForm.date} onChange={e => setSchedForm(p => ({ ...p, date: e.target.value }))} /></div>
             </div>
@@ -5194,35 +5204,6 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 </div>
               </>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Categories tab */}
-      {tab === "Categories" && (
-        <div>
-          {isAdmin && <button style={{ ...s.btn(), marginBottom: 16 }}>+ Add Category</button>}
-          <div style={s.grid("1fr 1fr", mobile)}>
-            {DEFAULT_UNIT_INSPECTION_CATEGORIES.map(cat => (
-              <div key={cat.id} style={{ ...s.card, opacity: cat.active ? 1 : 0.5, borderLeft: `3px solid ${cat.active ? T.accent : T.dim}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 15 }}>{cat.name}</span>
-                  <span style={s.badge(cat.active ? T.successDim : T.dangerDim, cat.active ? T.success : T.danger)}>{cat.active ? "Active" : "Inactive"}</span>
-                </div>
-                <div style={{ color: T.muted, fontSize: 13, marginBottom: 8 }}>{cat.description}</div>
-                <div style={{ display: "flex", gap: 16, fontSize: 12, color: T.dim }}>
-                  <span>Frequency: {cat.frequency}</span>
-                  <span>Scoring: {cat.scoring}</span>
-                  <span>Checklist: {cat.checklist.length} items</span>
-                </div>
-                {isAdmin && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button style={s.btn("ghost")} onClick={() => { const idx = DEFAULT_UNIT_INSPECTION_CATEGORIES.findIndex(c => c.id === cat.id); if (idx >= 0) DEFAULT_UNIT_INSPECTION_CATEGORIES[idx].active = !cat.active; showSuccess(cat.active ? `${cat.name} deactivated` : `${cat.name} activated`); }}>{cat.active ? "Deactivate" : "Activate"}</button>
-                    <button style={s.btn("ghost")} onClick={() => alert(`Checklist for ${cat.name}:\n\n${cat.checklist.map((c, i) => `${i + 1}. ${c}`).join("\n")}`)}> View Checklist</button>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         </div>
       )}
