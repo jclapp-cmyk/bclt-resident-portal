@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -1504,6 +1504,8 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
   const [incomeEntries, setIncomeEntries] = useState([]);
   const [assetEntries, setAssetEntries] = useState([]);
   const [newMemberForm, setNewMemberForm] = useState({ name: "", relationship: "Head of Household", dob: "", ssn4: "", ftStudent: false });
+  const [editingMemberId, setEditingMemberId] = useState(null);
+  const [editMemberForm, setEditMemberForm] = useState({ name: "", relationship: "", dob: "", ssn4: "", ftStudent: false });
   const [showNewMember, setShowNewMember] = useState(false);
   const [newResidentId, setNewResidentId] = useState("");
   // Defaults: deadline 30 days out
@@ -1820,7 +1822,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
             <div style={s.card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <div style={{ fontWeight: 700, fontSize: 15 }}>Household Members ({hhMembers.length})</div>
-                <button onClick={() => setShowNewMember(v => !v)} style={s.btn(showNewMember ? "ghost" : "primary")}>{showNewMember ? "Cancel" : "➕ Add Member"}</button>
+                <button onClick={() => setShowNewMember(v => !v)} style={{ ...s.btn(showNewMember ? "ghost" : "primary"), padding: "10px 18px", fontSize: 14 }}>{showNewMember ? "Cancel" : "➕ Add Member"}</button>
               </div>
               {showNewMember && (
                 <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 10, marginBottom: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
@@ -1842,17 +1844,58 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
               )}
               <table style={s.table}>
                 <thead><tr>{["#", "Name", "Relationship", "DOB", "SSN-4", "Student", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                <tbody>{hhMembers.map((m, i) => (
-                  <tr key={m.id || i}>
-                    <td style={s.td}>{i + 1}</td>
-                    <td style={s.td}><span style={{ fontWeight: 600 }}>{m.name}</span></td>
-                    <td style={s.td}>{m.relationship}</td>
-                    <td style={s.td}>{m.dob || "—"}</td>
-                    <td style={s.td}>{m.ssn4 ? `***-**-${m.ssn4}` : "—"}</td>
-                    <td style={s.td}>{m.ftStudent ? "FT" : "N/A"}</td>
-                    <td style={s.td}>{i > 0 && <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11, padding: "2px 8px" }} onClick={async () => { try { await deleteTICMember(m.id); setHhMembers(prev => prev.filter(x => x.id !== m.id)); } catch {} }}>Remove</button>}</td>
-                  </tr>
-                ))}</tbody>
+                <tbody>{hhMembers.map((m, i) => {
+                  const isEditing = editingMemberId === m.id;
+                  if (isEditing) {
+                    return (
+                      <tr key={m.id}>
+                        <td style={s.td}>{i + 1}</td>
+                        <td style={s.td}><input style={{ ...s.input, padding: "4px 8px", fontSize: 13 }} value={editMemberForm.name} onChange={e => setEditMemberForm(f => ({ ...f, name: e.target.value }))} /></td>
+                        <td style={s.td}>
+                          <select style={{ ...s.select, padding: "4px 6px", fontSize: 13 }} value={editMemberForm.relationship} onChange={e => setEditMemberForm(f => ({ ...f, relationship: e.target.value }))}>
+                            <option>Head of Household</option><option>Spouse</option><option>Co-Head</option><option>Child</option><option>Other Adult</option><option>Foster Child</option><option>Live-in Aide</option>
+                          </select>
+                        </td>
+                        <td style={s.td}><input type="date" style={{ ...s.input, padding: "4px 6px", fontSize: 12 }} value={editMemberForm.dob || ""} onChange={e => setEditMemberForm(f => ({ ...f, dob: e.target.value }))} /></td>
+                        <td style={s.td}><input maxLength={4} placeholder="0000" style={{ ...s.input, padding: "4px 6px", fontSize: 13, width: 60 }} value={editMemberForm.ssn4 || ""} onChange={e => setEditMemberForm(f => ({ ...f, ssn4: e.target.value.replace(/\D/g, "").slice(0, 4) }))} /></td>
+                        <td style={s.td}>
+                          <select style={{ ...s.select, padding: "4px 6px", fontSize: 13 }} value={editMemberForm.ftStudent ? "yes" : "no"} onChange={e => setEditMemberForm(f => ({ ...f, ftStudent: e.target.value === "yes" }))}>
+                            <option value="no">No</option><option value="yes">Yes</option>
+                          </select>
+                        </td>
+                        <td style={s.td}>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button style={{ ...s.btn("primary"), fontSize: 12, padding: "4px 10px" }} onClick={async () => {
+                              try {
+                                await updateTICMember(m.id, editMemberForm);
+                                setHhMembers(prev => prev.map(x => x.id === m.id ? { ...x, ...editMemberForm } : x));
+                                setEditingMemberId(null);
+                                showSuccess("Saved");
+                              } catch (err) { showSuccess("Error: " + err.message); }
+                            }}>Save</button>
+                            <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 8px" }} onClick={() => setEditingMemberId(null)}>Cancel</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return (
+                    <tr key={m.id || i}>
+                      <td style={s.td}>{i + 1}</td>
+                      <td style={s.td}><span style={{ fontWeight: 600 }}>{m.name}</span></td>
+                      <td style={s.td}>{m.relationship}</td>
+                      <td style={s.td}>{m.dob || "—"}</td>
+                      <td style={s.td}>{m.ssn4 ? `***-**-${m.ssn4}` : "—"}</td>
+                      <td style={s.td}>{m.ftStudent ? "FT" : "N/A"}</td>
+                      <td style={s.td}>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => { setEditingMemberId(m.id); setEditMemberForm({ name: m.name || "", relationship: m.relationship || "Head of Household", dob: m.dob || "", ssn4: m.ssn4 || "", ftStudent: !!m.ftStudent }); }}>Edit</button>
+                          {i > 0 && <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 12, padding: "4px 10px" }} onClick={async () => { if (!confirm(`Remove ${m.name}?`)) return; try { await deleteTICMember(m.id); setHhMembers(prev => prev.filter(x => x.id !== m.id)); } catch {} }}>Remove</button>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}</tbody>
               </table>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
@@ -1864,6 +1907,10 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
         {/* STEP 1: INCOME */}
         {step === 1 && (
           <div>
+            <div style={{ padding: 14, background: T.infoDim, borderLeft: `3px solid ${T.info}`, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, color: T.text }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>📎 Attach documentation for every income source</div>
+              <div style={{ color: T.muted }}>For each income entry, click <strong>"Attach Doc"</strong> to upload supporting documentation: pay stubs, Social Security award letters, public-assistance notices, employer verification — whatever you have. PDF, JPG, or PNG. You can attach more than one entry per category.</div>
+            </div>
             {hhMembers.map((m, mi) => {
               const memberIncome = incomeEntries.filter(e => e.memberId === m.id);
               const memberTotal = memberIncome.reduce((s, e) => s + (e.amount || 0), 0);
@@ -1885,17 +1932,24 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                               const e = await insertTICIncome({ certId: activeCert.id, memberId: m.id, category: cat, source: "", amount: 0 });
                               setIncomeEntries(prev => [...prev, { id: e.id, certId: activeCert.id, memberId: m.id, category: cat, source: "", amount: 0 }]);
                             } catch {}
-                          }} style={{ ...s.btn("ghost"), fontSize: 10, padding: "2px 8px" }}>+ Add</button>
+                          }} style={{ ...s.btn("primary"), fontSize: 13, padding: "6px 14px" }}>＋ Add</button>
                         </div>
                         {catEntries.map(entry => (
                           <div key={entry.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
                             <input placeholder="Source" value={entry.source || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, source: e.target.value } : x)); }} onBlur={() => updateTICIncome(entry.id, { source: entry.source }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 2, fontSize: 12, padding: "4px 8px" }} />
                             <input type="number" placeholder="$/yr" value={entry.amount || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, amount: parseFloat(e.target.value) || 0 } : x)); }} onBlur={() => updateTICIncome(entry.id, { amount: entry.amount }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
-                            <label style={{ fontSize: 10, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
-                              <input type="file" accept=".pdf,.jpg,.png" style={{ display: "none" }} onChange={async (ev) => {
-                                const file = ev.target.files?.[0]; if (!file) return;
-                                try { const path = await uploadTICDocument(file, activeCert.id); await updateTICIncome(entry.id, { docPath: path }); setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, docPath: path, verified: true } : x)); showSuccess("Doc uploaded"); } catch (err) { showSuccess("Upload failed"); }
-                              }} />📎 {entry.docPath ? "✓" : "Doc"}
+                            <label title={entry.docPath ? "Replace attached document" : "Attach supporting document"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: T.radiusSm, cursor: "pointer", fontSize: 13, fontWeight: 600, background: entry.docPath ? T.successDim : T.accentDim, color: entry.docPath ? T.success : T.accent, border: `1px solid ${entry.docPath ? T.success : T.accent}`, whiteSpace: "nowrap" }}>
+                              <input type="file" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif" style={{ display: "none" }} onChange={async (ev) => {
+                                const original = ev.target.files?.[0]; if (!original) return;
+                                try {
+                                  const file = await convertHeicIfNeeded(original);
+                                  const path = await uploadTICDocument(file, activeCert.id);
+                                  await updateTICIncome(entry.id, { docPath: path });
+                                  setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, docPath: path, verified: true } : x));
+                                  showSuccess("Document attached");
+                                } catch (err) { showSuccess("Upload failed: " + (err.message || "")); }
+                              }} />
+                              📎 {entry.docPath ? "Attached ✓" : "Attach Doc"}
                             </label>
                             <button onClick={async () => { try { await deleteTICIncome(entry.id); setIncomeEntries(prev => prev.filter(x => x.id !== entry.id)); } catch {} }} style={{ ...s.btn("ghost"), color: T.danger, fontSize: 10, padding: "2px 6px" }}>✕</button>
                           </div>
@@ -1931,7 +1985,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                         const e = await insertTICAsset({ certId: activeCert.id, memberId: m.id, assetType: "savings", cashValue: 0, annualIncome: 0 });
                         setAssetEntries(prev => [...prev, { id: e.id, certId: activeCert.id, memberId: m.id, assetType: "savings", cashValue: 0, annualIncome: 0 }]);
                       } catch {}
-                    }} style={{ ...s.btn("ghost"), fontSize: 11 }}>+ Add Asset</button>
+                    }} style={{ ...s.btn("primary"), fontSize: 13, padding: "6px 14px" }}>＋ Add Asset</button>
                   </div>
                   {memberAssets.length === 0 ? <div style={{ fontSize: 12, color: T.dim }}>No assets reported</div> : memberAssets.map(a => (
                     <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>

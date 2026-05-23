@@ -1154,6 +1154,22 @@ export async function insertTICMember(member) {
   return { ...data, id: data.id };
 }
 
+export async function updateTICMember(id, changes) {
+  const mapped = {};
+  if (changes.name !== undefined) mapped.member_name = changes.name;
+  if (changes.relationship !== undefined) mapped.relationship = changes.relationship;
+  if (changes.dob !== undefined) mapped.date_of_birth = changes.dob || null;
+  if (changes.ssn4 !== undefined) mapped.ssn_last4 = changes.ssn4 || null;
+  if (changes.ftStudent !== undefined) mapped.is_full_time_student = changes.ftStudent;
+  if (changes.ptStudent !== undefined) mapped.is_part_time_student = changes.ptStudent;
+  if (changes.disabled !== undefined) mapped.is_disabled = changes.disabled;
+  if (changes.race !== undefined) mapped.race_code = changes.race;
+  if (changes.ethnicity !== undefined) mapped.ethnicity_code = changes.ethnicity;
+  if (changes.order !== undefined) mapped.sort_order = changes.order;
+  const { error } = await supabase.from('tic_household_members').update(mapped).eq('id', id);
+  if (error) throw error;
+}
+
 export async function deleteTICMember(id) {
   const { error } = await supabase.from('tic_household_members').delete().eq('id', id);
   if (error) throw error;
