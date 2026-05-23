@@ -1476,6 +1476,9 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
   const [newMemberForm, setNewMemberForm] = useState({ name: "", relationship: "Head of Household", dob: "", ssn4: "", ftStudent: false });
   const [showNewMember, setShowNewMember] = useState(false);
   const [newResidentId, setNewResidentId] = useState("");
+  // Defaults: deadline 30 days out
+  const [newDeadline, setNewDeadline] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); });
+  const [newNotify, setNewNotify] = useState(true);
 
   const stepLabels = ["Household", "Income", "Assets", "Eligibility", "Rent & Program", "Review & Sign"];
 
@@ -1499,7 +1502,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
     const res = LIVE_RESIDENTS.find(r => r._uuid === newResidentId);
     if (!res) return;
     try {
-      const cert = await insertIncomeCertification({ residentId: res._uuid, certType: "annual", effectiveDate: new Date().toISOString().slice(0, 10) });
+      const cert = await insertIncomeCertification({ residentId: res._uuid, certType: "annual", effectiveDate: new Date().toISOString().slice(0, 10), deadline: newDeadline || null });
       // Pre-fill household from existing household_members
       const existing = await fetchHouseholdMembers(res._uuid);
       const headMember = await insertTICMember({ certId: cert.id, name: res.name, relationship: "Head of Household", order: 0 });
@@ -1511,9 +1514,30 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
       }
       setHhMembers([{ ...headMember, id: headMember.id, name: res.name, relationship: "Head of Household", order: 0 }, ...otherMembers.map((tm, i) => ({ ...tm, id: tm.id, name: existing[i].name, relationship: existing[i].relationship, order: i + 1 }))]);
       setIncomeEntries([]); setAssetEntries([]);
-      setActiveCert({ ...cert, id: cert.id, residentName: res.name, unit: res.unit, status: "draft" });
+      setActiveCert({ ...cert, id: cert.id, residentName: res.name, unit: res.unit, status: "draft", deadline: newDeadline || null });
       setStep(0);
-      showSuccess("Certification started for " + res.name);
+      // Notify resident with the deadline
+      let notified = "";
+      if (newNotify) {
+        const firstName = res.name?.split(" ")[0] || "there";
+        const dl = newDeadline ? new Date(newDeadline + "T00:00:00").toLocaleDateString() : "soon";
+        try {
+          if (res.email) {
+            await sendNotification("custom", {
+              to: res.email,
+              subject: "Action Required: Annual Income Certification",
+              body: `<p>Hi ${firstName},</p><p>It's time to complete your annual income certification with BCLT. The deadline to submit is <strong>${dl}</strong>.</p><p>Please log in to your BCLT HomeBase portal to fill out the form and upload your documents:</p><p><a href="https://bclt-resident-portal.vercel.app">https://bclt-resident-portal.vercel.app</a></p><p>If you have any questions, reply to this email or contact BCLT management.</p>`,
+            });
+            notified += "📧 ";
+          }
+          if (res.phone) {
+            await sendSMS(res.phone, `BCLT: Your annual income certification is due ${dl}. Log in to BCLT HomeBase to complete it: https://bclt-resident-portal.vercel.app`);
+            notified += "💬 ";
+          }
+          await updateIncomeCertification(cert.id, { lastNotifiedAt: new Date().toISOString() });
+        } catch (err) { console.warn("Cert notification failed:", err); }
+      }
+      showSuccess(`Certification started for ${res.name}${notified ? ` — resident notified ${notified.trim()}` : ""}`);
       setNewResidentId("");
     } catch (err) { showSuccess("Error: " + err.message); }
   };
@@ -2044,22 +2068,36 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                       adminSignerName: activeCert.adminSignerName,
                     });
                     showSuccess(isAdmin ? "Certification approved!" : "Submitted for review!");
-                    // Notify admin when resident submits
-                    if (!isAdmin && pushNotif) {
-                      pushNotif({
-                        id: `N-${Date.now()}`,
-                        type: "recert",
-                        icon: "📋",
-                        message: `Income certification submitted by ${activeCert.residentName} (${activeCert.unit}) — $${incomeForDetermination.toLocaleString()}/yr. Review required.`,
-                        timestamp: new Date().toISOString(),
-                        roles: ["admin"],
-                      });
-                      // Email the shared portal mailbox — admins read from there, not personal email
+                    // Notify admin when resident submits + send resident a confirmation
+                    if (!isAdmin) {
+                      if (pushNotif) {
+                        pushNotif({
+                          id: `N-${Date.now()}`,
+                          type: "recert",
+                          icon: "📋",
+                          message: `Income certification submitted by ${activeCert.residentName} (${activeCert.unit}) — $${incomeForDetermination.toLocaleString()}/yr. Review required.`,
+                          timestamp: new Date().toISOString(),
+                          roles: ["admin"],
+                        });
+                      }
+                      // Email the shared portal mailbox so admins see it in Gmail too
                       sendNotification("custom", {
                         to: "residentportal@bolinaslandtrust.org",
                         subject: `Income Certification Submitted — ${activeCert.residentName} (${activeCert.unit})`,
                         body: `${activeCert.residentName} in Unit ${activeCert.unit} has submitted their income certification for review.\n\nTotal Annual Household Income: $${incomeForDetermination.toLocaleString()}\nAMI Category: ${eligibility.category}\n\nPlease log in to the Resident Portal to review and approve.`,
-                      }).catch((err) => { console.error('Income cert notification failed:', err); });
+                      }).catch((err) => { console.error('Income cert admin notification failed:', err); });
+                      // Confirm to the resident that we got it
+                      const resRec = LIVE_RESIDENTS.find(r => r._uuid === activeCert.residentId);
+                      if (resRec?.email) {
+                        sendNotification("custom", {
+                          to: resRec.email,
+                          subject: "Received: Your income certification",
+                          body: `<p>Hi ${resRec.name?.split(" ")[0] || "there"},</p><p>Thanks — we've received your annual income certification. BCLT will review it and follow up if anything is missing. Otherwise you'll get a confirmation when it's approved.</p>`,
+                        }).catch(() => {});
+                      }
+                      if (resRec?.phone) {
+                        sendSMS(resRec.phone, `BCLT: Got your income certification. We'll review and confirm shortly.`).catch(() => {});
+                      }
                     }
                     // Refresh certs before clearing active cert to avoid stale list
                     const refreshed = await fetchIncomeCertifications();
@@ -2097,8 +2135,15 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                 {filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => <option key={r._uuid} value={r._uuid}>{r.name} — {r.unit}</option>)}
               </select>
             </div>
+            <div style={{ minWidth: 160 }}><label style={s.label}>Deadline</label>
+              <input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={newDeadline} onChange={e => setNewDeadline(e.target.value)} />
+            </div>
             <button disabled={!newResidentId} onClick={startNewCert} style={s.mBtn("primary", mobile)}>📋 Start Certification</button>
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, cursor: "pointer", fontSize: 13, color: T.muted }}>
+            <input type="checkbox" checked={newNotify} onChange={e => setNewNotify(e.target.checked)} />
+            <span>Notify resident now (email + SMS) with deadline and a link to the portal</span>
+          </label>
         </div>
       ) : (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
@@ -2189,24 +2234,82 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
           { key: "unit", label: "Unit" },
           { key: "certType", label: "Type", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span> },
           { key: "effectiveDate", label: "Effective Date" },
-          { key: "status", label: "Status", render: v => {
-            const colors = { draft: [T.dimLight, T.muted], in_progress: [T.warnDim, T.warn], pending_review: [T.infoDim, T.info], approved: [T.successDim, T.success], rejected: [T.dangerDim, T.danger] };
+          { key: "status", label: "Status", render: (v, row) => {
+            const colors = { draft: [T.dimLight, T.muted], in_progress: [T.warnDim, T.warn], pending_review: [T.infoDim, T.info], needs_info: [T.warnDim, T.warn], approved: [T.successDim, T.success], rejected: [T.dangerDim, T.danger] };
             const [bg, fg] = colors[v] || colors.draft;
-            return <span style={s.badge(bg, fg)}>{v.replace("_", " ")}</span>;
-          }, filterOptions: ["draft", "in_progress", "pending_review", "approved", "rejected"] },
+            const reason = v === "needs_info" ? row.infoRequest : v === "rejected" ? row.rejectionReason : "";
+            return (
+              <span title={reason || undefined} style={s.badge(bg, fg)}>
+                {(v || "").replace("_", " ")}{reason ? " ⓘ" : ""}
+              </span>
+            );
+          }, filterOptions: ["draft", "in_progress", "pending_review", "needs_info", "approved", "rejected"], filterValue: row => row.status },
+          { key: "deadline", label: "Deadline", render: v => v || <span style={{ color: T.dim }}>—</span>, tdStyle: row => ({ color: row.deadline && new Date(row.deadline) < new Date() && row.status !== "approved" ? T.danger : T.text, fontWeight: row.deadline && new Date(row.deadline) < new Date() && row.status !== "approved" ? 600 : 400 }) },
           { key: "amiCategory", label: "AMI", render: v => v || "—" },
           { key: "incomeForDetermination", label: "Income", render: v => v ? `$${Number(v).toLocaleString()}` : "—" },
-          ...(isAdmin ? [{ key: "id", label: "", render: (v, row) => row.status === "pending_review" ? (
-            <button onClick={async (e) => {
-              e.stopPropagation();
+          ...(isAdmin ? [{ key: "id", label: "Actions", sortable: false, filterable: false, render: (v, row) => {
+            if (row.status !== "pending_review") return null;
+            const notifyResident = async (subject, body, smsText) => {
+              const r = LIVE_RESIDENTS.find(x => x._uuid === row.residentId);
               try {
-                await updateIncomeCertification(v, { status: "approved" });
-                showSuccess("Certification approved!");
-                const refreshed = await fetchIncomeCertifications();
-                setCerts(refreshed || []);
-              } catch (err) { showSuccess("Error: " + err.message); }
-            }} style={{ ...s.btn("primary"), fontSize: 11, padding: "4px 10px", whiteSpace: "nowrap" }}>✓ Approve</button>
-          ) : null }] : []),
+                if (r?.email) await sendNotification("custom", { to: r.email, subject, body });
+                if (r?.phone && smsText) await sendSMS(r.phone, smsText);
+              } catch (err) { console.warn("Cert status notify failed:", err); }
+            };
+            return (
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
+                <button title="Approve" style={{ ...s.btn("primary"), fontSize: 11, padding: "4px 8px" }} onClick={async () => {
+                  try {
+                    await updateIncomeCertification(v, { status: "approved", lastNotifiedAt: new Date().toISOString() });
+                    const r = LIVE_RESIDENTS.find(x => x._uuid === row.residentId);
+                    const first = r?.name?.split(" ")[0] || "there";
+                    await notifyResident(
+                      "Your income certification was approved",
+                      `<p>Hi ${first},</p><p>Good news — your income certification for Unit ${row.unit} has been <strong>approved</strong>. No further action needed.</p><p>You can view the details any time in BCLT HomeBase.</p>`,
+                      `BCLT: Your income certification has been approved. Thanks!`
+                    );
+                    showSuccess("Approved — resident notified");
+                    const refreshed = await fetchIncomeCertifications();
+                    setCerts(refreshed || []);
+                  } catch (err) { showSuccess("Error: " + err.message); }
+                }}>✓ Approve</button>
+                <button title="Request more info" style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px", color: T.warn }} onClick={async () => {
+                  const reason = window.prompt("What additional info do you need from the resident?");
+                  if (!reason || !reason.trim()) return;
+                  try {
+                    await updateIncomeCertification(v, { status: "needs_info", infoRequest: reason.trim(), lastNotifiedAt: new Date().toISOString() });
+                    const r = LIVE_RESIDENTS.find(x => x._uuid === row.residentId);
+                    const first = r?.name?.split(" ")[0] || "there";
+                    await notifyResident(
+                      "Additional info needed for your income certification",
+                      `<p>Hi ${first},</p><p>BCLT needs some additional info to finish reviewing your income certification:</p><blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#555;">${reason.trim()}</blockquote><p>Please log in to BCLT HomeBase to update your certification.</p>`,
+                      `BCLT: More info needed on your income certification: ${reason.trim().slice(0, 120)}`
+                    );
+                    showSuccess("Info request sent");
+                    const refreshed = await fetchIncomeCertifications();
+                    setCerts(refreshed || []);
+                  } catch (err) { showSuccess("Error: " + err.message); }
+                }}>? More Info</button>
+                <button title="Reject" style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px", color: T.danger }} onClick={async () => {
+                  const reason = window.prompt("Reason for rejecting this certification?");
+                  if (!reason || !reason.trim()) return;
+                  try {
+                    await updateIncomeCertification(v, { status: "rejected", rejectionReason: reason.trim(), lastNotifiedAt: new Date().toISOString() });
+                    const r = LIVE_RESIDENTS.find(x => x._uuid === row.residentId);
+                    const first = r?.name?.split(" ")[0] || "there";
+                    await notifyResident(
+                      "Your income certification was rejected",
+                      `<p>Hi ${first},</p><p>Your income certification was rejected with the following reason:</p><blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#555;">${reason.trim()}</blockquote><p>Please contact BCLT management to discuss next steps.</p>`,
+                      `BCLT: Your income certification was rejected. Reason: ${reason.trim().slice(0, 120)}`
+                    );
+                    showSuccess("Rejected — resident notified");
+                    const refreshed = await fetchIncomeCertifications();
+                    setCerts(refreshed || []);
+                  } catch (err) { showSuccess("Error: " + err.message); }
+                }}>✕ Reject</button>
+              </div>
+            );
+          } }] : []),
         ]} data={filteredCerts} />
       )}
     </div>

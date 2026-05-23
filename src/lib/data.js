@@ -1082,6 +1082,10 @@ export async function fetchIncomeCertifications(propertyFilter) {
     residentSignature: c.resident_signature, residentSignedAt: c.resident_signed_at,
     adminSignature: c.admin_signature, adminSignedAt: c.admin_signed_at, adminSignerName: c.admin_signer_name,
     demographics: c.demographics, createdAt: c.created_at, updatedAt: c.updated_at,
+    deadline: c.deadline || null,
+    rejectionReason: c.rejection_reason || null,
+    infoRequest: c.info_request || null,
+    lastNotifiedAt: c.last_notified_at || null,
   }));
 }
 
@@ -1089,7 +1093,8 @@ export async function insertIncomeCertification(cert) {
   const { data, error } = await supabase.from('income_certifications').insert({
     resident_id: cert.residentId, cert_type: cert.certType || 'annual',
     effective_date: cert.effectiveDate || new Date().toISOString().slice(0, 10),
-    status: 'draft', steps_completed: cert.stepsCompleted || {},
+    deadline: cert.deadline || null,
+    status: cert.status || 'draft', steps_completed: cert.stepsCompleted || {},
   }).select().single();
   if (error) throw error;
   return data;
@@ -1123,6 +1128,10 @@ export async function updateIncomeCertification(id, changes) {
   if (changes.adminSignedAt !== undefined) mapped.admin_signed_at = changes.adminSignedAt;
   if (changes.adminSignerName !== undefined) mapped.admin_signer_name = changes.adminSignerName;
   if (changes.demographics !== undefined) mapped.demographics = changes.demographics;
+  if (changes.deadline !== undefined) mapped.deadline = changes.deadline || null;
+  if (changes.rejectionReason !== undefined) mapped.rejection_reason = changes.rejectionReason || null;
+  if (changes.infoRequest !== undefined) mapped.info_request = changes.infoRequest || null;
+  if (changes.lastNotifiedAt !== undefined) mapped.last_notified_at = changes.lastNotifiedAt || null;
   mapped.updated_at = new Date().toISOString();
   const { error } = await supabase.from('income_certifications').update(mapped).eq('id', id);
   if (error) throw error;
