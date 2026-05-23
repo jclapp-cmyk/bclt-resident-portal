@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -4051,7 +4051,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 };
 
 // --- INSPECTIONS (All Roles — Unified) ---
-const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [], savedChecklists = [], onSaveChecklist, onUpdateChecklist, staffMembers = [], onScheduleReg, onUpdateReg, onDeleteReg }) => {
+const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [], savedChecklists = [], onSaveChecklist, onUpdateChecklist, staffMembers = [], onScheduleReg, onUpdateReg, onDeleteReg, inspectionTemplates = [], onSaveTemplate, onUpdateTemplate, onDeleteTemplate }) => {
   const inspectorOptions = useMemo(() => {
     const list = (staffMembers || [])
       .filter(s => s && s.active !== false && (s.role === "admin" || s.role === "maintenance" || s.role === "property_manager"))
@@ -4082,6 +4082,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   const [activeChecklist, setActiveChecklist] = useState(null);
   const [viewingChecklist, setViewingChecklist] = useState(null);
   const [editingChecklist, setEditingChecklist] = useState(false); // true when editing a completed checklist
+  const [templateEditor, setTemplateEditor] = useState(null); // { code, name, description, frequency, scoring, sections } or null
 
   const unitData = isResident ? unitInspections.filter(i => i.unit === (rc?.unit || "")) : unitInspections;
   const regInsp = selectedProperty && selectedProperty !== "all"
@@ -4519,7 +4520,23 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
               items: c.checklist.map(text => ({ text, type: "yesNoNa" })),
             }],
           }));
-        const ALL_PROCEDURES = [...CATEGORY_PROCEDURES, RV_PROCEDURE, QUARTERLY_PROCEDURE];
+        // Custom templates stored in the inspection_templates table —
+        // editable in the UI (modal below). Filtered to active=true so
+        // disabled ones disappear from the picker but stay in the DB.
+        const CUSTOM_TEMPLATES = (inspectionTemplates || [])
+          .filter(t => t.active !== false)
+          .map(t => ({
+            id: t.id,
+            code: t.id,
+            _uuid: t._uuid,
+            name: t.name,
+            description: t.description || '',
+            frequency: t.frequency || '',
+            scoring: t.scoring || 'yesNoNa',
+            sections: t.sections || [],
+            custom: true,
+          }));
+        const ALL_PROCEDURES = [...CUSTOM_TEMPLATES, ...CATEGORY_PROCEDURES, RV_PROCEDURE, QUARTERLY_PROCEDURE];
         const lookupId = activeChecklist?.procedureId || viewingChecklist?.procedureId;
         const currentProc = lookupId
           ? ALL_PROCEDURES.find(p => p.id === lookupId) || RV_PROCEDURE
@@ -4585,20 +4602,26 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 )}
 
                 {/* Available templates */}
-                <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "1px", margin: "20px 0 10px" }}>Available Templates ({ALL_PROCEDURES.length})</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "20px 0 10px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "1px" }}>Available Templates ({ALL_PROCEDURES.length})</div>
+                  {isAdmin && onSaveTemplate && (
+                    <button style={{ ...s.btn(), fontSize: 13 }} onClick={() => setTemplateEditor({ code: null, name: "", description: "", frequency: "Annual", scoring: "yesNoNa", sections: [{ name: "Items", items: [{ text: "", type: "yesNoNa" }] }] })}>+ Create Template</button>
+                  )}
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 12 }}>
                   {ALL_PROCEDURES.map(proc => {
                     const procItems = proc.sections.reduce((sum, sec) => sum + sec.items.length, 0);
                     const freq = proc.frequency || (proc.id.includes("QPM") ? "Quarterly" : "Annual");
+                    const isCustom = !!proc.custom;
                     return (
-                      <div key={proc.id} style={{ ...s.card, marginBottom: 0 }}>
+                      <div key={proc.id} style={{ ...s.card, marginBottom: 0, borderLeft: isCustom ? `3px solid ${T.accent}` : undefined }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 8 }}>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 700, fontSize: 15 }}>{proc.name}</div>
                             {proc.description && <div style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>{proc.description}</div>}
                             {proc.nameSp && <div style={{ color: T.dim, fontSize: 12, fontStyle: "italic", marginTop: 2 }}>{proc.nameSp}</div>}
                           </div>
-                          <span style={s.badge(T.successDim, T.success)}>Active</span>
+                          <span style={s.badge(isCustom ? T.accentDim : T.successDim, isCustom ? T.accent : T.success)}>{isCustom ? "Custom" : "Active"}</span>
                         </div>
                         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 12, marginBottom: 10 }}>
                           <span style={{ color: T.dim }}>{procItems} items</span>
@@ -4606,11 +4629,22 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                           {proc.scoring && <span style={{ color: T.dim }}>· {proc.scoring}</span>}
                         </div>
                         {isAdmin && (
-                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => {
-                            // Pre-fill the start form and scroll up
-                            const procSel = document.getElementById("proc-type");
-                            if (procSel) { procSel.value = proc.id; procSel.scrollIntoView({ behavior: "smooth", block: "center" }); }
-                          }}>Use this template</button>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => {
+                              const procSel = document.getElementById("proc-type");
+                              if (procSel) { procSel.value = proc.id; procSel.scrollIntoView({ behavior: "smooth", block: "center" }); }
+                            }}>Use this template</button>
+                            {isCustom && onUpdateTemplate && (
+                              <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => setTemplateEditor({ code: proc.code, name: proc.name, description: proc.description || "", frequency: proc.frequency || "", scoring: proc.scoring || "yesNoNa", sections: JSON.parse(JSON.stringify(proc.sections || [])) })}>Edit</button>
+                            )}
+                            {isCustom && onDeleteTemplate && (
+                              <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", color: T.danger }} onClick={async () => {
+                                if (!confirm(`Delete the "${proc.name}" template? Completed checklists using it will keep their data.`)) return;
+                                try { await onDeleteTemplate(proc.code); showSuccess("Template deleted"); }
+                                catch (err) { showSuccess("Error: " + err.message); }
+                              }}>🗑️</button>
+                            )}
+                          </div>
                         )}
                       </div>
                     );
@@ -5152,6 +5186,95 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
       {/* My Assigned — maintenance only */}
       {tab === "My Assigned" && role === "maintenance" && (
         <EmptyState icon="📋" text="No inspections currently assigned. Check back soon!" />
+      )}
+
+      {/* ────────────────────── TEMPLATE EDITOR MODAL ────────────────────── */}
+      {templateEditor && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setTemplateEditor(null)}>
+          <div style={{ ...s.card, maxWidth: 720, width: "100%", maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <h2 style={{ margin: 0, fontSize: 18 }}>{templateEditor.code ? "Edit Template" : "New Template"}</h2>
+              <button style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: T.text }} onClick={() => setTemplateEditor(null)}>×</button>
+            </div>
+
+            <div style={{ ...s.grid("1fr 1fr", mobile), gap: 12, marginBottom: 14 }}>
+              <div>
+                <label style={s.label}>Name *</label>
+                <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. Quarterly Fire Safety Walk" value={templateEditor.name} onChange={e => setTemplateEditor(p => ({ ...p, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={s.label}>Frequency</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={templateEditor.frequency} onChange={e => setTemplateEditor(p => ({ ...p, frequency: e.target.value }))}>
+                  {["Annual", "Semi-annual", "Quarterly", "Monthly", "Move-in", "Move-out", "As needed", "Before scheduled inspection", "Seasonal", "One-time"].map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <div style={{ gridColumn: mobile ? "1" : "1 / -1" }}>
+                <label style={s.label}>Description</label>
+                <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="Brief description shown on the template card" value={templateEditor.description} onChange={e => setTemplateEditor(p => ({ ...p, description: e.target.value }))} />
+              </div>
+              <div>
+                <label style={s.label}>Scoring</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={templateEditor.scoring} onChange={e => setTemplateEditor(p => ({ ...p, scoring: e.target.value }))}>
+                  <option value="yesNoNa">Yes / No / N/A</option>
+                  <option value="pass-fail">Pass / Fail</option>
+                  <option value="scored">Scored</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, marginTop: 8 }}>Sections</div>
+            {templateEditor.sections.map((sec, sIdx) => (
+              <div key={sIdx} style={{ border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 12, marginBottom: 10 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <input style={{ ...s.mInput(mobile), flex: 1, fontWeight: 600 }} placeholder={`Section ${sIdx + 1} name`} value={sec.name} onChange={e => setTemplateEditor(p => ({ ...p, sections: p.sections.map((s2, i) => i === sIdx ? { ...s2, name: e.target.value } : s2) }))} />
+                  <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 12, padding: "4px 8px" }} onClick={() => setTemplateEditor(p => ({ ...p, sections: p.sections.filter((_, i) => i !== sIdx) }))}>Remove section</button>
+                </div>
+                {sec.items.map((it, iIdx) => (
+                  <div key={iIdx} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                    <input style={{ ...s.mInput(mobile), flex: 1 }} placeholder={`Item ${iIdx + 1}`} value={it.text} onChange={e => setTemplateEditor(p => ({ ...p, sections: p.sections.map((s2, si) => si === sIdx ? { ...s2, items: s2.items.map((i2, ii) => ii === iIdx ? { ...i2, text: e.target.value } : i2) } : s2) }))} />
+                    <select style={{ ...s.mSelect(mobile), width: 130 }} value={it.type} onChange={e => setTemplateEditor(p => ({ ...p, sections: p.sections.map((s2, si) => si === sIdx ? { ...s2, items: s2.items.map((i2, ii) => ii === iIdx ? { ...i2, type: e.target.value } : i2) } : s2) }))}>
+                      <option value="yesNoNa">Yes/No/N/A</option>
+                      <option value="text">Text</option>
+                      <option value="photo">Photo</option>
+                    </select>
+                    <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 14, padding: "4px 8px" }} onClick={() => setTemplateEditor(p => ({ ...p, sections: p.sections.map((s2, si) => si === sIdx ? { ...s2, items: s2.items.filter((_, ii) => ii !== iIdx) } : s2) }))}>✕</button>
+                  </div>
+                ))}
+                <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", marginTop: 4 }} onClick={() => setTemplateEditor(p => ({ ...p, sections: p.sections.map((s2, si) => si === sIdx ? { ...s2, items: [...s2.items, { text: "", type: "yesNoNa" }] } : s2) }))}>+ Add item</button>
+              </div>
+            ))}
+            <button style={{ ...s.btn("ghost"), fontSize: 13, marginBottom: 16 }} onClick={() => setTemplateEditor(p => ({ ...p, sections: [...p.sections, { name: `Section ${p.sections.length + 1}`, items: [{ text: "", type: "yesNoNa" }] }] }))}>+ Add section</button>
+
+            <div style={{ display: "flex", gap: 10, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+              <button disabled={!templateEditor.name.trim()} style={s.btn()} onClick={async () => {
+                try {
+                  // Clean up empty items / sections before saving
+                  const cleanSections = templateEditor.sections
+                    .map(sec => ({ ...sec, items: sec.items.filter(it => it.text.trim()) }))
+                    .filter(sec => sec.items.length > 0);
+                  if (cleanSections.length === 0) { showSuccess("Add at least one item before saving."); return; }
+                  const payload = {
+                    name: templateEditor.name.trim(),
+                    description: templateEditor.description.trim(),
+                    frequency: templateEditor.frequency,
+                    scoring: templateEditor.scoring,
+                    sections: cleanSections,
+                    active: true,
+                  };
+                  if (templateEditor.code) {
+                    await onUpdateTemplate(templateEditor.code, payload);
+                    showSuccess("Template updated");
+                  } else {
+                    await onSaveTemplate(payload);
+                    showSuccess("Template created");
+                  }
+                  setTemplateEditor(null);
+                } catch (err) { showSuccess("Error: " + (err.message || "Save failed")); }
+              }}>{templateEditor.code ? "Save Changes" : "Create Template"}</button>
+              <button style={s.btn("ghost")} onClick={() => setTemplateEditor(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -7961,6 +8084,11 @@ export default function App() {
   const [unitInspections, setUnitInspections] = useState([]);
   const [allUnits, setAllUnits] = useState([]);
   const [savedChecklists, setSavedChecklists] = useState([]);
+  const [inspectionTemplates, setInspectionTemplates] = useState([]);
+  // Load custom templates once after auth — fetchInspectionTemplates returns
+  // [] gracefully if the table doesn't exist yet, so the app keeps working
+  // even before the SQL migration is run.
+  useEffect(() => { if (profile) fetchInspectionTemplates().then(t => setInspectionTemplates(t || [])).catch(() => {}); }, [profile]);
   const [staffMembers, setStaffMembers] = useState([]);
   const [emergencyContacts, setEmergencyContacts] = useState({});
   const [adminNotes, setAdminNotes] = useState({});
@@ -8413,7 +8541,7 @@ export default function App() {
         case "documents": return <AdminDocuments leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} />;
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} vendors={vendors} profile={profile} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
-        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} onScheduleReg={scheduleRegInspection} onUpdateReg={updateRegInspectionN} onDeleteReg={deleteRegInspectionN} />;
+        case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} onScheduleReg={scheduleRegInspection} onUpdateReg={updateRegInspectionN} onDeleteReg={deleteRegInspectionN} inspectionTemplates={inspectionTemplates} onSaveTemplate={async (tpl) => { const saved = await insertInspectionTemplate(tpl); setInspectionTemplates(prev => [saved, ...prev]); return saved; }} onUpdateTemplate={async (code, changes) => { await updateInspectionTemplate(code, changes); setInspectionTemplates(prev => prev.map(t => t.id === code ? { ...t, ...changes } : t)); }} onDeleteTemplate={async (code) => { await deleteInspectionTemplate(code); setInspectionTemplates(prev => prev.filter(t => t.id !== code)); }} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
@@ -8428,7 +8556,7 @@ export default function App() {
       switch (page) {
         case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
-        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} />;
+        case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} />;

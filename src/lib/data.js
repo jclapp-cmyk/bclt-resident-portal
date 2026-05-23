@@ -675,6 +675,60 @@ export async function deleteRegInspection(code) {
   if (error) throw error;
 }
 
+// ── INSPECTION TEMPLATES (custom checklists) ──
+
+export async function fetchInspectionTemplates() {
+  const { data, error } = await supabase
+    .from('inspection_templates')
+    .select('*')
+    .order('name');
+  if (error) {
+    // Table may not exist yet — return empty list rather than crashing the app
+    console.warn('fetchInspectionTemplates:', error.message);
+    return [];
+  }
+  return (data || []).map(t => ({
+    id: t.code, _uuid: t.id, name: t.name, description: t.description || '',
+    frequency: t.frequency || '', scoring: t.scoring || 'yesNoNa',
+    sections: Array.isArray(t.sections) ? t.sections : (typeof t.sections === 'string' ? (() => { try { return JSON.parse(t.sections); } catch { return []; } })() : []),
+    active: t.active !== false,
+    createdAt: t.created_at,
+  }));
+}
+
+export async function insertInspectionTemplate(tpl) {
+  const code = tpl.code || `TPL-${Date.now().toString(36)}`;
+  const { data, error } = await supabase.from('inspection_templates').insert({
+    code,
+    name: tpl.name,
+    description: tpl.description || null,
+    frequency: tpl.frequency || null,
+    scoring: tpl.scoring || 'yesNoNa',
+    sections: tpl.sections || [],
+    active: tpl.active !== false,
+  }).select().single();
+  if (error) throw error;
+  return { ...tpl, id: code, _uuid: data.id };
+}
+
+export async function updateInspectionTemplate(code, changes) {
+  const mapped = {};
+  if (changes.name !== undefined) mapped.name = changes.name;
+  if (changes.description !== undefined) mapped.description = changes.description;
+  if (changes.frequency !== undefined) mapped.frequency = changes.frequency;
+  if (changes.scoring !== undefined) mapped.scoring = changes.scoring;
+  if (changes.sections !== undefined) mapped.sections = changes.sections;
+  if (changes.active !== undefined) mapped.active = changes.active;
+  mapped.updated_at = new Date().toISOString();
+  const { error } = await supabase.from('inspection_templates').update(mapped).eq('code', code);
+  if (error) throw error;
+}
+
+export async function deleteInspectionTemplate(code) {
+  const { error } = await supabase.from('inspection_templates').delete().eq('code', code);
+  if (error) throw error;
+}
+
 // ── MAINTENANCE REQUESTS ──
 
 export async function fetchMaintenanceRequests() {
