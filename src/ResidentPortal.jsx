@@ -4501,7 +4501,25 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
           ],
         };
 
-        const ALL_PROCEDURES = [RV_PROCEDURE, QUARTERLY_PROCEDURE];
+        // Auto-generate fillable templates from each active category — the
+        // checklist items become yes/no/N/A line items so staff can run
+        // them on a real inspection (not just view in the Categories tab).
+        const CATEGORY_PROCEDURES = DEFAULT_UNIT_INSPECTION_CATEGORIES
+          .filter(c => c.active)
+          .map(c => ({
+            id: `PROC-CAT-${c.id}`,
+            name: `${c.name} Checklist`,
+            nameSp: "",
+            year: new Date().getFullYear(),
+            frequency: c.frequency,
+            scoring: c.scoring,
+            description: c.description,
+            sections: [{
+              name: c.name,
+              items: c.checklist.map(text => ({ text, type: "yesNoNa" })),
+            }],
+          }));
+        const ALL_PROCEDURES = [...CATEGORY_PROCEDURES, RV_PROCEDURE, QUARTERLY_PROCEDURE];
         const lookupId = activeChecklist?.procedureId || viewingChecklist?.procedureId;
         const currentProc = lookupId
           ? ALL_PROCEDURES.find(p => p.id === lookupId) || RV_PROCEDURE
@@ -4566,26 +4584,38 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                   </div>
                 )}
 
-                {/* Procedure overview cards */}
-                {ALL_PROCEDURES.map(proc => {
-                  const procItems = proc.sections.reduce((sum, sec) => sum + sec.items.length, 0);
-                  return (
-                    <div key={proc.id} style={{ ...s.card, marginBottom: 16 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: 17 }}>{proc.name}</div>
-                          <div style={{ color: T.muted, fontSize: 13, fontStyle: "italic" }}>{proc.nameSp}</div>
+                {/* Available templates */}
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "1px", margin: "20px 0 10px" }}>Available Templates ({ALL_PROCEDURES.length})</div>
+                <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 12 }}>
+                  {ALL_PROCEDURES.map(proc => {
+                    const procItems = proc.sections.reduce((sum, sec) => sum + sec.items.length, 0);
+                    const freq = proc.frequency || (proc.id.includes("QPM") ? "Quarterly" : "Annual");
+                    return (
+                      <div key={proc.id} style={{ ...s.card, marginBottom: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 8 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 15 }}>{proc.name}</div>
+                            {proc.description && <div style={{ color: T.muted, fontSize: 12, marginTop: 2 }}>{proc.description}</div>}
+                            {proc.nameSp && <div style={{ color: T.dim, fontSize: 12, fontStyle: "italic", marginTop: 2 }}>{proc.nameSp}</div>}
+                          </div>
+                          <span style={s.badge(T.successDim, T.success)}>Active</span>
                         </div>
-                        <span style={s.badge(T.successDim, T.success)}>Active</span>
+                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 12, marginBottom: 10 }}>
+                          <span style={{ color: T.dim }}>{procItems} items</span>
+                          <span style={{ color: T.dim }}>· {freq}</span>
+                          {proc.scoring && <span style={{ color: T.dim }}>· {proc.scoring}</span>}
+                        </div>
+                        {isAdmin && (
+                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => {
+                            // Pre-fill the start form and scroll up
+                            const procSel = document.getElementById("proc-type");
+                            if (procSel) { procSel.value = proc.id; procSel.scrollIntoView({ behavior: "smooth", block: "center" }); }
+                          }}>Use this template</button>
+                        )}
                       </div>
-                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8, fontSize: 13 }}>
-                        <span style={{ color: T.dim }}>Sections: <strong style={{ color: T.text }}>{proc.sections.length}</strong></span>
-                        <span style={{ color: T.dim }}>Total Items: <strong style={{ color: T.text }}>{procItems}</strong></span>
-                        <span style={{ color: T.dim }}>Frequency: <strong style={{ color: T.text }}>{proc.id.includes("QPM") ? "Quarterly" : "Annual"}</strong></span>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
 
                 {/* Completed checklists history */}
                 {savedChecklists.length > 0 && (
