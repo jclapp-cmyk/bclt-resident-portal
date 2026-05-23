@@ -5,6 +5,28 @@ import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fet
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
 
+// HEIC files (default iPhone photo format) don't render in <img> on
+// Chrome/Firefox/Edge — only Safari. Convert client-side to JPEG so
+// uploaded photos display reliably anywhere admins might view them.
+// Lazy-loaded so the ~700KB library only ships when needed.
+async function convertHeicIfNeeded(file) {
+  if (!file) return file;
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+  const isHeic = type.includes("heic") || type.includes("heif") || name.endsWith(".heic") || name.endsWith(".heif");
+  if (!isHeic) return file;
+  try {
+    const { default: heic2any } = await import("heic2any");
+    const out = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+    const blob = Array.isArray(out) ? out[0] : out;
+    const newName = name.replace(/\.heic$|\.heif$/i, ".jpg");
+    return new File([blob], newName, { type: "image/jpeg", lastModified: Date.now() });
+  } catch (err) {
+    console.warn("HEIC conversion failed, uploading original:", err);
+    return file;
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════
    BCLT RESIDENT PORTAL — Affordable Housing / Section 8
    Full interactive portal with Supabase backend
@@ -989,7 +1011,13 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
 
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files || []);
-    const imageFiles = files.filter(f => f.type.startsWith("image/"));
+    // Accept anything tagged as an image OR an iPhone HEIC/HEIF (some
+    // browsers don't tag those with image/*)
+    const imageFiles = files.filter(f => {
+      const t = (f.type || "").toLowerCase();
+      const n = (f.name || "").toLowerCase();
+      return t.startsWith("image/") || t.includes("heic") || t.includes("heif") || n.endsWith(".heic") || n.endsWith(".heif");
+    });
     setPhotoFiles(prev => [...prev, ...imageFiles].slice(0, 5));
   };
 
@@ -1001,12 +1029,14 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
     if (!formData.description.trim()) return;
     setUploading(true);
     const uploadedPhotos = [];
-    for (const file of photoFiles) {
+    for (const original of photoFiles) {
       try {
+        // Convert iPhone HEIC photos to JPEG so admin browsers can render them
+        const file = await convertHeicIfNeeded(original);
         const photo = await uploadMaintenancePhoto(file, rc?.unit || 'unknown');
         if (photo?.url) uploadedPhotos.push({ url: photo.url, name: photo.name, path: photo.path });
       } catch (err) {
-        console.warn(`Photo ${file.name} upload failed:`, err);
+        console.warn(`Photo ${original.name} upload failed:`, err);
       }
     }
     const newReq = {
@@ -1089,7 +1119,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
           <div style={{ marginBottom: 14 }}><label style={s.label}>Permission to Enter</label><select style={{ ...s.select, width: "100%" }} value={formData.permission} onChange={e => setFormData(p => ({ ...p, permission: e.target.value }))}><option>Yes, enter anytime</option><option>Contact me first</option><option>Only when I'm home</option></select></div>
           <div style={{ marginBottom: 14 }}>
             <label style={s.label}>Photos (optional, max 5)</label>
-            <input ref={photoInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handlePhotoSelect} />
+            <input ref={photoInputRef} type="file" accept="image/*,.heic,.heif" multiple style={{ display: "none" }} onChange={handlePhotoSelect} />
             <div onClick={() => photoInputRef.current?.click()} onDragOver={e => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => { e.preventDefault(); e.stopPropagation(); handlePhotoSelect({ target: { files: e.dataTransfer.files } }); }} style={{ border: `2px dashed ${T.border}`, borderRadius: T.radiusSm, padding: 24, textAlign: "center", color: T.dim, cursor: "pointer" }}>
               {photoFiles.length === 0 ? "Click or drag to upload photos" : `${photoFiles.length} photo${photoFiles.length > 1 ? "s" : ""} selected — click to add more`}
             </div>
@@ -6071,11 +6101,13 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               const recipientLabels = { management: "BCLT Management", property_manager: "Property Manager", maintenance: "Maintenance Team", rent: "Rent / Billing" };
               const recipientLabel = recipientLabels[recipientKey] || "BCLT Management";
               const taggedSubject = `[${recipientLabel}] ${composeData.subject.trim()}`;
-              // Upload attachments (if any)
+              // Upload attachments (if any). HEIC images get converted to JPEG first.
               const uploaded = [];
-              for (const f of residentAttachments) {
-                try { uploaded.push(await uploadMessageAttachment(f, threadId)); }
-                catch (err) { console.warn(`Attachment ${f.name} failed:`, err); }
+              for (const original of residentAttachments) {
+                try {
+                  const f = await convertHeicIfNeeded(original);
+                  uploaded.push(await uploadMessageAttachment(f, threadId));
+                } catch (err) { console.warn(`Attachment ${original.name} failed:`, err); }
               }
               const attachmentText = uploaded.length > 0
                 ? "\n\n— Attachments —\n" + uploaded.map(a => `📎 ${a.name}: ${a.url}`).join("\n")
