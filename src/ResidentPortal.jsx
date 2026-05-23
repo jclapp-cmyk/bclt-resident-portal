@@ -1974,6 +1974,19 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
         {/* STEP 2: ASSETS */}
         {step === 2 && (
           <div>
+            <div style={{ padding: 14, background: T.infoDim, borderLeft: `3px solid ${T.info}`, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, lineHeight: 1.55, color: T.text }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>💰 What counts as an asset?</div>
+              <div style={{ color: T.muted, marginBottom: 8 }}>This is where you report what you own — not just income. Please add anything that applies to your household:</div>
+              <ul style={{ margin: "0 0 8px 18px", padding: 0, color: T.text }}>
+                <li><strong>Cash accounts</strong> — checking, savings, money-market, CDs</li>
+                <li><strong>Investment accounts</strong> — brokerage, mutual funds, individual stocks/bonds</li>
+                <li><strong>Retirement accounts</strong> — 401(k), IRA, Roth IRA, pension cash value</li>
+                <li><strong>Real estate</strong> you own (other than your primary home)</li>
+                <li><strong>Life insurance</strong> with a cash value</li>
+                <li><strong>Trust funds</strong> or other holdings you can access</li>
+              </ul>
+              <div style={{ color: T.muted, fontStyle: "italic" }}>If you don't have any of these, just leave the section empty and click Next. Attach a recent statement for each asset you list.</div>
+            </div>
             {hhMembers.map(m => {
               const memberAssets = assetEntries.filter(e => e.memberId === m.id);
               return (
