@@ -8425,36 +8425,42 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
 };
 
 // --- MAINTENANCE PROFILE ---
-const MaintenanceProfile = ({ mobile }) => {
+const MaintenanceProfile = ({ mobile, profile, staffMembers = [] }) => {
   const [onDuty, setOnDuty] = useState(true);
+  // Match the logged-in user to their staff_members row by email (case-insensitive)
+  const email = (profile?.email || "").toLowerCase();
+  const staffRecord = staffMembers.find(s => (s.email || "").toLowerCase() === email) || null;
+  const name = staffRecord?.name || profile?.displayName || profile?.email || "—";
+  const role = staffRecord?.role || profile?.role || "maintenance";
+  const roleLabel = role === "admin" ? "Administrator" : role === "property_manager" ? "Property Manager" : role === "maintenance" ? "Maintenance Technician" : role;
+  const initials = name.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>My Profile</h1>
       <p style={s.sectionSub}>Staff information and availability</p>
       <div style={s.card}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-          <div style={{ width: 64, height: 64, borderRadius: "50%", background: T.accentDim, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 22, color: T.accent }}>MR</div>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: T.accentDim, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 22, color: T.accent }}>{initials}</div>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>Mike R.</div>
-            <div style={{ color: T.muted, fontSize: 14 }}>Maintenance Technician</div>
+            <div style={{ fontSize: 20, fontWeight: 700 }}>{name}</div>
+            <div style={{ color: T.muted, fontSize: 14 }}>{roleLabel}</div>
           </div>
         </div>
-        <DetailRow label="Phone" value="(415) 555-0150" />
-        <DetailRow label="Email" value="mike.r@bclt.org" />
-        <DetailRow label="Start Date" value="2020-03-15" />
-        <DetailRow label="Employee ID" value="EMP-042" />
-      </div>
-      <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Skills & Certifications</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {["Plumbing", "HVAC", "Electrical", "Appliance Repair", "EPA 608 Certified", "OSHA 10-Hour", "Lead-Safe Work Practices"].map(sk => (
-            <span key={sk} style={s.badge(T.accentDim, T.accent)}>{sk}</span>
-          ))}
-        </div>
+        <DetailRow label="Phone" value={staffRecord?.phone || "—"} />
+        <DetailRow label="Email" value={staffRecord?.email || profile?.email || "—"} />
+        {staffRecord?.propertyName && <DetailRow label="Assigned Property" value={staffRecord.propertyName} />}
+        <DetailRow label="Status" value={staffRecord?.active === false ? "Inactive" : "Active"} />
       </div>
       <div style={s.card}>
         <Toggle label="On Duty" checked={onDuty} onChange={() => setOnDuty(d => !d)} description={onDuty ? "Available for work order assignments" : "Off duty — not receiving assignments"} />
       </div>
+      {!staffRecord && (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.warn}`, background: T.warnDim }}>
+          <div style={{ fontSize: 13, color: T.text }}>
+            <strong>No staff record found for this account.</strong> Ask an admin to add you under Settings → Staff with the email <code>{profile?.email}</code> so your phone and assigned property show up here.
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -9432,7 +9438,7 @@ export default function App() {
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
-        case "profile": return <MaintenanceProfile mobile={mobile} />;
+        case "profile": return <MaintenanceProfile mobile={mobile} profile={profile} staffMembers={staffMembers} />;
         case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
         default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
       }
