@@ -1185,7 +1185,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
 const WorkOrders = ({ mobile, maintenance, onUpdate, profile, vendors = [], staffMembers = [] }) => {
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
   const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin" || s.role === "property_manager")).filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i);
-  const [woTab, setWoTab] = useState("todo");
+  const [topTab, setTopTab] = useState("workorders");
   const [assigneeFilter, setAssigneeFilter] = useState("mine");
   const [selected, setSelected] = useState(null);
   const [success, showSuccess] = useSuccess();
@@ -1197,7 +1197,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, profile, vendors = [], staf
   }, [maintenance, selected]);
 
   const todoRows = maintenance.filter(m => m.status === "todo" || m.status === "in-progress");
-  const doneRows = maintenance.filter(m => m.status === "done");
+  const archiveRows = maintenance.filter(m => m.status === "done" || m.status === "rejected" || m.status === "completed");
   const applyAssignee = (rows) => assigneeFilter === "mine" ? rows.filter(r => r.assignedTo === staffName) : rows;
 
   const issueCol = {
@@ -1212,19 +1212,30 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, profile, vendors = [], staf
   };
 
   const propertyOptions = [...new Set(maintenance.map(m => propertyDisplayName(m.propertyId)))];
-  const cols = [
+  const workOrderCols = [
     issueCol,
     { key: "residentName", label: "Requester", render: (v, row) => v || row.requesterName || "—" },
     { key: "propertyId", label: "Property", render: v => propertyDisplayName(v), filterOptions: propertyOptions, filterValue: row => propertyDisplayName(row.propertyId) },
     { key: "unit", label: "Unit" },
     { key: "category", label: "Category", filterOptions: [...new Set(maintenance.map(m => m.category))] },
     { key: "priority", label: "Priority", render: v => <Badge status={v} type="priority" />, filterOptions: ["critical", "urgent", "routine"], filterValue: row => row.priority },
-    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: woTab === "todo" ? ["todo", "in-progress"] : ["done"], filterValue: row => row.status },
+    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["todo", "in-progress"], filterValue: row => row.status },
     { key: "vendorId", label: "Vendor", render: v => vendors.find(x => x.id === v)?.company || "—", filterOptions: [...new Set(vendors.map(v => v.company))], filterValue: row => vendors.find(x => x.id === row.vendorId)?.company || "" },
     { key: "projectedComplete", label: "Projected", render: v => v || "—" },
   ];
+  const archiveCols = [
+    issueCol,
+    { key: "residentName", label: "Requester", render: (v, row) => v || row.requesterName || "—" },
+    { key: "propertyId", label: "Property", render: v => propertyDisplayName(v), filterOptions: propertyOptions, filterValue: row => propertyDisplayName(row.propertyId) },
+    { key: "unit", label: "Unit" },
+    { key: "category", label: "Category", filterOptions: [...new Set(archiveRows.map(m => m.category))] },
+    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["done", "rejected", "completed"], filterValue: row => row.status },
+    { key: "assignedTo", label: "Worked By", render: v => v || <span style={{ color: T.dim }}>—</span> },
+    { key: "completedDate", label: "Closed", render: (v, row) => v || row.convertedAt?.slice(0, 10) || "—" },
+  ];
 
-  const currentRows = applyAssignee(woTab === "todo" ? todoRows : doneRows);
+  const currentRows = topTab === "archive" ? applyAssignee(archiveRows) : applyAssignee(todoRows);
+  const currentCols = topTab === "archive" ? archiveCols : workOrderCols;
 
   return (
     <div>
@@ -1233,26 +1244,29 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, profile, vendors = [], staf
         <ExportButton mobile={mobile} onClick={() => generateCSV([
           { label: "Issue", key: "description" }, { label: "Requester", key: "residentName", exportValue: r => r.residentName || r.requesterName || "" },
           { label: "Property", key: "propertyId", exportValue: r => propertyDisplayName(r.propertyId) }, { label: "Unit", key: "unit" },
-          { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" },
+          { label: "Category", key: "category" }, { label: "Status", key: "status" },
           { label: "Vendor", key: "vendorId", exportValue: r => vendors.find(v => v.id === r.vendorId)?.company || "" },
-          { label: "Projected", key: "projectedComplete" }, { label: "ID", key: "id" },
-        ], currentRows, `work_orders_${woTab}`)} />
+          { label: "Projected", key: "projectedComplete" }, { label: "Closed", key: "completedDate" }, { label: "ID", key: "id" },
+        ], currentRows, topTab === "archive" ? "work_orders_archive" : "work_orders")} />
       </div>
       <SuccessMessage message={success} />
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button style={s.btn(woTab === "todo" ? "primary" : "ghost")} onClick={() => setWoTab("todo")}>To Do ({applyAssignee(todoRows).length})</button>
-          <button style={s.btn(woTab === "done" ? "primary" : "ghost")} onClick={() => setWoTab("done")}>Done ({applyAssignee(doneRows).length})</button>
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button style={s.btn(assigneeFilter === "mine" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("mine")}>My Orders</button>
-          <button style={s.btn(assigneeFilter === "all" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("all")}>All</button>
-        </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
+        {[
+          ["workorders", `🔧 Work Orders (${applyAssignee(todoRows).length})`],
+          ["archive", `📦 Archive (${applyAssignee(archiveRows).length})`],
+        ].map(([k, label]) => (
+          <button key={k} onClick={() => setTopTab(k)} style={{ background: "transparent", border: "none", padding: "10px 14px", fontWeight: 600, cursor: "pointer", fontSize: 14, borderBottom: topTab === k ? `2px solid ${T.accent}` : "2px solid transparent", color: topTab === k ? T.accent : T.text }}>{label}</button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, justifyContent: "flex-end" }}>
+        <button style={s.btn(assigneeFilter === "mine" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("mine")}>My Orders</button>
+        <button style={s.btn(assigneeFilter === "all" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("all")}>All</button>
       </div>
 
       <div style={s.card}>
-        <SortableTable mobile={mobile} columns={cols} data={currentRows} onRowClick={setSelected} />
+        <SortableTable mobile={mobile} columns={currentCols} data={currentRows} onRowClick={setSelected} />
       </div>
 
       {selected && (
@@ -7013,7 +7027,6 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
   const isMaintStaff = !!(staffName && maintStaff.some(m => m.name === staffName));
 
   const [topTab, setTopTab] = useState("intake");
-  const [woTab, setWoTab] = useState("todo");
   const [selected, setSelected] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [assigneeFilter, setAssigneeFilter] = useState(isMaintStaff ? "mine" : "all");
@@ -7032,10 +7045,10 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
     if (!pendingOpenId) return;
     const row = maintenance.find(m => m.id === pendingOpenId);
     if (row) {
-      // Switch to whichever tab makes the row visible
+      // Switch to whichever top tab makes the row visible
       const isIntake = row.status === "new" || row.status === "needs-info";
-      setTopTab(isIntake ? "intake" : "workorders");
-      if (!isIntake) setWoTab(row.status === "done" || row.status === "rejected" ? "done" : "todo");
+      const isArchive = row.status === "done" || row.status === "rejected";
+      setTopTab(isIntake ? "intake" : isArchive ? "archive" : "workorders");
       setSelected(row);
     }
     if (onClearPendingOpen) onClearPendingOpen();
@@ -7043,7 +7056,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
 
   const intakeRows = maintenance.filter(m => m.status === "new" || m.status === "needs-info");
   const todoRows = maintenance.filter(m => m.status === "todo" || m.status === "in-progress");
-  const doneRows = maintenance.filter(m => m.status === "done" || m.status === "rejected");
+  const archiveRows = maintenance.filter(m => m.status === "done" || m.status === "rejected" || m.status === "completed");
 
   const applyAssignee = (rows) => assigneeFilter === "mine" && staffName ? rows.filter(r => r.assignedTo === staffName) : rows;
 
@@ -7071,7 +7084,6 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
     { key: "submitted", label: "Submitted" },
   ];
 
-  const woStatusOptions = woTab === "todo" ? ["todo", "in-progress"] : ["done", "rejected"];
   const workOrderCols = [
     issueCol,
     { key: "residentName", label: "Requester", render: (v, row) => v || row.requesterName || "—", sortValue: row => (row.residentName || row.requesterName || "").toLowerCase() },
@@ -7079,14 +7091,25 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
     { key: "unit", label: "Unit" },
     { key: "category", label: "Category", filterOptions: [...new Set(maintenance.map(m => m.category))] },
     { key: "priority", label: "Priority", render: v => <Badge status={v} type="priority" />, filterOptions: ["critical", "urgent", "routine"], filterValue: row => row.priority },
-    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: woStatusOptions, filterValue: row => row.status },
+    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["todo", "in-progress"], filterValue: row => row.status },
     { key: "assignedTo", label: "Assignee", render: v => v || <span style={{ color: T.danger }}>Unassigned</span>, filterValue: row => row.assignedTo || "Unassigned" },
     { key: "vendorId", label: "Vendor", render: v => vendors.find(x => x.id === v)?.company || "—", filterOptions: [...new Set(vendors.map(v => v.company))], filterValue: row => vendors.find(x => x.id === row.vendorId)?.company || "" },
     { key: "projectedComplete", label: "Projected", render: v => v || "—" },
   ];
 
-  const currentRows = topTab === "intake" ? intakeRows : (woTab === "todo" ? applyAssignee(todoRows) : applyAssignee(doneRows));
-  const currentCols = topTab === "intake" ? intakeCols : workOrderCols;
+  const archiveCols = [
+    issueCol,
+    { key: "residentName", label: "Requester", render: (v, row) => v || row.requesterName || "—", sortValue: row => (row.residentName || row.requesterName || "").toLowerCase() },
+    { key: "propertyId", label: "Property", render: v => propertyDisplayName(v), filterOptions: propertyOptions, filterValue: row => propertyDisplayName(row.propertyId) },
+    { key: "unit", label: "Unit" },
+    { key: "category", label: "Category", filterOptions: [...new Set(archiveRows.map(m => m.category))] },
+    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["done", "rejected", "completed"], filterValue: row => row.status },
+    { key: "assignedTo", label: "Worked By", render: v => v || <span style={{ color: T.dim }}>—</span> },
+    { key: "completedDate", label: "Closed", render: (v, row) => v || row.convertedAt?.slice(0, 10) || "—" },
+  ];
+
+  const currentRows = topTab === "intake" ? intakeRows : topTab === "archive" ? applyAssignee(archiveRows) : applyAssignee(todoRows);
+  const currentCols = topTab === "intake" ? intakeCols : topTab === "archive" ? archiveCols : workOrderCols;
 
   const csvExport = () => {
     if (topTab === "intake") {
@@ -7095,6 +7118,14 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
         { label: "Property", key: "propertyId", exportValue: r => propertyDisplayName(r.propertyId) }, { label: "Unit", key: "unit" },
         { label: "Category", key: "category" }, { label: "Priority", key: "priority" }, { label: "Status", key: "status" }, { label: "Submitted", key: "submitted" }, { label: "ID", key: "id" },
       ], currentRows, "maintenance_intake");
+    } else if (topTab === "archive") {
+      generateCSV([
+        { label: "Issue", key: "description" }, { label: "Requester", key: "residentName", exportValue: r => r.residentName || r.requesterName || "" },
+        { label: "Property", key: "propertyId", exportValue: r => propertyDisplayName(r.propertyId) }, { label: "Unit", key: "unit" },
+        { label: "Category", key: "category" }, { label: "Status", key: "status" },
+        { label: "Worked By", key: "assignedTo", exportValue: r => r.assignedTo || "" },
+        { label: "Closed", key: "completedDate" }, { label: "ID", key: "id" },
+      ], currentRows, "maintenance_archive");
     } else {
       generateCSV([
         { label: "Issue", key: "description" }, { label: "Requester", key: "residentName", exportValue: r => r.residentName || r.requesterName || "" },
@@ -7103,7 +7134,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
         { label: "Assignee", key: "assignedTo", exportValue: r => r.assignedTo || "Unassigned" },
         { label: "Vendor", key: "vendorId", exportValue: r => vendors.find(v => v.id === r.vendorId)?.company || "" },
         { label: "Projected", key: "projectedComplete" }, { label: "Completed", key: "completedDate" }, { label: "ID", key: "id" },
-      ], currentRows, `maintenance_${woTab}`);
+      ], currentRows, "maintenance_workorders");
     }
   };
 
@@ -7180,40 +7211,43 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
 
       {/* Top tabs */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
-        {[["intake", `📥 Intake (${intakeRows.length})`], ["workorders", `🔧 Work Orders (${todoRows.length + doneRows.length})`]].map(([k, label]) => (
+        {[
+          ["intake", `📥 Intake (${intakeRows.length})`],
+          ["workorders", `🔧 Work Orders (${todoRows.length})`],
+          ["archive", `📦 Archive (${archiveRows.length})`],
+        ].map(([k, label]) => (
           <button key={k} onClick={() => setTopTab(k)} style={{ background: "transparent", border: "none", padding: "10px 14px", fontWeight: 600, cursor: "pointer", fontSize: 14, borderBottom: topTab === k ? `2px solid ${T.accent}` : "2px solid transparent", color: topTab === k ? T.accent : T.text }}>{label}</button>
         ))}
       </div>
 
-      {/* Sub-controls for work orders */}
-      {topTab === "workorders" && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button style={s.btn(woTab === "todo" ? "primary" : "ghost")} onClick={() => setWoTab("todo")}>To Do ({applyAssignee(todoRows).length})</button>
-            <button style={s.btn(woTab === "done" ? "primary" : "ghost")} onClick={() => setWoTab("done")}>Done ({applyAssignee(doneRows).length})</button>
-          </div>
-          {isMaintStaff && (
-            <div style={{ display: "flex", gap: 6 }}>
-              <button style={s.btn(assigneeFilter === "mine" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("mine")}>My Orders</button>
-              <button style={s.btn(assigneeFilter === "all" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("all")}>All</button>
-            </div>
-          )}
+      {/* Assignee filter for staff on the work orders + archive views */}
+      {(topTab === "workorders" || topTab === "archive") && isMaintStaff && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 14, justifyContent: "flex-end" }}>
+          <button style={s.btn(assigneeFilter === "mine" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("mine")}>My Orders</button>
+          <button style={s.btn(assigneeFilter === "all" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("all")}>All</button>
         </div>
       )}
 
       {/* Stats */}
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-        {topTab === "intake" ? (
+        {topTab === "intake" && (
           <>
             <StatCard label="New" value={maintenance.filter(m => m.status === "new").length} accent={T.warn} mobile={mobile} />
             <StatCard label="Needs Info" value={maintenance.filter(m => m.status === "needs-info").length} accent={T.info} mobile={mobile} />
           </>
-        ) : (
+        )}
+        {topTab === "workorders" && (
           <>
             <StatCard label="To Do" value={maintenance.filter(m => m.status === "todo").length} accent={T.warn} mobile={mobile} />
             <StatCard label="In Progress" value={maintenance.filter(m => m.status === "in-progress").length} accent={T.info} mobile={mobile} />
             <StatCard label="Unassigned" value={maintenance.filter(m => (m.status === "todo" || m.status === "in-progress") && !m.assignedTo && !m.vendorId).length} accent={T.danger} mobile={mobile} />
-            <StatCard label="Done" value={maintenance.filter(m => m.status === "done").length} accent={T.success} mobile={mobile} />
+          </>
+        )}
+        {topTab === "archive" && (
+          <>
+            <StatCard label="Done" value={maintenance.filter(m => MAINT_DONE(m)).length} accent={T.success} mobile={mobile} />
+            <StatCard label="Rejected" value={maintenance.filter(m => m.status === "rejected").length} accent={T.danger} mobile={mobile} />
+            <StatCard label="Total Archived" value={archiveRows.length} accent={T.muted} mobile={mobile} />
           </>
         )}
       </div>
