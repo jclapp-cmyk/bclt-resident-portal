@@ -78,6 +78,11 @@ export async function insertUnit(unit, propertyUuid) {
   if (unit.amiSetAside !== undefined) row.ami_set_aside = unit.amiSetAside || null;
   if (unit.appliances !== undefined) row.appliances = unit.appliances;
   if (unit.finishes !== undefined) row.finishes = unit.finishes;
+  if (unit.unitType !== undefined) {
+    row.unit_type = unit.unitType || 'apartment';
+    // keep is_rv in sync for any legacy code still reading it
+    row.is_rv = unit.unitType === 'rv';
+  }
   const { data, error } = await supabase.from('units').insert(row).select().single();
   if (error) throw error;
   // Update property total_units count
@@ -125,6 +130,10 @@ export async function updateUnit(unitUuid, changes) {
   if (changes.amiSetAside !== undefined) mapped.ami_set_aside = changes.amiSetAside || null;
   if (changes.appliances !== undefined) mapped.appliances = changes.appliances;
   if (changes.finishes !== undefined) mapped.finishes = changes.finishes;
+  if (changes.unitType !== undefined) {
+    mapped.unit_type = changes.unitType || 'apartment';
+    mapped.is_rv = changes.unitType === 'rv';
+  }
   const { error } = await supabase.from('units').update(mapped).eq('id', unitUuid);
   if (error) throw error;
 }
@@ -195,6 +204,7 @@ export async function fetchAllUnits() {
     bathrooms: u.bathrooms,
     sqft: u.sqft,
     is_rv: u.is_rv || false,
+    unit_type: u.unit_type || (u.is_rv ? 'rv' : 'apartment'),
     amiSetAside: u.ami_set_aside || null,
   }));
 }

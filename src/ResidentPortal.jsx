@@ -3658,7 +3658,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const [propForm, setPropForm] = useState({ name: "", address: "", type: "", totalUnits: "", totalSF: "" });
   const [propSuccess, showPropSuccess] = useSuccess();
   const [showAddUnit, setShowAddUnit] = useState(false);
-  const [unitForm, setUnitForm] = useState({ number: "", bedrooms: "1", bathrooms: "1", sqft: "", amiSetAside: "", isRv: false, rvInfo: {} });
+  const [unitForm, setUnitForm] = useState({ number: "", bedrooms: "1", bathrooms: "1", sqft: "", amiSetAside: "", unitType: "apartment", isRv: false, rvInfo: {} });
   const [unitSuccess, showUnitSuccess] = useSuccess();
   const [unitList, setUnitList] = useState([]);
   const [editingUnit, setEditingUnit] = useState(null);
@@ -4080,13 +4080,16 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               </select>
             </div>
           </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
-              <input type="checkbox" checked={unitForm.isRv} onChange={e => setUnitForm(u => ({ ...u, isRv: e.target.checked, rvInfo: e.target.checked ? u.rvInfo : {} }))} />
-              Is RV Unit
-            </label>
+          <div style={{ marginBottom: 14, maxWidth: 300 }}>
+            <label style={s.label}>Type</label>
+            <select style={{ ...s.mSelect(mobile), width: "100%" }} value={unitForm.unitType} onChange={e => setUnitForm(u => ({ ...u, unitType: e.target.value, isRv: e.target.value === "rv", rvInfo: e.target.value === "rv" ? u.rvInfo : {} }))}>
+              <option value="apartment">Apartment</option>
+              <option value="house">House</option>
+              <option value="sro">SRO</option>
+              <option value="rv">RV</option>
+            </select>
           </div>
-          {unitForm.isRv && (
+          {unitForm.unitType === "rv" && (
             <div style={{ background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14, marginBottom: 14 }}>
               <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13, color: T.accent }}>RV Information</div>
               <div style={{ ...s.grid("1fr 1fr 1fr 1fr", mobile), gap: 14 }}>
@@ -4108,13 +4111,13 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
           )}
           <button disabled={!unitForm.number.trim()} onClick={async () => {
             try {
-              const newUnit = await insertUnit({ ...unitForm, bedrooms: parseInt(unitForm.bedrooms) || 1, bathrooms: parseInt(unitForm.bathrooms) || 1, sqft: parseInt(unitForm.sqft) || 0, is_rv: unitForm.isRv, rv_info: unitForm.isRv ? unitForm.rvInfo : null, amiSetAside: unitForm.amiSetAside || null }, p._uuid);
+              const newUnit = await insertUnit({ ...unitForm, bedrooms: parseInt(unitForm.bedrooms) || 1, bathrooms: parseInt(unitForm.bathrooms) || 1, sqft: parseInt(unitForm.sqft) || 0, is_rv: unitForm.unitType === "rv", rv_info: unitForm.unitType === "rv" ? unitForm.rvInfo : null, amiSetAside: unitForm.amiSetAside || null, unitType: unitForm.unitType || "apartment" }, p._uuid);
               showUnitSuccess(`Unit ${unitForm.number} added!`);
               setUnitList(prev => [...prev, newUnit]);
               // Update property total_units count in global state so sidebar reflects it
               const propIdx = LIVE_PROPERTIES.findIndex(x => x._uuid === p._uuid);
               if (propIdx >= 0) LIVE_PROPERTIES[propIdx] = { ...LIVE_PROPERTIES[propIdx], totalUnits: (LIVE_PROPERTIES[propIdx].totalUnits || 0) + 1 };
-              setUnitForm({ number: "", bedrooms: "1", bathrooms: "1", sqft: "", amiSetAside: "", isRv: false, rvInfo: {} });
+              setUnitForm({ number: "", bedrooms: "1", bathrooms: "1", sqft: "", amiSetAside: "", unitType: "apartment", isRv: false, rvInfo: {} });
               setShowAddUnit(false);
               if (onDataRefresh) onDataRefresh();
             } catch (err) { showUnitSuccess("Error: " + err.message); }
@@ -4147,17 +4150,20 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                         </select>
                       </td>
                       <td style={s.td}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, cursor: "pointer" }}>
-                          <input type="checkbox" checked={editUnitForm.isRv || false} onChange={e => setEditUnitForm(f => ({ ...f, isRv: e.target.checked, rvInfo: e.target.checked ? (f.rvInfo || {}) : {} }))} />
-                          RV
-                        </label>
+                        <select style={{ ...s.select, padding: "4px 6px", fontSize: 12 }} value={editUnitForm.unitType || "apartment"} onChange={e => setEditUnitForm(f => ({ ...f, unitType: e.target.value, isRv: e.target.value === "rv", rvInfo: e.target.value === "rv" ? (f.rvInfo || {}) : {} }))}>
+                          <option value="apartment">Apartment</option>
+                          <option value="house">House</option>
+                          <option value="sro">SRO</option>
+                          <option value="rv">RV</option>
+                        </select>
                       </td>
                       <td style={s.td}>
                         <div style={{ display: "flex", gap: 4 }}>
                           <button style={{ ...s.btn("primary"), fontSize: 11, padding: "4px 8px" }} onClick={async () => {
                             try {
-                              await updateUnit(uid, { number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0, amiSetAside: editUnitForm.amiSetAside || null, is_rv: editUnitForm.isRv || false, rv_info: editUnitForm.isRv ? (editUnitForm.rvInfo || {}) : null });
-                              setUnitList(prev => prev.map(x => (x._uuid || x.id) === uid ? { ...x, number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0, ami_set_aside: editUnitForm.amiSetAside || null, is_rv: editUnitForm.isRv || false, rv_info: editUnitForm.isRv ? (editUnitForm.rvInfo || {}) : null } : x));
+                              const isRv = (editUnitForm.unitType || "apartment") === "rv";
+                              await updateUnit(uid, { number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0, amiSetAside: editUnitForm.amiSetAside || null, is_rv: isRv, rv_info: isRv ? (editUnitForm.rvInfo || {}) : null, unitType: editUnitForm.unitType || "apartment" });
+                              setUnitList(prev => prev.map(x => (x._uuid || x.id) === uid ? { ...x, number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0, ami_set_aside: editUnitForm.amiSetAside || null, is_rv: isRv, rv_info: isRv ? (editUnitForm.rvInfo || {}) : null, unit_type: editUnitForm.unitType || "apartment" } : x));
                               setEditingUnit(null);
                               showUnitSuccess("Unit updated");
                             } catch (err) { showUnitSuccess("Error: " + err.message); }
@@ -4166,7 +4172,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                         </div>
                       </td>
                     </tr>,
-                    editUnitForm.isRv && (
+                    (editUnitForm.unitType || (editUnitForm.isRv ? "rv" : "")) === "rv" && (
                       <tr key={`${uid}-rv`}>
                         <td colSpan={7} style={{ ...s.td, padding: 0 }}>
                           <div style={{ background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14, margin: "4px 8px 8px" }}>
@@ -4205,10 +4211,16 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                     <td style={s.td}>{u.bathrooms}</td>
                     <td style={s.td}>{u.sqft || "—"}</td>
                     <td style={s.td}>{u.ami_set_aside ? <span style={s.badge(T.accentDim, T.accent)}>{u.ami_set_aside}</span> : <span style={{ color: T.dim, fontSize: 12 }}>—</span>}</td>
-                    <td style={s.td}>{u.is_rv ? <span style={s.badge(T.warnDim, T.warn)}>RV</span> : <span style={{ color: T.dim, fontSize: 12 }}>Standard</span>}</td>
+                    <td style={s.td}>{(() => {
+                      const t = u.unit_type || (u.is_rv ? "rv" : "apartment");
+                      const labels = { apartment: "Apartment", house: "House", sro: "SRO", rv: "RV" };
+                      const styles = { rv: [T.warnDim, T.warn], house: [T.successDim, T.success], sro: [T.infoDim, T.info], apartment: [T.accentDim, T.accent] };
+                      const [bg, fg] = styles[t] || styles.apartment;
+                      return <span style={s.badge(bg, fg)}>{labels[t] || t}</span>;
+                    })()}</td>
                     <td style={s.td}>
                       <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), amiSetAside: u.ami_set_aside || "", isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); }}>Edit</button>
+                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), amiSetAside: u.ami_set_aside || "", unitType: u.unit_type || (u.is_rv ? "rv" : "apartment"), isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); }}>Edit</button>
                         <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px", color: T.danger }} onClick={async () => {
                           if (!confirm(`Delete unit ${u.number}?`)) return;
                           try {
@@ -4268,7 +4280,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                         {u.bedrooms}BR / {u.bathrooms}BA
                         {u.sqft ? ` · ${u.sqft} sqft` : ""}
                         {u.ami_set_aside ? ` · ${u.ami_set_aside} AMI` : ""}
-                        {u.is_rv ? " · RV" : ""}
+                        {(u.unit_type && u.unit_type !== "apartment") ? ` · ${({ rv: "RV", house: "House", sro: "SRO" })[u.unit_type] || u.unit_type}` : (u.is_rv ? " · RV" : "")}
                       </div>
                     </div>
                     <button style={s.btn("ghost")} onClick={() => setUnitDetailModal(null)}>✕</button>
@@ -4293,8 +4305,8 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                       <div><span style={{ color: T.muted }}>Bathrooms:</span> <strong>{u.bathrooms || "—"}</strong></div>
                       <div><span style={{ color: T.muted }}>Square Feet:</span> <strong>{u.sqft ? u.sqft.toLocaleString() : "—"}</strong></div>
                       <div><span style={{ color: T.muted }}>AMI Set-Aside:</span> <strong>{u.ami_set_aside || "—"}</strong></div>
-                      <div><span style={{ color: T.muted }}>Type:</span> <strong>{u.is_rv ? "RV Unit" : "Standard"}</strong></div>
-                      {u.is_rv && u.rv_info && Object.entries(u.rv_info).map(([k, v]) => (
+                      <div><span style={{ color: T.muted }}>Type:</span> <strong>{({ apartment: "Apartment", house: "House", sro: "SRO", rv: "RV" })[u.unit_type || (u.is_rv ? "rv" : "apartment")] || u.unit_type || "Apartment"}</strong></div>
+                      {(u.unit_type === "rv" || u.is_rv) && u.rv_info && Object.entries(u.rv_info).map(([k, v]) => (
                         v ? <div key={k}><span style={{ color: T.muted }}>{k}:</span> <strong>{v}</strong></div> : null
                       ))}
                     </div>
