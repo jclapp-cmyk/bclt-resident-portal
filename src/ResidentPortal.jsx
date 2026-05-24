@@ -989,6 +989,7 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile }) =
 // --- MAINTENANCE PAGE (Resident) ---
 const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) => {
   const [replyDrafts, setReplyDrafts] = useState({}); // { [requestId]: text }
+  const [replyFiles, setReplyFiles] = useState({}); // { [requestId]: File[] }
   const [replySubmitting, setReplySubmitting] = useState({});
   const [showForm, setShowForm] = useState(false);
   const [showQr, setShowQr] = useState(false);
@@ -1182,6 +1183,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
             const lastInfoReq = [...notes].reverse().find(n => /^Needs info:/i.test(n.text || ""));
             const submitting = !!replySubmitting[m.id];
             const draft = replyDrafts[m.id] || "";
+            const files = replyFiles[m.id] || [];
             return (
               <div style={{ marginTop: 12, padding: 14, background: T.warnDim, borderLeft: `3px solid ${T.warn}`, borderRadius: T.radiusSm }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: T.warn, marginBottom: 6 }}>Management is asking for more info</div>
@@ -1196,18 +1198,47 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
                   value={draft}
                   onChange={e => setReplyDrafts(prev => ({ ...prev, [m.id]: e.target.value }))}
                 />
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.muted, display: "block", marginBottom: 4 }}>📎 Add photos or files (optional)</label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,.heic,.heif,.pdf"
+                    style={{ fontSize: 13 }}
+                    onChange={e => setReplyFiles(prev => ({ ...prev, [m.id]: Array.from(e.target.files || []) }))}
+                  />
+                  {files.length > 0 && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: T.muted }}>
+                      {files.map((f, i) => <div key={i}>📎 {f.name} ({(f.size / 1024).toFixed(1)} KB)</div>)}
+                    </div>
+                  )}
+                </div>
                 <button
-                  disabled={submitting || !draft.trim()}
+                  disabled={submitting || (!draft.trim() && files.length === 0)}
                   style={s.btn("primary")}
                   onClick={async () => {
                     const text = (draft || "").trim();
-                    if (!text) return;
+                    if (!text && files.length === 0) return;
                     setReplySubmitting(prev => ({ ...prev, [m.id]: true }));
                     try {
-                      const newNotes = [...notes, { by: rc?.name || "Resident", date: new Date().toISOString().slice(0, 10), text }];
-                      await onUpdate(m.id, { status: "new", notes: newNotes });
-                      showSuccess("Response sent to management.");
+                      // Upload any attached files (HEIC → JPEG client-side, then to maintenance-photos bucket)
+                      const newPhotos = [];
+                      for (const original of files) {
+                        try {
+                          const file = await convertHeicIfNeeded(original);
+                          const photo = await uploadMaintenancePhoto(file, m.unit || "unknown");
+                          if (photo?.url) newPhotos.push({ url: photo.url, name: photo.name, path: photo.path });
+                        } catch (err) { console.warn(`Reply attachment ${original.name} failed:`, err); }
+                      }
+                      const existingPhotos = Array.isArray(m.photos) ? m.photos : [];
+                      const noteText = text || (newPhotos.length === 1 ? "Attached a photo." : `Attached ${newPhotos.length} files.`);
+                      const newNotes = [...notes, { by: rc?.name || "Resident", date: new Date().toISOString().slice(0, 10), text: noteText }];
+                      const changes = { status: "new", notes: newNotes };
+                      if (newPhotos.length > 0) changes.photos = [...existingPhotos, ...newPhotos];
+                      await onUpdate(m.id, changes);
+                      showSuccess(`Response sent${newPhotos.length > 0 ? ` with ${newPhotos.length} attachment${newPhotos.length > 1 ? "s" : ""}` : ""}.`);
                       setReplyDrafts(prev => { const next = { ...prev }; delete next[m.id]; return next; });
+                      setReplyFiles(prev => { const next = { ...prev }; delete next[m.id]; return next; });
                     } catch (err) { showSuccess("Error: " + err.message); }
                     setReplySubmitting(prev => { const next = { ...prev }; delete next[m.id]; return next; });
                   }}
