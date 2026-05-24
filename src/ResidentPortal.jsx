@@ -3890,13 +3890,18 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
         })()}
       </div>
 
-      {/* Property Details — combines metadata, appliances, finishes, documents */}
+      {/* Property Details — metadata + documents (appliances/finishes live on units) */}
       {(() => {
-        const detailTabs = ["Overview", "Appliances", "Finishes", "Documents"];
+        const detailTabs = ["Overview", "Documents"];
         return (
           <div style={{ ...s.card, marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>🏠 Property Details</div>
+              {detailsTab === "Overview" && (
+                <button style={s.btn("ghost")} onClick={() => { setShowEditProp(v => !v); if (!showEditProp) setEditPropForm({ name: p.name, address: p.address, type: p.type, totalUnits: String(p.totalUnits || ""), totalSF: String(p.totalSF || ""), lotSize: p.lotSize || "", yearBuilt: String(p.yearBuilt || ""), adaUnits: String(p.adaUnits || ""), manager: p.manager || "", managerPhone: p.managerPhone || "", managerEmail: p.managerEmail || "", officeHours: p.officeHours || "" }); }}>
+                  {showEditProp ? "Cancel" : "✏️ Edit"}
+                </button>
+              )}
             </div>
             <div style={{ display: "flex", gap: 6, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
               {detailTabs.map(tk => (
@@ -3905,100 +3910,53 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                   fontWeight: 600, cursor: "pointer", fontSize: 13,
                   borderBottom: detailsTab === tk ? `2px solid ${T.accent}` : "2px solid transparent",
                   color: detailsTab === tk ? T.accent : T.text,
-                }}>{tk}{tk === "Documents" && propDocs.length > 0 ? ` (${propDocs.length})` : ""}{tk === "Appliances" && (p?.appliances || []).length > 0 ? ` (${(p.appliances || []).length})` : ""}{tk === "Finishes" && (p?.finishes || []).length > 0 ? ` (${(p.finishes || []).length})` : ""}</button>
+                }}>{tk}{tk === "Documents" && propDocs.length > 0 ? ` (${propDocs.length})` : ""}</button>
               ))}
             </div>
 
             {detailsTab === "Overview" && (
-              <div style={{ ...s.grid("1fr 1fr", mobile), gap: 10, fontSize: 13 }}>
-                <div><span style={{ color: T.muted }}>Address:</span> <strong>{p?.address || "—"}</strong></div>
-                <div><span style={{ color: T.muted }}>Type:</span> <strong>{p?.type || "—"}</strong></div>
-                <div><span style={{ color: T.muted }}>Year Built:</span> <strong>{p?.yearBuilt || "—"}</strong></div>
-                <div><span style={{ color: T.muted }}>Last Renovation:</span> <strong>{p?.lastRenovation || "—"}</strong></div>
-                <div><span style={{ color: T.muted }}>Total Units:</span> <strong>{p?.totalUnits || 0}</strong></div>
-                <div><span style={{ color: T.muted }}>Total SF:</span> <strong>{p?.totalSF ? p.totalSF.toLocaleString() : "—"}</strong></div>
-                <div><span style={{ color: T.muted }}>Lot Size:</span> <strong>{p?.lotSize || "—"}</strong></div>
-                <div><span style={{ color: T.muted }}>ADA Units:</span> <strong>{p?.adaUnits || 0}</strong></div>
-                <div><span style={{ color: T.muted }}>Manager:</span> <strong>{p?.manager || "—"}</strong></div>
-                <div><span style={{ color: T.muted }}>Office Hours:</span> <strong>{p?.officeHours || "—"}</strong></div>
-                {p?.managerPhone && <div><span style={{ color: T.muted }}>Phone:</span> <strong>{p.managerPhone}</strong></div>}
-                {p?.managerEmail && <div><span style={{ color: T.muted }}>Email:</span> <strong>{p.managerEmail}</strong></div>}
-              </div>
+              showEditProp ? (
+                <div>
+                  <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                    <div><label style={s.label}>Name</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.name || ""} onChange={e => setEditPropForm(f => ({ ...f, name: e.target.value }))} /></div>
+                    <div><label style={s.label}>Address</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.address || ""} onChange={e => setEditPropForm(f => ({ ...f, address: e.target.value }))} /></div>
+                    <div><label style={s.label}>Type</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.type || ""} onChange={e => setEditPropForm(f => ({ ...f, type: e.target.value }))} /></div>
+                    <div><label style={s.label}>Total Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.totalUnits || ""} onChange={e => setEditPropForm(f => ({ ...f, totalUnits: e.target.value }))} /></div>
+                    <div><label style={s.label}>Total SF</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.totalSF || ""} onChange={e => setEditPropForm(f => ({ ...f, totalSF: e.target.value }))} /></div>
+                    <div><label style={s.label}>Year Built</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.yearBuilt || ""} onChange={e => setEditPropForm(f => ({ ...f, yearBuilt: e.target.value }))} /></div>
+                    <div><label style={s.label}>Lot Size</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.lotSize || ""} onChange={e => setEditPropForm(f => ({ ...f, lotSize: e.target.value }))} /></div>
+                    <div><label style={s.label}>ADA Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.adaUnits || ""} onChange={e => setEditPropForm(f => ({ ...f, adaUnits: e.target.value }))} /></div>
+                    <div><label style={s.label}>Manager</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.manager || ""} onChange={e => setEditPropForm(f => ({ ...f, manager: e.target.value }))} /></div>
+                    <div><label style={s.label}>Manager Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.managerPhone || ""} onChange={e => setEditPropForm(f => ({ ...f, managerPhone: e.target.value }))} /></div>
+                    <div><label style={s.label}>Manager Email</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.managerEmail || ""} onChange={e => setEditPropForm(f => ({ ...f, managerEmail: e.target.value }))} /></div>
+                    <div><label style={s.label}>Office Hours</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.officeHours || ""} onChange={e => setEditPropForm(f => ({ ...f, officeHours: e.target.value }))} /></div>
+                  </div>
+                  <button style={{ ...s.mBtn("primary", mobile) }} onClick={async () => {
+                    try {
+                      await updateProperty(p._uuid, { ...editPropForm, totalUnits: parseInt(editPropForm.totalUnits) || 0, totalSF: parseInt(editPropForm.totalSF) || 0, yearBuilt: parseInt(editPropForm.yearBuilt) || null, adaUnits: parseInt(editPropForm.adaUnits) || 0 });
+                      showUnitSuccess("Property updated!");
+                      setShowEditProp(false);
+                      if (onDataRefresh) onDataRefresh();
+                    } catch (err) { showUnitSuccess("Error: " + err.message); }
+                  }}>Save Changes</button>
+                </div>
+              ) : (
+                <div style={{ ...s.grid("1fr 1fr", mobile), gap: 10, fontSize: 13 }}>
+                  <div><span style={{ color: T.muted }}>Address:</span> <strong>{p?.address || "—"}</strong></div>
+                  <div><span style={{ color: T.muted }}>Type:</span> <strong>{p?.type || "—"}</strong></div>
+                  <div><span style={{ color: T.muted }}>Year Built:</span> <strong>{p?.yearBuilt || "—"}</strong></div>
+                  <div><span style={{ color: T.muted }}>Last Renovation:</span> <strong>{p?.lastRenovation || "—"}</strong></div>
+                  <div><span style={{ color: T.muted }}>Total Units:</span> <strong>{p?.totalUnits || 0}</strong></div>
+                  <div><span style={{ color: T.muted }}>Total SF:</span> <strong>{p?.totalSF ? p.totalSF.toLocaleString() : "—"}</strong></div>
+                  <div><span style={{ color: T.muted }}>Lot Size:</span> <strong>{p?.lotSize || "—"}</strong></div>
+                  <div><span style={{ color: T.muted }}>ADA Units:</span> <strong>{p?.adaUnits || 0}</strong></div>
+                  <div><span style={{ color: T.muted }}>Manager:</span> <strong>{p?.manager || "—"}</strong></div>
+                  <div><span style={{ color: T.muted }}>Office Hours:</span> <strong>{p?.officeHours || "—"}</strong></div>
+                  {p?.managerPhone && <div><span style={{ color: T.muted }}>Phone:</span> <strong>{p.managerPhone}</strong></div>}
+                  {p?.managerEmail && <div><span style={{ color: T.muted }}>Email:</span> <strong>{p.managerEmail}</strong></div>}
+                </div>
+              )
             )}
-
-            {detailsTab === "Appliances" && (() => {
-              const list = p?.appliances || [];
-              const save = async (newList) => {
-                try { await updateProperty(p._uuid, { appliances: newList }); if (onDataRefresh) await onDataRefresh(); }
-                catch (err) { showUnitSuccess("Error: " + err.message); }
-              };
-              return (
-                <div>
-                  <div style={{ fontSize: 13, color: T.muted, marginBottom: 10 }}>Common-area or building-wide appliances. Track make/model so replacements and warranty lookups are easy.</div>
-                  {list.length === 0 ? (
-                    <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic", marginBottom: 10 }}>No appliances logged yet.</div>
-                  ) : (
-                    <table style={{ ...s.table, marginBottom: 10 }}>
-                      <thead><tr>{["Name", "Brand", "Model", "Location", "Notes", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                      <tbody>{list.map((a, i) => (
-                        <tr key={i}>
-                          <td style={s.td}><strong>{a.name}</strong></td>
-                          <td style={s.td}>{a.brand || "—"}</td>
-                          <td style={s.td}>{a.model || "—"}</td>
-                          <td style={s.td}>{a.location || "—"}</td>
-                          <td style={{ ...s.td, color: T.muted, fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{a.notes || "—"}</td>
-                          <td style={s.td}><button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11, padding: "2px 8px" }} onClick={async () => { if (!confirm(`Remove ${a.name}?`)) return; await save(list.filter((_, idx) => idx !== i)); }}>🗑</button></td>
-                        </tr>
-                      ))}</tbody>
-                    </table>
-                  )}
-                  <button style={{ ...s.btn("ghost"), fontSize: 13 }} onClick={() => {
-                    const name = window.prompt("Appliance name (e.g. Washer, Dryer, Boiler):"); if (!name) return;
-                    const brand = window.prompt("Brand (optional):") || "";
-                    const model = window.prompt("Model (optional):") || "";
-                    const location = window.prompt("Location (e.g. Laundry Room, Lobby):") || "";
-                    save([...list, { name, brand, model, location, notes: "" }]);
-                  }}>＋ Add Appliance</button>
-                </div>
-              );
-            })()}
-
-            {detailsTab === "Finishes" && (() => {
-              const list = p?.finishes || [];
-              const save = async (newList) => {
-                try { await updateProperty(p._uuid, { finishes: newList }); if (onDataRefresh) await onDataRefresh(); }
-                catch (err) { showUnitSuccess("Error: " + err.message); }
-              };
-              return (
-                <div>
-                  <div style={{ fontSize: 13, color: T.muted, marginBottom: 10 }}>Materials and finishes used in the building (paint, flooring, fixtures, cabinetry, etc.) — useful for matching during repairs.</div>
-                  {list.length === 0 ? (
-                    <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic", marginBottom: 10 }}>No finishes logged yet.</div>
-                  ) : (
-                    <table style={{ ...s.table, marginBottom: 10 }}>
-                      <thead><tr>{["Area", "Material", "Color / Style", "Year", "Notes", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                      <tbody>{list.map((f, i) => (
-                        <tr key={i}>
-                          <td style={s.td}><strong>{f.area}</strong></td>
-                          <td style={s.td}>{f.material || "—"}</td>
-                          <td style={s.td}>{f.color || "—"}</td>
-                          <td style={s.td}>{f.year || "—"}</td>
-                          <td style={{ ...s.td, color: T.muted, fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{f.notes || "—"}</td>
-                          <td style={s.td}><button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11, padding: "2px 8px" }} onClick={async () => { if (!confirm(`Remove ${f.area} finish?`)) return; await save(list.filter((_, idx) => idx !== i)); }}>🗑</button></td>
-                        </tr>
-                      ))}</tbody>
-                    </table>
-                  )}
-                  <button style={{ ...s.btn("ghost"), fontSize: 13 }} onClick={() => {
-                    const area = window.prompt("Area (e.g. Kitchen, Bathroom, Hallway):"); if (!area) return;
-                    const material = window.prompt("Material (e.g. Quartz, LVP, Tile):") || "";
-                    const color = window.prompt("Color or style (optional):") || "";
-                    const year = window.prompt("Year installed (optional):") || "";
-                    save([...list, { area, material, color, year, notes: "" }]);
-                  }}>＋ Add Finish</button>
-                </div>
-              );
-            })()}
 
             {detailsTab === "Documents" && (
               <div>
@@ -4407,48 +4365,6 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
       ) : (
         <div style={{ color: T.dim, fontSize: 13, textAlign: "center", padding: "12px 0" }}>No units yet. Click "Add Unit" above to create one.</div>
       )}
-      </div>
-      {/* Edit Property */}
-      <div style={{ ...s.card, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Property Details</div>
-          <button style={s.btn("ghost")} onClick={() => { setShowEditProp(v => !v); if (!showEditProp) setEditPropForm({ name: p.name, address: p.address, type: p.type, totalUnits: String(p.totalUnits || ""), totalSF: String(p.totalSF || ""), lotSize: p.lotSize || "", yearBuilt: String(p.yearBuilt || ""), adaUnits: String(p.adaUnits || "") }); }}>
-            {showEditProp ? "Cancel" : "✏️ Edit"}
-          </button>
-        </div>
-        {showEditProp ? (
-          <div>
-            <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
-              <div><label style={s.label}>Name</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.name || ""} onChange={e => setEditPropForm(f => ({ ...f, name: e.target.value }))} /></div>
-              <div><label style={s.label}>Address</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.address || ""} onChange={e => setEditPropForm(f => ({ ...f, address: e.target.value }))} /></div>
-              <div><label style={s.label}>Type</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.type || ""} onChange={e => setEditPropForm(f => ({ ...f, type: e.target.value }))} /></div>
-              <div><label style={s.label}>Total Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.totalUnits || ""} onChange={e => setEditPropForm(f => ({ ...f, totalUnits: e.target.value }))} /></div>
-              <div><label style={s.label}>Total SF</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.totalSF || ""} onChange={e => setEditPropForm(f => ({ ...f, totalSF: e.target.value }))} /></div>
-              <div><label style={s.label}>Year Built</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.yearBuilt || ""} onChange={e => setEditPropForm(f => ({ ...f, yearBuilt: e.target.value }))} /></div>
-              <div><label style={s.label}>Lot Size</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.lotSize || ""} onChange={e => setEditPropForm(f => ({ ...f, lotSize: e.target.value }))} /></div>
-              <div><label style={s.label}>ADA Units</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editPropForm.adaUnits || ""} onChange={e => setEditPropForm(f => ({ ...f, adaUnits: e.target.value }))} /></div>
-            </div>
-            <button style={{ ...s.mBtn("primary", mobile) }} onClick={async () => {
-              try {
-                await updateProperty(p._uuid, { ...editPropForm, totalUnits: parseInt(editPropForm.totalUnits) || 0, totalSF: parseInt(editPropForm.totalSF) || 0, yearBuilt: parseInt(editPropForm.yearBuilt) || null, adaUnits: parseInt(editPropForm.adaUnits) || 0 });
-                showUnitSuccess("Property updated!");
-                setShowEditProp(false);
-                if (onDataRefresh) onDataRefresh();
-              } catch (err) { showUnitSuccess("Error: " + err.message); }
-            }}>Save Changes</button>
-          </div>
-        ) : (
-          <div style={{ ...s.grid("1fr 1fr", mobile), gap: 8 }}>
-            <DetailRow label="Name" value={p.name} />
-            <DetailRow label="Address" value={p.address} />
-            <DetailRow label="Type" value={p.type} />
-            <DetailRow label="Total Units" value={unitList.length} />
-            <DetailRow label="Total SF" value={p.totalSF?.toLocaleString()} />
-            <DetailRow label="Year Built" value={p.yearBuilt} />
-            <DetailRow label="Lot Size" value={p.lotSize} />
-            <DetailRow label="ADA Units" value={p.adaUnits} />
-          </div>
-        )}
       </div>
     </div>
   );
