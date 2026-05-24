@@ -594,7 +594,7 @@ const NAV = {
     { id: "work-orders", label: "Work Orders", icon: "🔧" },
     { id: "inspections", label: "Inspections", icon: "🔍" },
     { id: "vendors", label: "Vendors", icon: "📇" },
-    { id: "messages", label: "Messages", icon: "💬" },
+    { id: "messages", label: "Communications", icon: "💬" },
     { id: "schedule", label: "Schedule", icon: "📅" },
     { id: "profile", label: "My Profile", icon: "👤" },
   ],
@@ -6318,7 +6318,8 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
 const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, onAddThread, onAddMessage, onUpdateThread, onDeleteThread, rc }) => {
   const isAdmin = role === "admin";
   const isMaint = role === "maintenance";
-  const tabs = isAdmin ? ["Inbox", "Compose", "Templates"] : isMaint ? ["Messages"] : ["Messages", "Compose", "Preferences"];
+  const isStaff = isAdmin || isMaint;
+  const tabs = isStaff ? ["Inbox", "Compose", "Templates"] : ["Messages", "Compose", "Preferences"];
   const [tab, setTab] = useState(tabs[0]);
   const [selectedThread, setSelectedThread] = useState(null);
   const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "residents", recipients: [], propertyIds: [] });
@@ -6340,8 +6341,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   };
 
   // Filter threads by role
-  const baseThreads = isAdmin ? threadData
-    : isMaint ? threadData.filter(t => t.type === "broadcast" || t.subject.toLowerCase().includes("maintenance"))
+  const baseThreads = isStaff ? threadData
     : threadData.filter(t => t.type === "broadcast" || t.participants.includes(rc?.id || ""));
 
   // Helpers used for sort/filter and headers
@@ -6356,17 +6356,17 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
     return LIVE_PROPERTIES.find(p => p.id === slug)?.name || slug || "";
   };
 
-  // Apply admin-only filters
-  const filteredThreads = isAdmin && inboxPropertyFilter
+  // Apply staff-only filters
+  const filteredThreads = isStaff && inboxPropertyFilter
     ? baseThreads.filter(t => threadPropertySlug(t) === inboxPropertyFilter)
     : baseThreads;
 
   // Sort
   const sortedThreads = [...filteredThreads].sort((a, b) => {
-    if (isAdmin && inboxSort === "resident") {
+    if (isStaff && inboxSort === "resident") {
       const cmp = threadResidentName(a).localeCompare(threadResidentName(b));
       if (cmp !== 0) return cmp;
-    } else if (isAdmin && inboxSort === "building") {
+    } else if (isStaff && inboxSort === "building") {
       const cmp = threadBuildingName(a).localeCompare(threadBuildingName(b));
       if (cmp !== 0) return cmp;
     }
@@ -6378,8 +6378,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   if (selectedThread) {
     return (
       <div>
-        <h1 style={s.sectionTitle}>{isAdmin ? "Communications" : "Messages"}</h1>
-        <p style={s.sectionSub}>{isAdmin ? "Manage resident communications" : isMaint ? "Maintenance-related messages" : "Your messages"}</p>
+        <h1 style={s.sectionTitle}>{isStaff ? "Communications" : "Messages"}</h1>
+        <p style={s.sectionSub}>{isStaff ? "Manage resident communications" : "Your messages"}</p>
         <ThreadView thread={selectedThread} onBack={() => setSelectedThread(null)} mobile={mobile} messages={messageData} onAddMessage={onAddMessage} onUpdateThread={onUpdateThread} role={role} rc={rc} />
       </div>
     );
@@ -6416,7 +6416,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               {t.priority === "high" && <span style={s.badge(T.warnDim, T.warn)} title="High priority">High</span>}
               {t.priority === "urgent" && <span style={s.badge(T.dangerDim, T.danger)} title="Urgent">Urgent</span>}
               {t.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent }} />}
-              {onDeleteThread && (isAdmin || (role === "resident" && !t.type?.includes("broadcast") && t.participants?.includes(rc?.id || ""))) && (
+              {onDeleteThread && (isStaff || (role === "resident" && !t.type?.includes("broadcast") && t.participants?.includes(rc?.id || ""))) && (
                 <button onClick={(e) => { e.stopPropagation(); if (confirm("Delete this thread?")) onDeleteThread(t.id); }} style={{ background: "none", border: "none", cursor: "pointer", color: T.dim, fontSize: 14, padding: "2px 4px", marginLeft: 4 }} title="Delete thread">🗑</button>
               )}
             </div>
@@ -6429,10 +6429,10 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <h1 style={s.sectionTitle}>{isAdmin ? "Communications" : "Messages"}</h1>
+        <h1 style={s.sectionTitle}>{isStaff ? "Communications" : "Messages"}</h1>
         {unreadCount > 0 && <span style={s.badge(T.accentDim, T.accent)}>{unreadCount} unread</span>}
       </div>
-      <p style={s.sectionSub}>{isAdmin ? "Send, receive, and manage all resident communications" : isMaint ? "Maintenance-related messages and broadcasts" : "View messages and manage your contact preferences"}</p>
+      <p style={s.sectionSub}>{isStaff ? "Send, receive, and manage all resident communications" : "View messages and manage your contact preferences"}</p>
       <SuccessMessage message={success} />
 
       <TabBar tabs={tabs} active={tab} onChange={setTab} mobile={mobile} />
@@ -6440,7 +6440,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       {/* INBOX / MESSAGES TAB */}
       {(tab === "Inbox" || tab === "Messages") && (
         <div>
-          {isAdmin && (
+          {isStaff && (
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 12, color: T.muted, fontWeight: 600 }}>Sort by</span>
@@ -6466,7 +6466,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             ) : (() => {
               // Group with header rows when grouping by resident or building
               const groupKey = (t) => {
-                if (!isAdmin) return null;
+                if (!isStaff) return null;
                 if (inboxSort === "resident") return threadResidentName(t) || (t.type === "broadcast" ? "Broadcasts" : "—");
                 if (inboxSort === "building") return threadBuildingName(t) || (t.type === "broadcast" ? "Broadcasts" : "—");
                 return null;
@@ -6489,8 +6489,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
         </div>
       )}
 
-      {/* COMPOSE TAB (Admin) */}
-      {tab === "Compose" && isAdmin && (() => {
+      {/* COMPOSE TAB (Staff: admin + maintenance) */}
+      {tab === "Compose" && isStaff && (() => {
         const audience = composeData.audience || "residents";
         const propertyList = LIVE_PROPERTIES || [];
         const resolveRecipients = () => {
@@ -6688,7 +6688,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       })()}
 
       {/* COMPOSE TAB — Resident */}
-      {tab === "Compose" && !isAdmin && !isMaint && (
+      {tab === "Compose" && !isStaff && (
         <div style={s.card}>
           <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>Send a message. We'll reply as soon as we can.</div>
           <div style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>If this is a maintenance request, please submit a maintenance request from the <strong>Maintenance</strong> tab instead.</div>
@@ -6785,7 +6785,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       )}
 
       {/* TEMPLATES TAB (Admin) */}
-      {tab === "Templates" && isAdmin && (
+      {tab === "Templates" && isStaff && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <div />
@@ -6812,7 +6812,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       )}
 
       {/* PREFERENCES TAB (Resident) */}
-      {tab === "Preferences" && !isAdmin && (
+      {tab === "Preferences" && !isStaff && (
         <div>
           <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Contact Preferences</div>
@@ -9421,7 +9421,7 @@ export default function App() {
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
-        case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
+        case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
         case "profile": return <MaintenanceProfile mobile={mobile} />;
         case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
