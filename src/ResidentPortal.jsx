@@ -3013,6 +3013,9 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [residentDocs, setResidentDocs] = useState([]);
   const [residentPayments, setResidentPayments] = useState([]);
   const [hideInactive, setHideInactive] = useState(true);
+  const [residentUsers, setResidentUsers] = useState([]);
+  const [inviteResForm, setInviteResForm] = useState({ firstName: "", lastName: "", email: "", phone: "" });
+  const [invitingRes, setInvitingRes] = useState(false);
 
   // Load units when property changes or form opens
   useEffect(() => {
@@ -3020,7 +3023,17 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
     if (prop?._uuid) fetchUnits(prop._uuid).then(u => setAddFormUnits(u || [])).catch((err) => { console.error('Failed to fetch units:', err); });
   }, [addForm.propertyId]);
 
-  const detailTabs = ["Overview", "Household", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
+  const detailTabs = ["Overview", "Household", "Portal Access", "Lease & Docs", "Maintenance", "Payments", "Communications", "Notes"];
+
+  // Load portal-access users for the selected resident
+  const loadResidentUsers = useCallback(async (residentUuid) => {
+    if (!residentUuid) { setResidentUsers([]); return; }
+    try {
+      const all = await fetchUserProfiles();
+      setResidentUsers((all || []).filter(u => u.resident_id === residentUuid));
+    } catch (err) { console.warn("fetchUserProfiles for resident failed:", err); setResidentUsers([]); }
+  }, []);
+  useEffect(() => { loadResidentUsers(selectedResident?._uuid); }, [selectedResident?._uuid, loadResidentUsers]);
 
   // Load household members, docs, and payments when resident selected (hooks before conditional returns)
   const selectedResUuid = selectedResident?._uuid || null;
@@ -3265,6 +3278,120 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             )}
           </div>
         )}
+
+        {tab === "Portal Access" && (() => {
+          const residentUuid = selectedResident._uuid;
+          return (
+            <div>
+              <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
+                <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Invite to Portal</div>
+                <p style={{ fontSize: 12, color: T.muted, marginTop: 0, marginBottom: 14 }}>
+                  Each person you invite here gets their own login but shares this unit's rent ledger, maintenance requests, lease docs, and income certification.
+                </p>
+                {householdMembers.length > 0 && (
+                  <div style={{ marginBottom: 14, padding: 10, background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+                      Household Members on File — click to quick-fill
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {householdMembers.map(hm => {
+                        const nameParts = (hm.name || "").trim().split(/\s+/);
+                        const fn = nameParts[0] || "";
+                        const ln = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+                        const alreadyInvited = residentUsers.some(p => (p.email || "").toLowerCase() === (hm.email || "").toLowerCase() && hm.email);
+                        return (
+                          <button key={hm.id} type="button" disabled={alreadyInvited} onClick={() => setInviteResForm({ firstName: fn, lastName: ln, email: hm.email || "", phone: hm.phone || "" })}
+                            style={{
+                              padding: "6px 10px", fontSize: 12, fontWeight: 600, borderRadius: T.radiusSm,
+                              cursor: alreadyInvited ? "not-allowed" : "pointer",
+                              background: alreadyInvited ? T.dimLight : T.surface,
+                              color: alreadyInvited ? T.dim : T.text,
+                              border: `1px solid ${T.border}`,
+                              textAlign: "left",
+                            }}
+                            title={alreadyInvited ? "This person already has a portal login" : `Use ${hm.name}'s info`}
+                          >
+                            {hm.name} <span style={{ color: T.muted, fontWeight: 400 }}>· {hm.relationship}</span>{alreadyInvited ? <span style={{ color: T.success, marginLeft: 4 }}> ✓ invited</span> : ""}
+                            {hm.phone && <div style={{ fontSize: 11, color: T.muted, fontWeight: 400 }}>{hm.phone}{hm.email ? ` · ${hm.email}` : ""}</div>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                  <div>
+                    <label style={s.label}>First Name *</label>
+                    <input type="text" placeholder="First" value={inviteResForm.firstName} onChange={e => setInviteResForm(p => ({ ...p, firstName: e.target.value }))}
+                      style={{ ...s.mInput(mobile), width: "100%" }} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Last Name *</label>
+                    <input type="text" placeholder="Last" value={inviteResForm.lastName} onChange={e => setInviteResForm(p => ({ ...p, lastName: e.target.value }))}
+                      style={{ ...s.mInput(mobile), width: "100%" }} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Email *</label>
+                    <input type="email" placeholder="user@example.com" value={inviteResForm.email} onChange={e => setInviteResForm(p => ({ ...p, email: e.target.value }))}
+                      style={{ ...s.mInput(mobile), width: "100%" }} />
+                  </div>
+                </div>
+                <button disabled={!inviteResForm.email || !inviteResForm.firstName.trim() || !inviteResForm.lastName.trim() || invitingRes}
+                  onClick={async () => {
+                    setInvitingRes(true);
+                    try {
+                      const displayName = `${inviteResForm.firstName.trim()} ${inviteResForm.lastName.trim()}`.trim();
+                      const result = await inviteUser(inviteResForm.email, "resident", residentUuid, displayName);
+                      if (result?.warning) showSuccess(`${displayName} added. ${result.warning}`);
+                      else showSuccess(`${displayName} invited — magic link sent to ${inviteResForm.email}`);
+                      setInviteResForm({ firstName: "", lastName: "", email: "", phone: "" });
+                      loadResidentUsers(residentUuid);
+                    } catch (err) {
+                      showSuccess("Error: " + (err.message || "Failed to invite"));
+                    } finally { setInvitingRes(false); }
+                  }}
+                  style={{ ...s.mBtn("primary", mobile) }}>
+                  {invitingRes ? "Inviting..." : "Send Portal Invite"}
+                </button>
+              </div>
+
+              <div style={s.card}>
+                <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Portal Users for This Unit ({residentUsers.length})</div>
+                {residentUsers.length === 0 ? (
+                  <EmptyState icon="🔑" text="No one has portal access for this unit yet. Invite someone above." />
+                ) : (
+                  <table style={s.table}>
+                    <thead><tr>{["Name", "Email", "Status", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {residentUsers.map(u => (
+                        <tr key={u.id}>
+                          <td style={s.td}><span style={{ fontWeight: 600 }}>{u.display_name || "—"}</span></td>
+                          <td style={s.td}>{u.email}</td>
+                          <td style={s.td}>
+                            <span style={s.badge(T.successDim, T.success)}>Active</span>
+                            <span style={{ fontSize: 11, color: T.muted, marginLeft: 8 }}>
+                              {u.created_at ? `Invited ${new Date(u.created_at).toLocaleDateString()}` : ""}
+                            </span>
+                          </td>
+                          <td style={s.td}>
+                            <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 12, padding: "2px 8px" }} onClick={async () => {
+                              if (!confirm(`Revoke portal access for ${u.email}? They will no longer be able to sign in.`)) return;
+                              try {
+                                await deleteUserProfile(u.id);
+                                setResidentUsers(prev => prev.filter(p => p.id !== u.id));
+                                showSuccess(`${u.email} revoked`);
+                              } catch (err) { showSuccess("Error: " + err.message); }
+                            }}>Revoke</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {tab === "Lease & Docs" && (
           <div>
@@ -7363,14 +7490,14 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
 
 // --- ADMIN SETTINGS ---
 const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers, allUnits: parentAllUnits }) => {
-  const tabs = ["People", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
+  const tabs = ["Staff", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [newCat, setNewCat] = useState("");
   const [confirmReset, setConfirmReset] = useState(false);
   const [userProfiles, setUserProfiles] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: "", role: "resident", residentId: "", firstName: "", lastName: "", phone: "", propertyId: "" });
+  const [inviteForm, setInviteForm] = useState({ email: "", role: "maintenance", residentId: "", firstName: "", lastName: "", phone: "", propertyId: "" });
   const [inviting, setInviting] = useState(false);
   const [auditEntries, setAuditEntries] = useState([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
@@ -7400,7 +7527,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
   }, [tab]);
 
   useEffect(() => {
-    if (tab === "People") {
+    if (tab === "Staff") {
       setLoadingUsers(true);
       fetchUserProfiles()
         .then(data => { setUserProfiles(data || []); setLoadingUsers(false); })
@@ -7428,7 +7555,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
       } else {
         showSuccess(`${displayName || inviteForm.email} added and invite sent`);
       }
-      setInviteForm({ email: "", role: "resident", residentId: "", firstName: "", lastName: "", phone: "", propertyId: "" });
+      setInviteForm({ email: "", role: "maintenance", residentId: "", firstName: "", lastName: "", phone: "", propertyId: "" });
       // Refresh user list
       const data = await fetchUserProfiles();
       setUserProfiles(data || []);
@@ -7447,10 +7574,13 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
       <SuccessMessage message={success} />
       <TabBar tabs={tabs} active={tab} onChange={setTab} mobile={mobile} />
 
-      {tab === "People" && (
+      {tab === "Staff" && (
         <div>
           <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
-            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Add New Person</div>
+            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Add Staff Member</div>
+            <p style={{ fontSize: 12, color: T.muted, marginTop: 0, marginBottom: 14 }}>
+              For admins and maintenance only. To give a resident portal access, open their profile in the Residents section.
+            </p>
             <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
               <div>
                 <label style={s.label}>First Name *</label>
@@ -7470,7 +7600,6 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               <div>
                 <label style={s.label}>Role</label>
                 <select style={{ ...s.mSelect(mobile), width: "100%" }} value={inviteForm.role} onChange={e => setInviteForm(p => ({ ...p, role: e.target.value }))}>
-                  <option value="resident">Resident</option>
                   <option value="admin">Admin / Property Manager</option>
                   <option value="maintenance">Maintenance Staff</option>
                 </select>
@@ -7487,57 +7616,6 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                   {LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}
                 </select>
               </div>
-              {inviteForm.role === "resident" && (
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={s.label}>Link to Unit / Resident</label>
-                  <select style={{ ...s.mSelect(mobile), width: "100%" }} value={inviteForm.residentId} onChange={e => setInviteForm(p => ({ ...p, residentId: e.target.value }))}>
-                    <option value="">Select unit (optional)...</option>
-                    {LIVE_RESIDENTS.map(r => {
-                      const rid = r._uuid || r.id;
-                      const coUsers = userProfiles.filter(p => p.resident_id === rid && p.role === "resident").length;
-                      return (
-                        <option key={rid} value={rid}>
-                          {r.name} — Unit {r.unit}{coUsers > 0 ? ` (+${coUsers} co-resident${coUsers === 1 ? "" : "s"})` : ""}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>
-                    Multiple people (e.g. spouses) can be linked to the same unit — they'll each get their own login but share rent, maintenance, and lease data.
-                  </div>
-                  {householdMembers.length > 0 && (
-                    <div style={{ marginTop: 12, padding: 10, background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
-                        Household Members on File — click to quick-fill
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {householdMembers.map(hm => {
-                          const nameParts = (hm.name || "").trim().split(/\s+/);
-                          const fn = nameParts[0] || "";
-                          const ln = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
-                          const alreadyInvited = userProfiles.some(p => (p.email || "").toLowerCase() === (hm.email || "").toLowerCase() && hm.email);
-                          return (
-                            <button key={hm.id} type="button" disabled={alreadyInvited} onClick={() => setInviteForm(p => ({ ...p, firstName: fn, lastName: ln, email: hm.email || "", phone: hm.phone || "" }))}
-                              style={{
-                                padding: "6px 10px", fontSize: 12, fontWeight: 600, borderRadius: T.radiusSm,
-                                cursor: alreadyInvited ? "not-allowed" : "pointer",
-                                background: alreadyInvited ? T.dimLight : T.surface,
-                                color: alreadyInvited ? T.dim : T.text,
-                                border: `1px solid ${T.border}`,
-                                textAlign: "left",
-                              }}
-                              title={alreadyInvited ? "This person already has a portal login" : `Use ${hm.name}'s info`}
-                            >
-                              {hm.name} <span style={{ color: T.muted, fontWeight: 400 }}>· {hm.relationship}</span>{alreadyInvited ? <span style={{ color: T.success, marginLeft: 4 }}> ✓ invited</span> : ""}
-                              {hm.phone && <div style={{ fontSize: 11, color: T.muted, fontWeight: 400 }}>{hm.phone}{hm.email ? ` · ${hm.email}` : ""}</div>}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
             <button disabled={!inviteForm.email || !inviteForm.firstName.trim() || !inviteForm.lastName.trim() || inviting} onClick={handleInvite}
               style={{ ...s.mBtn("primary", mobile) }}>
@@ -7547,26 +7625,20 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
           </div>
 
           <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>All People ({userProfiles.length})</div>
+            {(() => { const staffOnly = userProfiles.filter(u => u.role !== "resident"); return (<>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Staff Directory ({staffOnly.length})</div>
             {loadingUsers ? (
               <div style={{ color: T.muted, padding: 20, textAlign: "center" }}>Loading...</div>
-            ) : userProfiles.length === 0 ? (
-              <EmptyState icon="👥" text="No people yet. Add your first person above." />
+            ) : staffOnly.length === 0 ? (
+              <EmptyState icon="👷" text="No staff yet. Add your first staff member above." />
             ) : (
               <table style={s.table}>
-                <thead><tr>{["Name", "Email", "Role", "Unit / Property", "Phone", "Active", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Name", "Email", "Role", "Property", "Phone", "Active", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {userProfiles.map(u => {
+                  {staffOnly.map(u => {
                     // Match this person to their staff_members row (if any) by email
                     const emailLc = (u.email || "").toLowerCase();
                     const staffRow = staffList.find(s2 => (s2.email || "").toLowerCase() === emailLc) || null;
-                    const isStaffRole = u.role === "admin" || u.role === "maintenance" || u.role === "property_manager";
-                    // Count co-residents: other user_profiles sharing the same resident_id
-                    const coResidentCount = u.resident_id
-                      ? userProfiles.filter(p => p.id !== u.id && p.resident_id === u.resident_id).length
-                      : 0;
-                    const unit = u.residents?.units?.number || u.residents?.unit_number || u.unit_number || null;
-                    const residentName = u.residents?.name || null;
                     const isEditing = editingStaff === u.id;
                     if (isEditing) {
                       return (
@@ -7575,20 +7647,15 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                           <td style={s.td}><span style={{ fontSize: 12, color: T.muted }}>{u.email}</span></td>
                           <td style={s.td}>
                             <select value={editStaffForm.role || u.role} onChange={e => setEditStaffForm(f => ({ ...f, role: e.target.value }))} style={{ ...s.select, fontSize: 12, padding: "2px 6px" }}>
-                              <option value="resident">Resident</option>
                               <option value="admin">Admin</option>
                               <option value="maintenance">Maintenance</option>
                             </select>
                           </td>
                           <td style={s.td}>
-                            {(editStaffForm.role || u.role) === "resident" ? (
-                              <span style={{ fontSize: 12, color: T.muted }}>{unit ? `Unit ${unit}` : "—"}{residentName ? ` · ${residentName}` : ""}</span>
-                            ) : (
-                              <select value={editStaffForm.propertyId || ""} onChange={e => setEditStaffForm(f => ({ ...f, propertyId: e.target.value }))} style={{ ...s.select, fontSize: 12, padding: "2px 6px" }}>
-                                <option value="">All</option>
-                                {LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}
-                              </select>
-                            )}
+                            <select value={editStaffForm.propertyId || ""} onChange={e => setEditStaffForm(f => ({ ...f, propertyId: e.target.value }))} style={{ ...s.select, fontSize: 12, padding: "2px 6px" }}>
+                              <option value="">All</option>
+                              {LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}
+                            </select>
                           </td>
                           <td style={s.td}><input value={editStaffForm.phone || ""} onChange={e => setEditStaffForm(f => ({ ...f, phone: e.target.value }))} placeholder="(415) 555-0000" style={{ ...s.input, padding: "4px 6px", fontSize: 13, width: "100%" }} /></td>
                           <td style={s.td}>
@@ -7650,25 +7717,10 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                       <td style={s.td}>
                         <span style={s.badge(u.role === "admin" ? T.accentDim : u.role === "property_manager" ? T.infoDim : u.role === "maintenance" ? T.warnDim : T.successDim, u.role === "admin" ? T.accent : u.role === "property_manager" ? T.info : u.role === "maintenance" ? T.warn : T.success)}>{roleLabel}</span>
                       </td>
-                      <td style={s.td}>
-                        {u.role === "resident" ? (
-                          <div style={{ fontSize: 12 }}>
-                            <div style={{ fontWeight: 600 }}>{unit ? `Unit ${unit}` : "—"}{residentName ? ` · ${residentName}` : ""}</div>
-                            {coResidentCount > 0 && (
-                              <div style={{ color: T.info, fontSize: 11 }}>+ {coResidentCount} co-resident{coResidentCount === 1 ? "" : "s"}</div>
-                            )}
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: 12 }}>{propertyName}</span>
-                        )}
-                      </td>
+                      <td style={s.td}><span style={{ fontSize: 12 }}>{propertyName}</span></td>
                       <td style={s.td}><span style={{ fontSize: 12 }}>{phone}</span></td>
                       <td style={s.td}>
-                        {isStaffRole ? (
-                          <span style={s.badge(active ? T.successDim : T.dangerDim, active ? T.success : T.danger)}>{active ? "Yes" : "No"}</span>
-                        ) : (
-                          <span style={{ fontSize: 12, color: T.muted }}>—</span>
-                        )}
+                        <span style={s.badge(active ? T.successDim : T.dangerDim, active ? T.success : T.danger)}>{active ? "Yes" : "No"}</span>
                       </td>
                       <td style={s.td}>
                         <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px", marginRight: 4 }} onClick={() => {
@@ -7700,10 +7752,10 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                 </tbody>
               </table>
             )}
+            </>); })()}
           </div>
         </div>
       )}
-
 
       {tab === "Property" && (
         <div>
