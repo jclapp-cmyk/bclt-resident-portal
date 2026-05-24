@@ -7402,9 +7402,11 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
   useEffect(() => {
     if (tab === "People") {
       setLoadingUsers(true);
-      fetchUserProfiles().then(data => { setUserProfiles(data || []); setLoadingUsers(false); }).catch(() => setLoadingUsers(false));
+      fetchUserProfiles()
+        .then(data => { setUserProfiles(data || []); setLoadingUsers(false); })
+        .catch(err => { console.warn("fetchUserProfiles failed:", err); setLoadingUsers(false); });
       // Also load staff so we can show phone/property/active fields that live there
-      fetchStaffMembers().then(data => setStaffList(data || [])).catch(() => {});
+      fetchStaffMembers().then(data => setStaffList(data || [])).catch(err => console.warn("fetchStaffMembers failed:", err));
     }
   }, [tab]);
 
@@ -7563,7 +7565,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                     const coResidentCount = u.resident_id
                       ? userProfiles.filter(p => p.id !== u.id && p.resident_id === u.resident_id).length
                       : 0;
-                    const unit = u.residents?.unit_number || u.unit_number || null;
+                    const unit = u.residents?.units?.number || u.residents?.unit_number || u.unit_number || null;
                     const residentName = u.residents?.name || null;
                     const isEditing = editingStaff === u.id;
                     if (isEditing) {
