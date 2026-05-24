@@ -7363,7 +7363,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
 
 // --- ADMIN SETTINGS ---
 const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers, allUnits: parentAllUnits }) => {
-  const tabs = ["Users", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
+  const tabs = ["Users", "Staff", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [newCat, setNewCat] = useState("");
@@ -7542,6 +7542,140 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                       </td>
                     </tr>
                   );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "Staff" && (
+        <div>
+          <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
+            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Add Staff Member</div>
+            <p style={{ fontSize: 12, color: T.muted, marginTop: 0, marginBottom: 14 }}>
+              Adds someone to the staff directory so they can be assigned to work orders. This does <strong>not</strong> create a portal login — use the Users tab to invite someone to sign in.
+            </p>
+            <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+              <div>
+                <label style={s.label}>First Name *</label>
+                <input type="text" placeholder="First" value={staffForm.firstName} onChange={e => setStaffForm(p => ({ ...p, firstName: e.target.value }))}
+                  style={{ ...s.mInput(mobile), width: "100%" }} />
+              </div>
+              <div>
+                <label style={s.label}>Last Name *</label>
+                <input type="text" placeholder="Last" value={staffForm.lastName} onChange={e => setStaffForm(p => ({ ...p, lastName: e.target.value }))}
+                  style={{ ...s.mInput(mobile), width: "100%" }} />
+              </div>
+              <div>
+                <label style={s.label}>Role</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={staffForm.role} onChange={e => setStaffForm(p => ({ ...p, role: e.target.value }))}>
+                  <option value="maintenance">Maintenance</option>
+                  <option value="admin">Admin</option>
+                  <option value="property_manager">Property Manager</option>
+                </select>
+              </div>
+              <div>
+                <label style={s.label}>Email</label>
+                <input type="email" placeholder="user@example.com" value={staffForm.email} onChange={e => setStaffForm(p => ({ ...p, email: e.target.value }))}
+                  style={{ ...s.mInput(mobile), width: "100%" }} />
+              </div>
+              <div>
+                <label style={s.label}>Phone</label>
+                <input type="tel" placeholder="(415) 555-0000" value={staffForm.phone} onChange={e => setStaffForm(p => ({ ...p, phone: e.target.value }))}
+                  style={{ ...s.mInput(mobile), width: "100%" }} />
+              </div>
+              <div>
+                <label style={s.label}>Assigned Property</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={staffForm.propertyId} onChange={e => setStaffForm(p => ({ ...p, propertyId: e.target.value }))}>
+                  <option value="">All Properties</option>
+                  {LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <button disabled={!staffForm.firstName.trim() || !staffForm.lastName.trim()} onClick={async () => {
+              const name = `${staffForm.firstName.trim()} ${staffForm.lastName.trim()}`.trim();
+              try {
+                const created = await insertStaffMember({ name, role: staffForm.role, email: staffForm.email.trim() || null, phone: staffForm.phone.trim() || null, propertyId: staffForm.propertyId || null });
+                setStaffList(prev => [created, ...prev]);
+                setStaffForm({ firstName: "", lastName: "", role: "maintenance", email: "", phone: "", propertyId: "" });
+                showSuccess(`${name} added to staff directory`);
+              } catch (err) {
+                showSuccess("Error: " + (err.message || "Failed to add staff member"));
+              }
+            }} style={{ ...s.mBtn("primary", mobile) }}>Add Staff Member</button>
+          </div>
+
+          <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Staff Directory ({staffList.length})</div>
+            {loadingStaff ? (
+              <div style={{ color: T.muted, padding: 20, textAlign: "center" }}>Loading...</div>
+            ) : staffList.length === 0 ? (
+              <EmptyState icon="👷" text="No staff yet. Add your first staff member above." />
+            ) : (
+              <table style={s.table}>
+                <thead><tr>{["Name", "Role", "Email", "Phone", "Property", "Active", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {staffList.map(st => {
+                    const isEditing = editingStaff === st.id;
+                    if (isEditing) {
+                      return (
+                        <tr key={st.id} style={{ background: T.accentDim }}>
+                          <td style={s.td}><input value={editStaffForm.name || ""} onChange={e => setEditStaffForm(f => ({ ...f, name: e.target.value }))} style={{ ...s.input, padding: "4px 6px", fontSize: 13 }} /></td>
+                          <td style={s.td}>
+                            <select value={editStaffForm.role || "maintenance"} onChange={e => setEditStaffForm(f => ({ ...f, role: e.target.value }))} style={{ ...s.select, fontSize: 12, padding: "2px 6px" }}>
+                              <option value="maintenance">Maintenance</option>
+                              <option value="admin">Admin</option>
+                              <option value="property_manager">Property Manager</option>
+                            </select>
+                          </td>
+                          <td style={s.td}><input value={editStaffForm.email || ""} onChange={e => setEditStaffForm(f => ({ ...f, email: e.target.value }))} style={{ ...s.input, padding: "4px 6px", fontSize: 13 }} /></td>
+                          <td style={s.td}><input value={editStaffForm.phone || ""} onChange={e => setEditStaffForm(f => ({ ...f, phone: e.target.value }))} style={{ ...s.input, padding: "4px 6px", fontSize: 13 }} /></td>
+                          <td style={s.td}>
+                            <select value={editStaffForm.propertyId || ""} onChange={e => setEditStaffForm(f => ({ ...f, propertyId: e.target.value }))} style={{ ...s.select, fontSize: 12, padding: "2px 6px" }}>
+                              <option value="">All</option>
+                              {LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}
+                            </select>
+                          </td>
+                          <td style={s.td}>
+                            <Toggle checked={editStaffForm.active !== false} onChange={() => setEditStaffForm(f => ({ ...f, active: f.active === false }))} />
+                          </td>
+                          <td style={s.td}>
+                            <button style={{ ...s.btn("primary"), fontSize: 12, padding: "2px 8px", marginRight: 4 }} onClick={async () => {
+                              try {
+                                await updateStaffMember(st.id, { name: editStaffForm.name, role: editStaffForm.role, email: editStaffForm.email || null, phone: editStaffForm.phone || null, propertyId: editStaffForm.propertyId || null, active: editStaffForm.active !== false });
+                                setStaffList(prev => prev.map(s2 => s2.id === st.id ? { ...s2, ...editStaffForm } : s2));
+                                setEditingStaff(null);
+                                showSuccess("Staff member updated");
+                              } catch (err) { showSuccess("Error: " + err.message); }
+                            }}>Save</button>
+                            <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px" }} onClick={() => setEditingStaff(null)}>Cancel</button>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return (
+                      <tr key={st.id} style={{ opacity: st.active === false ? 0.55 : 1 }}>
+                        <td style={s.td}><span style={{ fontWeight: 600 }}>{st.name}</span></td>
+                        <td style={s.td}><span style={s.badge(st.role === "admin" ? T.accentDim : st.role === "property_manager" ? T.infoDim : T.warnDim, st.role === "admin" ? T.accent : st.role === "property_manager" ? T.info : T.warn)}>{st.role === "property_manager" ? "PM" : st.role === "admin" ? "Admin" : "Maint"}</span></td>
+                        <td style={s.td}><span style={{ fontSize: 12 }}>{st.email || "—"}</span></td>
+                        <td style={s.td}><span style={{ fontSize: 12 }}>{st.phone || "—"}</span></td>
+                        <td style={s.td}><span style={{ fontSize: 12 }}>{st.propertyName || "All"}</span></td>
+                        <td style={s.td}><span style={s.badge(st.active !== false ? T.successDim : T.dangerDim, st.active !== false ? T.success : T.danger)}>{st.active !== false ? "Yes" : "No"}</span></td>
+                        <td style={s.td}>
+                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px", marginRight: 4 }} onClick={() => { setEditingStaff(st.id); setEditStaffForm({ name: st.name, role: st.role, email: st.email || "", phone: st.phone || "", propertyId: st.propertyId || "", active: st.active }); }}>Edit</button>
+                          <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 12, padding: "2px 8px" }} onClick={async () => {
+                            if (!confirm(`Remove ${st.name} from the staff directory?`)) return;
+                            try {
+                              await deleteStaffMember(st.id);
+                              setStaffList(prev => prev.filter(s2 => s2.id !== st.id));
+                              showSuccess(`${st.name} removed`);
+                            } catch (err) { showSuccess("Error: " + err.message); }
+                          }}>Remove</button>
+                        </td>
+                      </tr>
+                    );
                   })}
                 </tbody>
               </table>
