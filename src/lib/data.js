@@ -73,12 +73,13 @@ export async function insertUnit(unit, propertyUuid) {
   };
   if (unit.is_rv !== undefined) row.is_rv = unit.is_rv;
   if (unit.rv_info !== undefined) row.rv_info = unit.rv_info;
+  if (unit.amiSetAside !== undefined) row.ami_set_aside = unit.amiSetAside || null;
   const { data, error } = await supabase.from('units').insert(row).select().single();
   if (error) throw error;
   // Update property total_units count
   const { count } = await supabase.from('units').select('*', { count: 'exact', head: true }).eq('property_id', propertyUuid);
   await supabase.from('properties').update({ total_units: count || 1 }).eq('id', propertyUuid);
-  return { _uuid: data.id, number: data.number, bedrooms: data.bedrooms, bathrooms: data.bathrooms, sqft: data.sqft, is_rv: data.is_rv || false, rv_info: data.rv_info || {} };
+  return { _uuid: data.id, number: data.number, bedrooms: data.bedrooms, bathrooms: data.bathrooms, sqft: data.sqft, is_rv: data.is_rv || false, rv_info: data.rv_info || {}, ami_set_aside: data.ami_set_aside || null };
 }
 
 export async function updateProperty(propUuid, changes) {
@@ -115,6 +116,7 @@ export async function updateUnit(unitUuid, changes) {
   if (changes.floorPlan !== undefined) mapped.floor_plan = changes.floorPlan;
   if (changes.is_rv !== undefined) mapped.is_rv = changes.is_rv;
   if (changes.rv_info !== undefined) mapped.rv_info = changes.rv_info;
+  if (changes.amiSetAside !== undefined) mapped.ami_set_aside = changes.amiSetAside || null;
   const { error } = await supabase.from('units').update(mapped).eq('id', unitUuid);
   if (error) throw error;
 }
@@ -185,6 +187,7 @@ export async function fetchAllUnits() {
     bathrooms: u.bathrooms,
     sqft: u.sqft,
     is_rv: u.is_rv || false,
+    amiSetAside: u.ami_set_aside || null,
   }));
 }
 
@@ -193,7 +196,7 @@ export async function fetchAllUnits() {
 export async function fetchResidents() {
   const { data, error } = await supabase
     .from('residents')
-    .select('*, units(number), properties(slug)')
+    .select('*, units(number, ami_set_aside, bedrooms), properties(slug)')
     .order('name');
   if (error) throw error;
   return data.map(r => ({
@@ -205,6 +208,8 @@ export async function fetchResidents() {
     lastName: r.last_name || r.name?.split(' ').slice(1).join(' ') || '',
     unit: r.units?.number || '',
     unitId: r.unit_id || null,
+    unitAmiSetAside: r.units?.ami_set_aside || null,
+    unitBedrooms: r.units?.bedrooms || null,
     phone: r.phone,
     email: r.email,
     preferredChannel: r.preferred_channel,
