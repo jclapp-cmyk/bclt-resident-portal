@@ -3670,6 +3670,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const [docForm, setDocForm] = useState({ docType: "plan", name: "", notes: "", file: null });
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [docUploading, setDocUploading] = useState(false);
+  const [detailsTab, setDetailsTab] = useState("Overview");
 
   // Load units for selected property (must be before early return to satisfy hooks rules)
   const p = !isAll ? getProperty(selectedProperty) : null;
@@ -3888,85 +3889,199 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
         })()}
       </div>
 
-      {/* Property Records (plans, manuals, regulatory agreements, etc.) */}
-      <div style={{ ...s.card, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>📁 Property Records ({propDocs.length})</div>
-          <button style={{ ...s.btn(showAddDoc ? "ghost" : "primary"), fontSize: 12, padding: "4px 12px" }} onClick={() => setShowAddDoc(v => !v)}>{showAddDoc ? "Cancel" : "➕ Upload"}</button>
-        </div>
-        {showAddDoc && (
-          <div style={{ padding: 14, background: T.bg, borderRadius: T.radiusSm, marginBottom: 14 }}>
-            <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 10, marginBottom: 10 }}>
-              <div><label style={s.label}>Type</label>
-                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={docForm.docType} onChange={e => setDocForm(f => ({ ...f, docType: e.target.value }))}>
-                  <option value="plan">Plan</option>
-                  <option value="manual">Manual</option>
-                  <option value="regulatory_agreement">Regulatory Agreement</option>
-                  <option value="inspection_report">Inspection Report</option>
-                  <option value="insurance">Insurance</option>
-                  <option value="lease_template">Lease Template</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div><label style={s.label}>Document Name</label>
-                <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. 2025 Site Plan" value={docForm.name} onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div><label style={s.label}>File</label>
-                <input type="file" style={{ fontSize: 13 }} onChange={e => setDocForm(f => ({ ...f, file: e.target.files?.[0] || null, name: f.name || e.target.files?.[0]?.name?.replace(/\.[^.]+$/, "") || "" }))} />
-              </div>
+      {/* Property Details — combines metadata, appliances, finishes, documents */}
+      {(() => {
+        const detailTabs = ["Overview", "Appliances", "Finishes", "Documents"];
+        return (
+          <div style={{ ...s.card, marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>🏠 Property Details</div>
             </div>
-            <div style={{ marginBottom: 10 }}>
-              <label style={s.label}>Notes (optional)</label>
-              <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="Any context for this document" value={docForm.notes} onChange={e => setDocForm(f => ({ ...f, notes: e.target.value }))} />
+            <div style={{ display: "flex", gap: 6, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
+              {detailTabs.map(tk => (
+                <button key={tk} onClick={() => setDetailsTab(tk)} style={{
+                  background: "transparent", border: "none", padding: "8px 12px",
+                  fontWeight: 600, cursor: "pointer", fontSize: 13,
+                  borderBottom: detailsTab === tk ? `2px solid ${T.accent}` : "2px solid transparent",
+                  color: detailsTab === tk ? T.accent : T.text,
+                }}>{tk}{tk === "Documents" && propDocs.length > 0 ? ` (${propDocs.length})` : ""}{tk === "Appliances" && (p?.appliances || []).length > 0 ? ` (${(p.appliances || []).length})` : ""}{tk === "Finishes" && (p?.finishes || []).length > 0 ? ` (${(p.finishes || []).length})` : ""}</button>
+              ))}
             </div>
-            <button disabled={!docForm.file || !p?._uuid || docUploading} style={s.btn("primary")} onClick={async () => {
-              if (!docForm.file || !p?._uuid) return;
-              setDocUploading(true);
-              try {
-                const saved = await uploadPropertyDocument(docForm.file, p._uuid, docForm.docType, docForm.name || docForm.file.name, docForm.notes);
-                setPropDocs(prev => [saved, ...prev]);
-                setDocForm({ docType: "plan", name: "", notes: "", file: null });
-                setShowAddDoc(false);
-                showUnitSuccess("Document uploaded");
-              } catch (err) { showUnitSuccess("Upload failed: " + (err.message || "")); }
-              setDocUploading(false);
-            }}>{docUploading ? "Uploading…" : "Upload"}</button>
-          </div>
-        )}
-        {propDocs.length === 0 && !showAddDoc ? (
-          <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic" }}>No documents yet. Upload plans, manuals, regulatory agreements, etc.</div>
-        ) : propDocs.length > 0 && (
-          <table style={s.table}>
-            <thead><tr>{["Name", "Type", "Notes", "Uploaded", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-            <tbody>
-              {propDocs.map(d => {
-                const typeLabels = { plan: "Plan", manual: "Manual", regulatory_agreement: "Regulatory Agreement", inspection_report: "Inspection Report", insurance: "Insurance", lease_template: "Lease Template", other: "Other" };
-                return (
-                  <tr key={d.id}>
-                    <td style={s.td}><span style={{ fontWeight: 600 }}>{d.name}</span></td>
-                    <td style={s.td}><span style={s.badge(T.accentDim, T.accent)}>{typeLabels[d.doc_type] || d.doc_type}</span></td>
-                    <td style={{ ...s.td, color: T.muted, fontSize: 12, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>{d.notes || "—"}</td>
-                    <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString() : "—"}</td>
-                    <td style={s.td}>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={async () => {
-                          try { const url = await getPropertyDocumentUrl(d.path); if (url) window.open(url, "_blank"); else showUnitSuccess("Could not generate link"); }
-                          catch (err) { showUnitSuccess("Error: " + err.message); }
-                        }}>Open</button>
-                        <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", color: T.danger }} onClick={async () => {
-                          if (!confirm(`Delete "${d.name}"?`)) return;
-                          try { await deletePropertyDocument(d.id, d.path); setPropDocs(prev => prev.filter(x => x.id !== d.id)); showUnitSuccess("Deleted"); }
-                          catch (err) { showUnitSuccess("Error: " + err.message); }
-                        }}>🗑</button>
+
+            {detailsTab === "Overview" && (
+              <div style={{ ...s.grid("1fr 1fr", mobile), gap: 10, fontSize: 13 }}>
+                <div><span style={{ color: T.muted }}>Address:</span> <strong>{p?.address || "—"}</strong></div>
+                <div><span style={{ color: T.muted }}>Type:</span> <strong>{p?.type || "—"}</strong></div>
+                <div><span style={{ color: T.muted }}>Year Built:</span> <strong>{p?.yearBuilt || "—"}</strong></div>
+                <div><span style={{ color: T.muted }}>Last Renovation:</span> <strong>{p?.lastRenovation || "—"}</strong></div>
+                <div><span style={{ color: T.muted }}>Total Units:</span> <strong>{p?.totalUnits || 0}</strong></div>
+                <div><span style={{ color: T.muted }}>Total SF:</span> <strong>{p?.totalSF ? p.totalSF.toLocaleString() : "—"}</strong></div>
+                <div><span style={{ color: T.muted }}>Lot Size:</span> <strong>{p?.lotSize || "—"}</strong></div>
+                <div><span style={{ color: T.muted }}>ADA Units:</span> <strong>{p?.adaUnits || 0}</strong></div>
+                <div><span style={{ color: T.muted }}>Manager:</span> <strong>{p?.manager || "—"}</strong></div>
+                <div><span style={{ color: T.muted }}>Office Hours:</span> <strong>{p?.officeHours || "—"}</strong></div>
+                {p?.managerPhone && <div><span style={{ color: T.muted }}>Phone:</span> <strong>{p.managerPhone}</strong></div>}
+                {p?.managerEmail && <div><span style={{ color: T.muted }}>Email:</span> <strong>{p.managerEmail}</strong></div>}
+              </div>
+            )}
+
+            {detailsTab === "Appliances" && (() => {
+              const list = p?.appliances || [];
+              const save = async (newList) => {
+                try { await updateProperty(p._uuid, { appliances: newList }); if (onDataRefresh) await onDataRefresh(); }
+                catch (err) { showUnitSuccess("Error: " + err.message); }
+              };
+              return (
+                <div>
+                  <div style={{ fontSize: 13, color: T.muted, marginBottom: 10 }}>Common-area or building-wide appliances. Track make/model so replacements and warranty lookups are easy.</div>
+                  {list.length === 0 ? (
+                    <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic", marginBottom: 10 }}>No appliances logged yet.</div>
+                  ) : (
+                    <table style={{ ...s.table, marginBottom: 10 }}>
+                      <thead><tr>{["Name", "Brand", "Model", "Location", "Notes", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>{list.map((a, i) => (
+                        <tr key={i}>
+                          <td style={s.td}><strong>{a.name}</strong></td>
+                          <td style={s.td}>{a.brand || "—"}</td>
+                          <td style={s.td}>{a.model || "—"}</td>
+                          <td style={s.td}>{a.location || "—"}</td>
+                          <td style={{ ...s.td, color: T.muted, fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{a.notes || "—"}</td>
+                          <td style={s.td}><button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11, padding: "2px 8px" }} onClick={async () => { if (!confirm(`Remove ${a.name}?`)) return; await save(list.filter((_, idx) => idx !== i)); }}>🗑</button></td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  )}
+                  <button style={{ ...s.btn("ghost"), fontSize: 13 }} onClick={() => {
+                    const name = window.prompt("Appliance name (e.g. Washer, Dryer, Boiler):"); if (!name) return;
+                    const brand = window.prompt("Brand (optional):") || "";
+                    const model = window.prompt("Model (optional):") || "";
+                    const location = window.prompt("Location (e.g. Laundry Room, Lobby):") || "";
+                    save([...list, { name, brand, model, location, notes: "" }]);
+                  }}>＋ Add Appliance</button>
+                </div>
+              );
+            })()}
+
+            {detailsTab === "Finishes" && (() => {
+              const list = p?.finishes || [];
+              const save = async (newList) => {
+                try { await updateProperty(p._uuid, { finishes: newList }); if (onDataRefresh) await onDataRefresh(); }
+                catch (err) { showUnitSuccess("Error: " + err.message); }
+              };
+              return (
+                <div>
+                  <div style={{ fontSize: 13, color: T.muted, marginBottom: 10 }}>Materials and finishes used in the building (paint, flooring, fixtures, cabinetry, etc.) — useful for matching during repairs.</div>
+                  {list.length === 0 ? (
+                    <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic", marginBottom: 10 }}>No finishes logged yet.</div>
+                  ) : (
+                    <table style={{ ...s.table, marginBottom: 10 }}>
+                      <thead><tr>{["Area", "Material", "Color / Style", "Year", "Notes", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>{list.map((f, i) => (
+                        <tr key={i}>
+                          <td style={s.td}><strong>{f.area}</strong></td>
+                          <td style={s.td}>{f.material || "—"}</td>
+                          <td style={s.td}>{f.color || "—"}</td>
+                          <td style={s.td}>{f.year || "—"}</td>
+                          <td style={{ ...s.td, color: T.muted, fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{f.notes || "—"}</td>
+                          <td style={s.td}><button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11, padding: "2px 8px" }} onClick={async () => { if (!confirm(`Remove ${f.area} finish?`)) return; await save(list.filter((_, idx) => idx !== i)); }}>🗑</button></td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  )}
+                  <button style={{ ...s.btn("ghost"), fontSize: 13 }} onClick={() => {
+                    const area = window.prompt("Area (e.g. Kitchen, Bathroom, Hallway):"); if (!area) return;
+                    const material = window.prompt("Material (e.g. Quartz, LVP, Tile):") || "";
+                    const color = window.prompt("Color or style (optional):") || "";
+                    const year = window.prompt("Year installed (optional):") || "";
+                    save([...list, { area, material, color, year, notes: "" }]);
+                  }}>＋ Add Finish</button>
+                </div>
+              );
+            })()}
+
+            {detailsTab === "Documents" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10 }}>
+                  <div style={{ fontSize: 13, color: T.muted }}>Plans, manuals, regulatory agreements, insurance, inspection reports, etc.</div>
+                  <button style={{ ...s.btn(showAddDoc ? "ghost" : "primary"), fontSize: 12, padding: "4px 12px" }} onClick={() => setShowAddDoc(v => !v)}>{showAddDoc ? "Cancel" : "➕ Upload"}</button>
+                </div>
+                {showAddDoc && (
+                  <div style={{ padding: 14, background: T.bg, borderRadius: T.radiusSm, marginBottom: 14 }}>
+                    <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 10, marginBottom: 10 }}>
+                      <div><label style={s.label}>Type</label>
+                        <select style={{ ...s.mSelect(mobile), width: "100%" }} value={docForm.docType} onChange={e => setDocForm(f => ({ ...f, docType: e.target.value }))}>
+                          <option value="plan">Plan</option>
+                          <option value="manual">Manual</option>
+                          <option value="regulatory_agreement">Regulatory Agreement</option>
+                          <option value="inspection_report">Inspection Report</option>
+                          <option value="insurance">Insurance</option>
+                          <option value="lease_template">Lease Template</option>
+                          <option value="other">Other</option>
+                        </select>
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                      <div><label style={s.label}>Document Name</label>
+                        <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. 2025 Site Plan" value={docForm.name} onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
+                      </div>
+                      <div><label style={s.label}>File</label>
+                        <input type="file" style={{ fontSize: 13 }} onChange={e => setDocForm(f => ({ ...f, file: e.target.files?.[0] || null, name: f.name || e.target.files?.[0]?.name?.replace(/\.[^.]+$/, "") || "" }))} />
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      <label style={s.label}>Notes (optional)</label>
+                      <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="Any context for this document" value={docForm.notes} onChange={e => setDocForm(f => ({ ...f, notes: e.target.value }))} />
+                    </div>
+                    <button disabled={!docForm.file || !p?._uuid || docUploading} style={s.btn("primary")} onClick={async () => {
+                      if (!docForm.file || !p?._uuid) return;
+                      setDocUploading(true);
+                      try {
+                        const saved = await uploadPropertyDocument(docForm.file, p._uuid, docForm.docType, docForm.name || docForm.file.name, docForm.notes);
+                        setPropDocs(prev => [saved, ...prev]);
+                        setDocForm({ docType: "plan", name: "", notes: "", file: null });
+                        setShowAddDoc(false);
+                        showUnitSuccess("Document uploaded");
+                      } catch (err) { showUnitSuccess("Upload failed: " + (err.message || "")); }
+                      setDocUploading(false);
+                    }}>{docUploading ? "Uploading…" : "Upload"}</button>
+                  </div>
+                )}
+                {propDocs.length === 0 && !showAddDoc ? (
+                  <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic" }}>No documents yet. Upload plans, manuals, regulatory agreements, etc.</div>
+                ) : propDocs.length > 0 && (
+                  <table style={s.table}>
+                    <thead><tr>{["Name", "Type", "Notes", "Uploaded", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {propDocs.map(d => {
+                        const typeLabels = { plan: "Plan", manual: "Manual", regulatory_agreement: "Regulatory Agreement", inspection_report: "Inspection Report", insurance: "Insurance", lease_template: "Lease Template", other: "Other" };
+                        return (
+                          <tr key={d.id}>
+                            <td style={s.td}><span style={{ fontWeight: 600 }}>{d.name}</span></td>
+                            <td style={s.td}><span style={s.badge(T.accentDim, T.accent)}>{typeLabels[d.doc_type] || d.doc_type}</span></td>
+                            <td style={{ ...s.td, color: T.muted, fontSize: 12, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>{d.notes || "—"}</td>
+                            <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString() : "—"}</td>
+                            <td style={s.td}>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={async () => {
+                                  try { const url = await getPropertyDocumentUrl(d.path); if (url) window.open(url, "_blank"); else showUnitSuccess("Could not generate link"); }
+                                  catch (err) { showUnitSuccess("Error: " + err.message); }
+                                }}>Open</button>
+                                <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", color: T.danger }} onClick={async () => {
+                                  if (!confirm(`Delete "${d.name}"?`)) return;
+                                  try { await deletePropertyDocument(d.id, d.path); setPropDocs(prev => prev.filter(x => x.id !== d.id)); showUnitSuccess("Deleted"); }
+                                  catch (err) { showUnitSuccess("Error: " + err.message); }
+                                }}>🗑</button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {showAddProp && (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>

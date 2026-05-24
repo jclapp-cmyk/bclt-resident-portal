@@ -31,6 +31,8 @@ export async function fetchProperties() {
     managerEmail: p.manager_email,
     officeHours: p.office_hours,
     documents: p.documents || [],
+    appliances: Array.isArray(p.appliances) ? p.appliances : (typeof p.appliances === 'string' ? (() => { try { return JSON.parse(p.appliances); } catch { return []; } })() : []),
+    finishes: Array.isArray(p.finishes) ? p.finishes : (typeof p.finishes === 'string' ? (() => { try { return JSON.parse(p.finishes); } catch { return []; } })() : []),
   }));
 }
 
@@ -103,6 +105,8 @@ export async function updateProperty(propUuid, changes) {
   if (changes.lotSize !== undefined) mapped.lot_size = changes.lotSize;
   if (changes.adaUnits !== undefined) mapped.ada_units = changes.adaUnits;
   if (changes.yearBuilt !== undefined) mapped.year_built = changes.yearBuilt;
+  if (changes.appliances !== undefined) mapped.appliances = changes.appliances;
+  if (changes.finishes !== undefined) mapped.finishes = changes.finishes;
   const { error } = await supabase.from('properties').update(mapped).eq('id', propUuid);
   if (error) throw error;
 }
