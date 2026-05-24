@@ -76,6 +76,8 @@ export async function insertUnit(unit, propertyUuid) {
   if (unit.is_rv !== undefined) row.is_rv = unit.is_rv;
   if (unit.rv_info !== undefined) row.rv_info = unit.rv_info;
   if (unit.amiSetAside !== undefined) row.ami_set_aside = unit.amiSetAside || null;
+  if (unit.appliances !== undefined) row.appliances = unit.appliances;
+  if (unit.finishes !== undefined) row.finishes = unit.finishes;
   const { data, error } = await supabase.from('units').insert(row).select().single();
   if (error) throw error;
   // Update property total_units count
@@ -121,6 +123,8 @@ export async function updateUnit(unitUuid, changes) {
   if (changes.is_rv !== undefined) mapped.is_rv = changes.is_rv;
   if (changes.rv_info !== undefined) mapped.rv_info = changes.rv_info;
   if (changes.amiSetAside !== undefined) mapped.ami_set_aside = changes.amiSetAside || null;
+  if (changes.appliances !== undefined) mapped.appliances = changes.appliances;
+  if (changes.finishes !== undefined) mapped.finishes = changes.finishes;
   const { error } = await supabase.from('units').update(mapped).eq('id', unitUuid);
   if (error) throw error;
 }

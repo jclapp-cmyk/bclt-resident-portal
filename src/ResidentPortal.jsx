@@ -3671,6 +3671,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [docUploading, setDocUploading] = useState(false);
   const [detailsTab, setDetailsTab] = useState("Overview");
+  const [unitDetailModal, setUnitDetailModal] = useState(null); // { unit, tab }
 
   // Load units for selected property (must be before early return to satisfy hooks rules)
   const p = !isAll ? getProperty(selectedProperty) : null;
@@ -4249,6 +4250,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                     <td style={s.td}>{u.is_rv ? <span style={s.badge(T.warnDim, T.warn)}>RV</span> : <span style={{ color: T.dim, fontSize: 12 }}>Standard</span>}</td>
                     <td style={s.td}>
                       <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => setUnitDetailModal({ unit: u, tab: "Appliances" })}>📋 Details</button>
                         <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), amiSetAside: u.ami_set_aside || "", isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); }}>Edit</button>
                         <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px", color: T.danger }} onClick={async () => {
                           if (!confirm(`Delete unit ${u.number}?`)) return;
@@ -4269,6 +4271,112 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               })}
             </tbody>
           </table>
+          {/* Unit Details Modal — appliances + finishes */}
+          {unitDetailModal && (() => {
+            const u = unitDetailModal.unit;
+            const uid = u._uuid || u.id;
+            const tab = unitDetailModal.tab;
+            const setTab = (t) => setUnitDetailModal(prev => ({ ...prev, tab: t }));
+            const appliances = Array.isArray(u.appliances) ? u.appliances : (typeof u.appliances === 'string' ? (() => { try { return JSON.parse(u.appliances); } catch { return []; } })() : []);
+            const finishes = Array.isArray(u.finishes) ? u.finishes : (typeof u.finishes === 'string' ? (() => { try { return JSON.parse(u.finishes); } catch { return []; } })() : []);
+            const saveAppliances = async (newList) => {
+              try {
+                await updateUnit(uid, { appliances: newList });
+                setUnitList(prev => prev.map(x => (x._uuid || x.id) === uid ? { ...x, appliances: newList } : x));
+                setUnitDetailModal(prev => ({ ...prev, unit: { ...prev.unit, appliances: newList } }));
+              } catch (err) { showUnitSuccess("Error: " + err.message); }
+            };
+            const saveFinishes = async (newList) => {
+              try {
+                await updateUnit(uid, { finishes: newList });
+                setUnitList(prev => prev.map(x => (x._uuid || x.id) === uid ? { ...x, finishes: newList } : x));
+                setUnitDetailModal(prev => ({ ...prev, unit: { ...prev.unit, finishes: newList } }));
+              } catch (err) { showUnitSuccess("Error: " + err.message); }
+            };
+            return (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setUnitDetailModal(null)}>
+                <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius, maxWidth: 720, width: "100%", maxHeight: "92vh", overflowY: "auto", padding: 24 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, gap: 10 }}>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: 18 }}>Unit {u.number}</h2>
+                      <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{u.bedrooms}BR / {u.bathrooms}BA{u.sqft ? ` · ${u.sqft} sqft` : ""}{u.ami_set_aside ? ` · ${u.ami_set_aside} AMI` : ""}</div>
+                    </div>
+                    <button style={s.btn("ghost")} onClick={() => setUnitDetailModal(null)}>✕</button>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 6, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
+                    {["Appliances", "Finishes"].map(t => (
+                      <button key={t} onClick={() => setTab(t)} style={{
+                        background: "transparent", border: "none", padding: "8px 14px",
+                        fontWeight: 600, cursor: "pointer", fontSize: 14,
+                        borderBottom: tab === t ? `2px solid ${T.accent}` : "2px solid transparent",
+                        color: tab === t ? T.accent : T.text,
+                      }}>{t}{t === "Appliances" && appliances.length > 0 ? ` (${appliances.length})` : ""}{t === "Finishes" && finishes.length > 0 ? ` (${finishes.length})` : ""}</button>
+                    ))}
+                  </div>
+
+                  {tab === "Appliances" && (
+                    <div>
+                      <div style={{ fontSize: 13, color: T.muted, marginBottom: 10 }}>In-unit appliances (fridge, stove, dishwasher, etc.).</div>
+                      {appliances.length === 0 ? (
+                        <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic", marginBottom: 10 }}>No appliances logged yet.</div>
+                      ) : (
+                        <table style={{ ...s.table, marginBottom: 10 }}>
+                          <thead><tr>{["Name", "Brand", "Model", "Serial / Notes", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                          <tbody>{appliances.map((a, i) => (
+                            <tr key={i}>
+                              <td style={s.td}><strong>{a.name}</strong></td>
+                              <td style={s.td}>{a.brand || "—"}</td>
+                              <td style={s.td}>{a.model || "—"}</td>
+                              <td style={{ ...s.td, color: T.muted, fontSize: 12, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{a.serial || a.notes || "—"}</td>
+                              <td style={s.td}><button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11, padding: "2px 8px" }} onClick={async () => { if (!confirm(`Remove ${a.name}?`)) return; await saveAppliances(appliances.filter((_, idx) => idx !== i)); }}>🗑</button></td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      )}
+                      <button style={{ ...s.btn("ghost"), fontSize: 13 }} onClick={async () => {
+                        const name = window.prompt("Appliance (e.g. Fridge, Stove, Dishwasher):"); if (!name) return;
+                        const brand = window.prompt("Brand (optional):") || "";
+                        const model = window.prompt("Model (optional):") || "";
+                        const serial = window.prompt("Serial number or notes (optional):") || "";
+                        await saveAppliances([...appliances, { name, brand, model, serial }]);
+                      }}>＋ Add Appliance</button>
+                    </div>
+                  )}
+
+                  {tab === "Finishes" && (
+                    <div>
+                      <div style={{ fontSize: 13, color: T.muted, marginBottom: 10 }}>Finishes in this specific unit (paint, flooring, countertops, fixtures).</div>
+                      {finishes.length === 0 ? (
+                        <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic", marginBottom: 10 }}>No finishes logged yet.</div>
+                      ) : (
+                        <table style={{ ...s.table, marginBottom: 10 }}>
+                          <thead><tr>{["Area", "Material", "Color / Style", "Year", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                          <tbody>{finishes.map((f, i) => (
+                            <tr key={i}>
+                              <td style={s.td}><strong>{f.area}</strong></td>
+                              <td style={s.td}>{f.material || "—"}</td>
+                              <td style={s.td}>{f.color || "—"}</td>
+                              <td style={s.td}>{f.year || "—"}</td>
+                              <td style={s.td}><button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 11, padding: "2px 8px" }} onClick={async () => { if (!confirm(`Remove ${f.area} finish?`)) return; await saveFinishes(finishes.filter((_, idx) => idx !== i)); }}>🗑</button></td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      )}
+                      <button style={{ ...s.btn("ghost"), fontSize: 13 }} onClick={async () => {
+                        const area = window.prompt("Area (e.g. Kitchen, Bath, Bedroom 1):"); if (!area) return;
+                        const material = window.prompt("Material (e.g. Quartz, LVP, Tile):") || "";
+                        const color = window.prompt("Color or style (optional):") || "";
+                        const year = window.prompt("Year installed (optional):") || "";
+                        await saveFinishes([...finishes, { area, material, color, year }]);
+                      }}>＋ Add Finish</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* QR Code Popup */}
           {qrUnit && (
             <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setQrUnit(null)}>
