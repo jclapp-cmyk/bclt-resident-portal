@@ -3671,7 +3671,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const [showAddDoc, setShowAddDoc] = useState(false);
   const [docUploading, setDocUploading] = useState(false);
   const [detailsTab, setDetailsTab] = useState("Overview");
-  const [unitDetailModal, setUnitDetailModal] = useState(null); // { unit, tab }
+  const [unitDetailModal, setUnitDetailModal] = useState(null); // { unit, tab, editing?: bool }
 
   // Load units for selected property (must be before early return to satisfy hooks rules)
   const p = !isAll ? getProperty(selectedProperty) : null;
@@ -4135,69 +4135,6 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
             <tbody>
               {unitList.map(u => {
                 const uid = u._uuid || u.id;
-                if (editingUnit === uid) {
-                  return ([
-                    <tr key={uid}>
-                      <td style={s.td}><input style={{ ...s.input, width: 80, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.number || ""} onChange={e => setEditUnitForm(f => ({ ...f, number: e.target.value }))} /></td>
-                      <td style={s.td}><span style={{ color: T.dim, fontSize: 12 }}>—</span></td>
-                      <td style={s.td}><input type="number" style={{ ...s.input, width: 50, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.bedrooms || ""} onChange={e => setEditUnitForm(f => ({ ...f, bedrooms: e.target.value }))} /></td>
-                      <td style={s.td}><input type="number" style={{ ...s.input, width: 50, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.bathrooms || ""} onChange={e => setEditUnitForm(f => ({ ...f, bathrooms: e.target.value }))} /></td>
-                      <td style={s.td}><input type="number" style={{ ...s.input, width: 70, padding: "4px 6px", fontSize: 13 }} value={editUnitForm.sqft || ""} onChange={e => setEditUnitForm(f => ({ ...f, sqft: e.target.value }))} /></td>
-                      <td style={s.td}>
-                        <select style={{ ...s.select, padding: "4px 6px", fontSize: 12 }} value={editUnitForm.amiSetAside || ""} onChange={e => setEditUnitForm(f => ({ ...f, amiSetAside: e.target.value }))}>
-                          <option value="">—</option>
-                          {["30%", "40%", "50%", "60%", "70%", "80%", "100%", "120%", "Market"].map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </td>
-                      <td style={s.td}>
-                        <select style={{ ...s.select, padding: "4px 6px", fontSize: 12 }} value={editUnitForm.unitType || "apartment"} onChange={e => setEditUnitForm(f => ({ ...f, unitType: e.target.value, isRv: e.target.value === "rv", rvInfo: e.target.value === "rv" ? (f.rvInfo || {}) : {} }))}>
-                          <option value="apartment">Apartment</option>
-                          <option value="house">House</option>
-                          <option value="sro">SRO</option>
-                          <option value="rv">RV</option>
-                        </select>
-                      </td>
-                      <td style={s.td}>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button style={{ ...s.btn("primary"), fontSize: 11, padding: "4px 8px" }} onClick={async () => {
-                            try {
-                              const isRv = (editUnitForm.unitType || "apartment") === "rv";
-                              await updateUnit(uid, { number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0, amiSetAside: editUnitForm.amiSetAside || null, is_rv: isRv, rv_info: isRv ? (editUnitForm.rvInfo || {}) : null, unitType: editUnitForm.unitType || "apartment" });
-                              setUnitList(prev => prev.map(x => (x._uuid || x.id) === uid ? { ...x, number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0, ami_set_aside: editUnitForm.amiSetAside || null, is_rv: isRv, rv_info: isRv ? (editUnitForm.rvInfo || {}) : null, unit_type: editUnitForm.unitType || "apartment" } : x));
-                              setEditingUnit(null);
-                              showUnitSuccess("Unit updated");
-                            } catch (err) { showUnitSuccess("Error: " + err.message); }
-                          }}>Save</button>
-                          <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => setEditingUnit(null)}>Cancel</button>
-                        </div>
-                      </td>
-                    </tr>,
-                    (editUnitForm.unitType || (editUnitForm.isRv ? "rv" : "")) === "rv" && (
-                      <tr key={`${uid}-rv`}>
-                        <td colSpan={7} style={{ ...s.td, padding: 0 }}>
-                          <div style={{ background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14, margin: "4px 8px 8px" }}>
-                            <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13, color: T.accent }}>RV Information</div>
-                            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr 1fr 1fr", gap: 10 }}>
-                              {(settings.rvFields || []).map(f => (
-                                <div key={f.key}>
-                                  <label style={{ ...s.label, fontSize: 11 }}>{f.label}</label>
-                                  {f.type === "select" ? (
-                                    <select style={{ ...s.select, fontSize: 12, padding: "4px 6px", width: "100%" }} value={(editUnitForm.rvInfo || {})[f.key] || ""} onChange={e => setEditUnitForm(prev => ({ ...prev, rvInfo: { ...(prev.rvInfo || {}), [f.key]: e.target.value } }))}>
-                                      <option value="">Select...</option>
-                                      {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
-                                    </select>
-                                  ) : (
-                                    <input style={{ ...s.input, fontSize: 12, padding: "4px 6px", width: "100%" }} placeholder={f.placeholder || ""} value={(editUnitForm.rvInfo || {})[f.key] || ""} onChange={e => setEditUnitForm(prev => ({ ...prev, rvInfo: { ...(prev.rvInfo || {}), [f.key]: e.target.value } }))} />
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ),
-                  ]);
-                }
                 const unitResident = propResidents.find(r => r.unit === u.number);
                 return (
                   <tr key={uid}>
@@ -4220,7 +4157,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                     })()}</td>
                     <td style={s.td}>
                       <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), amiSetAside: u.ami_set_aside || "", unitType: u.unit_type || (u.is_rv ? "rv" : "apartment"), isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); }}>Edit</button>
+                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), amiSetAside: u.ami_set_aside || "", unitType: u.unit_type || (u.is_rv ? "rv" : "apartment"), isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); setUnitDetailModal({ unit: u, tab: "Overview", editing: true }); }}>Edit</button>
                         <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px", color: T.danger }} onClick={async () => {
                           if (!confirm(`Delete unit ${u.number}?`)) return;
                           try {
@@ -4298,18 +4235,82 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                   </div>
 
                   {tab === "Overview" && (
-                    <div style={{ ...s.grid("1fr 1fr", mobile), gap: 10, fontSize: 13 }}>
-                      <div><span style={{ color: T.muted }}>Unit Number:</span> <strong>{u.number}</strong></div>
-                      <div><span style={{ color: T.muted }}>Property:</span> <strong>{p?.name || "—"}</strong></div>
-                      <div><span style={{ color: T.muted }}>Bedrooms:</span> <strong>{u.bedrooms || "—"}</strong></div>
-                      <div><span style={{ color: T.muted }}>Bathrooms:</span> <strong>{u.bathrooms || "—"}</strong></div>
-                      <div><span style={{ color: T.muted }}>Square Feet:</span> <strong>{u.sqft ? u.sqft.toLocaleString() : "—"}</strong></div>
-                      <div><span style={{ color: T.muted }}>AMI Set-Aside:</span> <strong>{u.ami_set_aside || "—"}</strong></div>
-                      <div><span style={{ color: T.muted }}>Type:</span> <strong>{({ apartment: "Apartment", house: "House", sro: "SRO", rv: "RV" })[u.unit_type || (u.is_rv ? "rv" : "apartment")] || u.unit_type || "Apartment"}</strong></div>
-                      {(u.unit_type === "rv" || u.is_rv) && u.rv_info && Object.entries(u.rv_info).map(([k, v]) => (
-                        v ? <div key={k}><span style={{ color: T.muted }}>{k}:</span> <strong>{v}</strong></div> : null
-                      ))}
-                    </div>
+                    unitDetailModal.editing ? (
+                      <div>
+                        <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 12, marginBottom: 14 }}>
+                          <div><label style={s.label}>Unit Number</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={editUnitForm.number || ""} onChange={e => setEditUnitForm(f => ({ ...f, number: e.target.value }))} /></div>
+                          <div><label style={s.label}>Bedrooms</label><input type="number" min="0" style={{ ...s.mInput(mobile), width: "100%" }} value={editUnitForm.bedrooms || ""} onChange={e => setEditUnitForm(f => ({ ...f, bedrooms: e.target.value }))} /></div>
+                          <div><label style={s.label}>Bathrooms</label><input type="number" min="0" style={{ ...s.mInput(mobile), width: "100%" }} value={editUnitForm.bathrooms || ""} onChange={e => setEditUnitForm(f => ({ ...f, bathrooms: e.target.value }))} /></div>
+                          <div><label style={s.label}>Sqft</label><input type="number" style={{ ...s.mInput(mobile), width: "100%" }} value={editUnitForm.sqft || ""} onChange={e => setEditUnitForm(f => ({ ...f, sqft: e.target.value }))} /></div>
+                          <div><label style={s.label}>AMI Set-Aside</label>
+                            <select style={{ ...s.mSelect(mobile), width: "100%" }} value={editUnitForm.amiSetAside || ""} onChange={e => setEditUnitForm(f => ({ ...f, amiSetAside: e.target.value }))}>
+                              <option value="">Not set</option>
+                              {["30%", "40%", "50%", "60%", "70%", "80%", "100%", "120%", "Market"].map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </div>
+                          <div><label style={s.label}>Type</label>
+                            <select style={{ ...s.mSelect(mobile), width: "100%" }} value={editUnitForm.unitType || "apartment"} onChange={e => setEditUnitForm(f => ({ ...f, unitType: e.target.value, isRv: e.target.value === "rv", rvInfo: e.target.value === "rv" ? (f.rvInfo || {}) : {} }))}>
+                              <option value="apartment">Apartment</option>
+                              <option value="house">House</option>
+                              <option value="sro">SRO</option>
+                              <option value="rv">RV</option>
+                            </select>
+                          </div>
+                        </div>
+                        {(editUnitForm.unitType || (editUnitForm.isRv ? "rv" : "")) === "rv" && (
+                          <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14, marginBottom: 14 }}>
+                            <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 13, color: T.accent }}>RV Information</div>
+                            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+                              {(settings.rvFields || []).map(f => (
+                                <div key={f.key}>
+                                  <label style={{ ...s.label, fontSize: 11 }}>{f.label}</label>
+                                  {f.type === "select" ? (
+                                    <select style={{ ...s.mSelect(mobile), width: "100%" }} value={(editUnitForm.rvInfo || {})[f.key] || ""} onChange={e => setEditUnitForm(prev => ({ ...prev, rvInfo: { ...(prev.rvInfo || {}), [f.key]: e.target.value } }))}>
+                                      <option value="">Select...</option>
+                                      {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  ) : (
+                                    <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder={f.placeholder || ""} value={(editUnitForm.rvInfo || {})[f.key] || ""} onChange={e => setEditUnitForm(prev => ({ ...prev, rvInfo: { ...(prev.rvInfo || {}), [f.key]: e.target.value } }))} />
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", gap: 10 }}>
+                          <button style={s.btn("primary")} onClick={async () => {
+                            try {
+                              const isRv = (editUnitForm.unitType || "apartment") === "rv";
+                              const updated = { number: editUnitForm.number, bedrooms: parseInt(editUnitForm.bedrooms) || 1, bathrooms: parseInt(editUnitForm.bathrooms) || 1, sqft: parseInt(editUnitForm.sqft) || 0, amiSetAside: editUnitForm.amiSetAside || null, is_rv: isRv, rv_info: isRv ? (editUnitForm.rvInfo || {}) : null, unitType: editUnitForm.unitType || "apartment" };
+                              await updateUnit(uid, updated);
+                              const merged = { ...u, number: updated.number, bedrooms: updated.bedrooms, bathrooms: updated.bathrooms, sqft: updated.sqft, ami_set_aside: updated.amiSetAside, is_rv: updated.is_rv, rv_info: updated.rv_info, unit_type: updated.unitType };
+                              setUnitList(prev => prev.map(x => (x._uuid || x.id) === uid ? merged : x));
+                              setUnitDetailModal(prev => ({ ...prev, unit: merged, editing: false }));
+                              showUnitSuccess("Unit updated");
+                            } catch (err) { showUnitSuccess("Error: " + err.message); }
+                          }}>Save Changes</button>
+                          <button style={s.btn("ghost")} onClick={() => setUnitDetailModal(prev => ({ ...prev, editing: false }))}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+                          <button style={s.btn("ghost")} onClick={() => { setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), amiSetAside: u.ami_set_aside || "", unitType: u.unit_type || (u.is_rv ? "rv" : "apartment"), isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); setUnitDetailModal(prev => ({ ...prev, editing: true })); }}>✏️ Edit</button>
+                        </div>
+                        <div style={{ ...s.grid("1fr 1fr", mobile), gap: 10, fontSize: 13 }}>
+                          <div><span style={{ color: T.muted }}>Unit Number:</span> <strong>{u.number}</strong></div>
+                          <div><span style={{ color: T.muted }}>Property:</span> <strong>{p?.name || "—"}</strong></div>
+                          <div><span style={{ color: T.muted }}>Bedrooms:</span> <strong>{u.bedrooms || "—"}</strong></div>
+                          <div><span style={{ color: T.muted }}>Bathrooms:</span> <strong>{u.bathrooms || "—"}</strong></div>
+                          <div><span style={{ color: T.muted }}>Square Feet:</span> <strong>{u.sqft ? u.sqft.toLocaleString() : "—"}</strong></div>
+                          <div><span style={{ color: T.muted }}>AMI Set-Aside:</span> <strong>{u.ami_set_aside || "—"}</strong></div>
+                          <div><span style={{ color: T.muted }}>Type:</span> <strong>{({ apartment: "Apartment", house: "House", sro: "SRO", rv: "RV" })[u.unit_type || (u.is_rv ? "rv" : "apartment")] || u.unit_type || "Apartment"}</strong></div>
+                          {(u.unit_type === "rv" || u.is_rv) && u.rv_info && Object.entries(u.rv_info).map(([k, v]) => (
+                            v ? <div key={k}><span style={{ color: T.muted }}>{k}:</span> <strong>{v}</strong></div> : null
+                          ))}
+                        </div>
+                      </div>
+                    )
                   )}
 
                   {tab === "Resident" && (
