@@ -7447,21 +7447,39 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
 };
 
 // --- CALENDAR EVENTS BUILDER ---
-const buildCalendarEvents = (maintenance, vendors, unitInspections, threads = []) => {
+const buildCalendarEvents = (maintenance, vendors, unitInspections, threads = [], certs = []) => {
   const events = [];
   const add = (date, type, icon, color, label, description, sourcePage) => {
     if (date) events.push({ date: date.slice(0, 10), type, icon, color, label, description, sourcePage });
   };
-  // Regulatory inspections
-  LIVE_REG_INSPECTIONS.forEach(i => add(i.nextDue, "inspection", "🔍", T.info, `${i.type} Inspection Due`, `${i.authority}`, "inspections"));
+  // Regulatory inspections — show BOTH the scheduled date and the next-due date
+  LIVE_REG_INSPECTIONS.forEach(i => {
+    const propName = (LIVE_PROPERTIES.find(p => p.id === i.propertyId)?.name) || i.propertyId || "";
+    const detail = `${i.authority || i.type}${propName ? ` · ${propName}` : ""}${i.timeWindow ? ` · ${i.timeWindow}` : ""}`;
+    if (i.date && i.result === "Scheduled") add(i.date, "inspection", "📋", T.info, `${i.type} Inspection`, detail, "inspections");
+    if (i.nextDue) add(i.nextDue, "inspection", "🔍", T.info, `${i.type} Next Due`, detail, "inspections");
+  });
   // Unit inspections
-  unitInspections.forEach(i => add(i.date, "inspection", "🔍", T.accent, `${i.category} — ${i.unit}`, `${i.result}${i.score ? ` (${i.score})` : ""} — ${i.inspector}`, "inspections"));
+  unitInspections.forEach(i => {
+    const desc = `${i.result || "Scheduled"}${i.score ? ` (${i.score})` : ""}${i.inspector ? ` — ${i.inspector}` : ""}${i.timeWindow ? ` · ${i.timeWindow}` : ""}`;
+    add(i.date, "inspection", "🔍", T.accent, `${i.category} — ${i.unit}`, desc, "inspections");
+  });
   // Maintenance
   maintenance.forEach(m => {
-    add(m.submitted, "maintenance", "🔧", T.warn, `${m.id} Submitted`, `${m.category}: ${m.description}`, "maintenance");
-    if (m.projectedComplete) add(m.projectedComplete, "maintenance", "🔧", T.warn, `${m.id} Target Completion`, `${m.category} — ${m.unit}`, "maintenance");
+    add(m.submitted, "maintenance", "🔧", T.warn, `Submitted: ${m.description?.slice(0, 60) || m.category}`, `${m.category}${m.unit ? ` — Unit ${m.unit}` : ""}`, "maintenance");
+    if (m.projectedComplete) add(m.projectedComplete, "maintenance", "🔧", T.warn, `Target Complete: ${m.description?.slice(0, 60) || m.category}`, `${m.category}${m.unit ? ` — Unit ${m.unit}` : ""}`, "maintenance");
   });
-  // Recertification — skip if no data
+  // Income certification deadlines + effective dates
+  (certs || []).forEach(c => {
+    const who = c.residentName ? `${c.residentName}${c.unit ? ` (Unit ${c.unit})` : ""}` : "Resident";
+    if (c.deadline && c.status !== "approved" && c.status !== "rejected") {
+      add(c.deadline, "recert", "📋", T.danger, `Cert deadline: ${who}`, `${(c.status || "draft").replace("_", " ")}`, "recert");
+    }
+    if (c.status === "approved" && c.effectiveDate) {
+      add(c.effectiveDate, "recert", "📋", T.success, `Cert effective: ${who}`, `Approved`, "recert");
+    }
+  });
+  // Lease expiries (from residents extended)
   Object.entries(LIVE_RESIDENTS_EXTENDED || {}).forEach(([id, r]) => {
     const res = LIVE_RESIDENTS.find(rr => rr.id === id);
     add(r.leaseEnd, "recert", "📋", T.danger, `Lease Expiry — ${r.unit}`, res ? res.name : id, "recert");
@@ -7472,28 +7490,36 @@ const buildCalendarEvents = (maintenance, vendors, unitInspections, threads = []
     add(v.coiExp, "vendor", "📇", T.accent, `COI Expiry: ${v.company}`, `Certificate of Insurance`, "vendors");
   });
   // Community events from broadcasts
-  threads.filter(t => t.type === "broadcast").forEach(t => {
-    const match = t.subject.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})/i);
-    let d = t.lastDate.slice(0, 10);
+  (threads || []).filter(t => t.type === "broadcast").forEach(t => {
+    const match = t.subject?.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})/i);
+    let d = (t.lastDate || "").slice(0, 10);
     if (match) {
       const mi = ["january","february","march","april","may","june","july","august","september","october","november","december"].indexOf(match[1].toLowerCase());
-      d = `2026-${String(mi + 1).padStart(2, "0")}-${String(parseInt(match[2])).padStart(2, "0")}`;
+      const yr = new Date().getFullYear();
+      d = `${yr}-${String(mi + 1).padStart(2, "0")}-${String(parseInt(match[2])).padStart(2, "0")}`;
     }
-    add(d, "community", "💬", T.success, t.subject, t.lastMessage.slice(0, 60), "communications");
+    if (d) add(d, "community", "💬", T.success, t.subject, (t.lastMessage || "").slice(0, 60), "communications");
   });
   return events;
 };
 
 // --- CALENDAR VIEW ---
-const CalendarView = ({ mobile, maintenance, vendors, unitInspections, onNavigate }) => {
+const CalendarView = ({ mobile, maintenance, vendors, unitInspections, onNavigate, threads = [], certs: certsProp }) => {
   const tabs = ["Calendar", "Upcoming"];
   const [tab, setTab] = useState(tabs[0]);
   const today = new Date();
   const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [selectedDay, setSelectedDay] = useState(null);
+  // Income certs aren't held at App-level state, so fetch them here if not provided
+  const [localCerts, setLocalCerts] = useState([]);
+  useEffect(() => {
+    if (certsProp) { setLocalCerts(certsProp); return; }
+    fetchIncomeCertifications().then(c => setLocalCerts(c || [])).catch(() => {});
+  }, [certsProp]);
+  const certs = certsProp || localCerts;
 
-  const allEvents = buildCalendarEvents(maintenance, vendors, unitInspections);
+  const allEvents = buildCalendarEvents(maintenance, vendors, unitInspections, threads, certs);
   const monthStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}`;
   const eventsThisMonth = allEvents.filter(e => e.date.startsWith(monthStr));
   const eventsByDay = {};
@@ -8865,7 +8891,7 @@ export default function App() {
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
-        case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} />;
+        case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} threads={threads} />;
         case "settings": return <AdminSettings mobile={mobile} settings={settings} setSettings={setSettings} darkMode={darkMode} setDarkMode={setDarkMode} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onReset={resetAllState} staffMembers={staffMembers} allUnits={allUnits} />;
         default: return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
       }
@@ -8877,7 +8903,7 @@ export default function App() {
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
-        case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} />;
+        case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
         case "profile": return <MaintenanceProfile mobile={mobile} />;
         case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
         default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
