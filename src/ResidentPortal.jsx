@@ -6868,6 +6868,15 @@ const MaintenanceDetailModal = ({ row, onClose, onUpdate, staffMembers, vendors,
   const notes = Array.isArray(row.notes) ? row.notes : [];
   const isIntake = row.status === "new" || row.status === "needs-info";
   const ven = vendors.find(v => v.id === row.vendorId);
+  // Only show active admin / maintenance / property managers as possible assignees.
+  // Always include the current assignee even if their role/active state changed, so it remains visible.
+  const assignableStaff = staffMembers.filter(s =>
+    s.active && (s.role === "admin" || s.role === "maintenance" || s.role === "property_manager")
+  );
+  const currentAssignee = row.assignedTo && !assignableStaff.some(s => s.name === row.assignedTo)
+    ? staffMembers.find(s => s.name === row.assignedTo)
+    : null;
+  const staffOptions = currentAssignee ? [...assignableStaff, currentAssignee] : assignableStaff;
   const [tab, setTab] = useState(isIntake ? "review" : "update");
   const [draft, setDraft] = useState({
     status: row.status,
@@ -6999,7 +7008,7 @@ const MaintenanceDetailModal = ({ row, onClose, onUpdate, staffMembers, vendors,
                     <label style={s.label}>Assign To Staff</label>
                     <select style={{ ...s.mSelect(mobile), width: "100%" }} value={draft.assignedTo} onChange={e => setDraft(d => ({ ...d, assignedTo: e.target.value }))}>
                       <option value="">—</option>
-                      {staffMembers.map(m => <option key={m.id} value={m.name}>{m.name}{m.role === "property_manager" ? " (PM)" : ""}</option>)}
+                      {staffOptions.map(m => <option key={m.id} value={m.name}>{m.name}{m.role === "property_manager" ? " (PM)" : m.role === "admin" ? " (Admin)" : " (Maint)"}</option>)}
                     </select>
                   </div>
                   <div>
@@ -7069,7 +7078,7 @@ const MaintenanceDetailModal = ({ row, onClose, onUpdate, staffMembers, vendors,
                 <label style={s.label}>Assigned Staff</label>
                 <select style={{ ...s.mSelect(mobile), width: "100%" }} value={draft.assignedTo} onChange={e => setDraft(d => ({ ...d, assignedTo: e.target.value }))}>
                   <option value="">Unassigned</option>
-                  {staffMembers.map(m => <option key={m.id} value={m.name}>{m.name}{m.role === "property_manager" ? " (PM)" : ""}</option>)}
+                  {staffOptions.map(m => <option key={m.id} value={m.name}>{m.name}{m.role === "property_manager" ? " (PM)" : m.role === "admin" ? " (Admin)" : " (Maint)"}</option>)}
                 </select>
               </div>
               <div>
