@@ -106,7 +106,7 @@ export async function deleteUserProfile(profileId) {
 export async function fetchUserProfiles() {
   const { data, error } = await supabase
     .from('user_profiles')
-    .select('*, residents(name, slug)')
+    .select('*, residents(name, slug, unit_number)')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data;

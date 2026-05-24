@@ -7476,11 +7476,22 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               </div>
               {inviteForm.role === "resident" && (
                 <div>
-                  <label style={s.label}>Link to Resident</label>
+                  <label style={s.label}>Link to Unit / Resident</label>
                   <select style={{ ...s.mSelect(mobile), width: "100%" }} value={inviteForm.residentId} onChange={e => setInviteForm(p => ({ ...p, residentId: e.target.value }))}>
-                    <option value="">Select resident (optional)...</option>
-                    {LIVE_RESIDENTS.map(r => <option key={r._uuid || r.id} value={r._uuid || r.id}>{r.name} — {r.unit}</option>)}
+                    <option value="">Select unit (optional)...</option>
+                    {LIVE_RESIDENTS.map(r => {
+                      const rid = r._uuid || r.id;
+                      const coUsers = userProfiles.filter(p => p.resident_id === rid && p.role === "resident").length;
+                      return (
+                        <option key={rid} value={rid}>
+                          {r.name} — Unit {r.unit}{coUsers > 0 ? ` (+${coUsers} co-resident${coUsers === 1 ? "" : "s"})` : ""}
+                        </option>
+                      );
+                    })}
                   </select>
+                  <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>
+                    Multiple people (e.g. spouses) can be linked to the same unit — they'll each get their own login but share rent, maintenance, and lease data.
+                  </div>
                 </div>
               )}
             </div>
@@ -7499,13 +7510,19 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
               <EmptyState icon="👥" text="No people yet. Add your first person above." />
             ) : (
               <table style={s.table}>
-                <thead><tr>{["Name", "Email", "Role", "Phone", "Property", "Active", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Name", "Email", "Role", "Unit / Property", "Phone", "Active", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {userProfiles.map(u => {
                     // Match this person to their staff_members row (if any) by email
                     const emailLc = (u.email || "").toLowerCase();
                     const staffRow = staffList.find(s2 => (s2.email || "").toLowerCase() === emailLc) || null;
                     const isStaffRole = u.role === "admin" || u.role === "maintenance" || u.role === "property_manager";
+                    // Count co-residents: other user_profiles sharing the same resident_id
+                    const coResidentCount = u.resident_id
+                      ? userProfiles.filter(p => p.id !== u.id && p.resident_id === u.resident_id).length
+                      : 0;
+                    const unit = u.residents?.unit_number || u.unit_number || null;
+                    const residentName = u.residents?.name || null;
                     const isEditing = editingStaff === u.id;
                     if (isEditing) {
                       return (
@@ -7517,16 +7534,19 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                               <option value="resident">Resident</option>
                               <option value="admin">Admin</option>
                               <option value="maintenance">Maintenance</option>
-                              <option value="property_manager">Property Manager</option>
                             </select>
+                          </td>
+                          <td style={s.td}>
+                            {(editStaffForm.role || u.role) === "resident" ? (
+                              <span style={{ fontSize: 12, color: T.muted }}>{unit ? `Unit ${unit}` : "—"}{residentName ? ` · ${residentName}` : ""}</span>
+                            ) : (
+                              <select value={editStaffForm.propertyId || ""} onChange={e => setEditStaffForm(f => ({ ...f, propertyId: e.target.value }))} style={{ ...s.select, fontSize: 12, padding: "2px 6px" }}>
+                                <option value="">All</option>
+                                {LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}
+                              </select>
+                            )}
                           </td>
                           <td style={s.td}><input value={editStaffForm.phone || ""} onChange={e => setEditStaffForm(f => ({ ...f, phone: e.target.value }))} placeholder="(415) 555-0000" style={{ ...s.input, padding: "4px 6px", fontSize: 13, width: "100%" }} /></td>
-                          <td style={s.td}>
-                            <select value={editStaffForm.propertyId || ""} onChange={e => setEditStaffForm(f => ({ ...f, propertyId: e.target.value }))} style={{ ...s.select, fontSize: 12, padding: "2px 6px" }}>
-                              <option value="">All</option>
-                              {LIVE_PROPERTIES.map(p => <option key={p._uuid || p.id} value={p._uuid || p.id}>{p.name}</option>)}
-                            </select>
-                          </td>
                           <td style={s.td}>
                             <Toggle checked={editStaffForm.active !== false} onChange={() => setEditStaffForm(f => ({ ...f, active: f.active === false }))} />
                           </td>
@@ -7586,8 +7606,19 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                       <td style={s.td}>
                         <span style={s.badge(u.role === "admin" ? T.accentDim : u.role === "property_manager" ? T.infoDim : u.role === "maintenance" ? T.warnDim : T.successDim, u.role === "admin" ? T.accent : u.role === "property_manager" ? T.info : u.role === "maintenance" ? T.warn : T.success)}>{roleLabel}</span>
                       </td>
+                      <td style={s.td}>
+                        {u.role === "resident" ? (
+                          <div style={{ fontSize: 12 }}>
+                            <div style={{ fontWeight: 600 }}>{unit ? `Unit ${unit}` : "—"}{residentName ? ` · ${residentName}` : ""}</div>
+                            {coResidentCount > 0 && (
+                              <div style={{ color: T.info, fontSize: 11 }}>+ {coResidentCount} co-resident{coResidentCount === 1 ? "" : "s"}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 12 }}>{propertyName}</span>
+                        )}
+                      </td>
                       <td style={s.td}><span style={{ fontSize: 12 }}>{phone}</span></td>
-                      <td style={s.td}><span style={{ fontSize: 12 }}>{propertyName}</span></td>
                       <td style={s.td}>
                         {isStaffRole ? (
                           <span style={s.badge(active ? T.successDim : T.dangerDim, active ? T.success : T.danger)}>{active ? "Yes" : "No"}</span>
