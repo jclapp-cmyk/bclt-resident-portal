@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -3649,7 +3649,7 @@ const PropertySingleView = ({ p, mobile }) => (
   </>
 );
 
-const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty, onDataRefresh, settings, maintenance = [] }) => {
+const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty, onDataRefresh, settings, maintenance = [], threads = [], setPage, onOpenMaintenance }) => {
   const isAll = !selectedProperty || selectedProperty === "all";
   const totalUnits = LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0);
   const totalResidents = LIVE_RESIDENTS.length;
@@ -3666,11 +3666,16 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const [qrUnit, setQrUnit] = useState(null);
   const [showEditProp, setShowEditProp] = useState(false);
   const [editPropForm, setEditPropForm] = useState({});
+  const [propDocs, setPropDocs] = useState([]);
+  const [docForm, setDocForm] = useState({ docType: "plan", name: "", notes: "", file: null });
+  const [showAddDoc, setShowAddDoc] = useState(false);
+  const [docUploading, setDocUploading] = useState(false);
 
   // Load units for selected property (must be before early return to satisfy hooks rules)
   const p = !isAll ? getProperty(selectedProperty) : null;
   useEffect(() => {
     if (p?._uuid) fetchUnits(p._uuid).then(setUnitList).catch((err) => { console.error('Failed to fetch units:', err); });
+    if (p?._uuid) fetchPropertyDocuments(p._uuid).then(setPropDocs).catch(() => {});
   }, [p?._uuid]);
 
   if (isAll) {
@@ -3811,6 +3816,155 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+
+      {/* Maintenance for this property */}
+      <div style={{ ...s.card, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>🔧 Maintenance — Open</div>
+          {setPage && <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => setPage("maintenance")}>See all →</button>}
+        </div>
+        {(() => {
+          const propMaint = maintenance.filter(m => m.propertyId === selectedProperty && MAINT_OPEN(m));
+          if (propMaint.length === 0) return <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic" }}>No open maintenance items for this property.</div>;
+          return (
+            <table style={s.table}>
+              <thead><tr>{["Issue", "Requester", "Unit", "Category", "Priority", "Status", "Assigned"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {propMaint.slice(0, 10).map(m => (
+                  <tr key={m.id} onClick={() => onOpenMaintenance && onOpenMaintenance(m.id)} style={{ cursor: onOpenMaintenance ? "pointer" : "default" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = T.surfaceHover; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+                    <td style={s.td}>
+                      <div style={{ fontWeight: 600, color: T.accent }}>{m.description}</div>
+                      <div style={{ fontSize: 10, color: T.dim, marginTop: 2 }}>{m.id}</div>
+                    </td>
+                    <td style={s.td}>{m.residentName || m.requesterName || "—"}</td>
+                    <td style={s.td}>{m.unit || "—"}</td>
+                    <td style={s.td}>{m.category}</td>
+                    <td style={s.td}><Badge status={m.priority} type="priority" /></td>
+                    <td style={s.td}><Badge status={m.status} /></td>
+                    <td style={s.td}>{m.assignedTo || <span style={{ color: T.dim }}>Unassigned</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })()}
+      </div>
+
+      {/* Recent Communications */}
+      <div style={{ ...s.card, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>💬 Recent Communications</div>
+          {setPage && <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => setPage("communications")}>See all →</button>}
+        </div>
+        {(() => {
+          const propResIds = new Set(propResidents.map(r => r.id));
+          const propThreads = (threads || [])
+            .filter(t => t.type === "broadcast" || (t.participants || []).some(pid => propResIds.has(pid)))
+            .sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate))
+            .slice(0, 5);
+          if (propThreads.length === 0) return <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic" }}>No recent communications.</div>;
+          return propThreads.map(t => {
+            const isBroadcast = t.type === "broadcast";
+            const resident = !isBroadcast ? propResidents.find(r => (t.participants || []).includes(r.id)) : null;
+            return (
+              <div key={t.id} onClick={() => setPage && setPage("communications")} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, cursor: setPage ? "pointer" : "default" }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{t.subject}</div>
+                  <div style={{ fontSize: 12, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {isBroadcast ? "📢 Broadcast" : (resident?.name || "Resident")} · {t.lastMessage}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0, marginLeft: 12 }}>
+                  {t.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent }} />}
+                  <span style={{ fontSize: 11, color: T.dim }}>{new Date(t.lastDate).toLocaleDateString()}</span>
+                </div>
+              </div>
+            );
+          });
+        })()}
+      </div>
+
+      {/* Property Records (plans, manuals, regulatory agreements, etc.) */}
+      <div style={{ ...s.card, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>📁 Property Records ({propDocs.length})</div>
+          <button style={{ ...s.btn(showAddDoc ? "ghost" : "primary"), fontSize: 12, padding: "4px 12px" }} onClick={() => setShowAddDoc(v => !v)}>{showAddDoc ? "Cancel" : "➕ Upload"}</button>
+        </div>
+        {showAddDoc && (
+          <div style={{ padding: 14, background: T.bg, borderRadius: T.radiusSm, marginBottom: 14 }}>
+            <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 10, marginBottom: 10 }}>
+              <div><label style={s.label}>Type</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={docForm.docType} onChange={e => setDocForm(f => ({ ...f, docType: e.target.value }))}>
+                  <option value="plan">Plan</option>
+                  <option value="manual">Manual</option>
+                  <option value="regulatory_agreement">Regulatory Agreement</option>
+                  <option value="inspection_report">Inspection Report</option>
+                  <option value="insurance">Insurance</option>
+                  <option value="lease_template">Lease Template</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div><label style={s.label}>Document Name</label>
+                <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="e.g. 2025 Site Plan" value={docForm.name} onChange={e => setDocForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div><label style={s.label}>File</label>
+                <input type="file" style={{ fontSize: 13 }} onChange={e => setDocForm(f => ({ ...f, file: e.target.files?.[0] || null, name: f.name || e.target.files?.[0]?.name?.replace(/\.[^.]+$/, "") || "" }))} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={s.label}>Notes (optional)</label>
+              <input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="Any context for this document" value={docForm.notes} onChange={e => setDocForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+            <button disabled={!docForm.file || !p?._uuid || docUploading} style={s.btn("primary")} onClick={async () => {
+              if (!docForm.file || !p?._uuid) return;
+              setDocUploading(true);
+              try {
+                const saved = await uploadPropertyDocument(docForm.file, p._uuid, docForm.docType, docForm.name || docForm.file.name, docForm.notes);
+                setPropDocs(prev => [saved, ...prev]);
+                setDocForm({ docType: "plan", name: "", notes: "", file: null });
+                setShowAddDoc(false);
+                showUnitSuccess("Document uploaded");
+              } catch (err) { showUnitSuccess("Upload failed: " + (err.message || "")); }
+              setDocUploading(false);
+            }}>{docUploading ? "Uploading…" : "Upload"}</button>
+          </div>
+        )}
+        {propDocs.length === 0 && !showAddDoc ? (
+          <div style={{ color: T.dim, fontSize: 13, fontStyle: "italic" }}>No documents yet. Upload plans, manuals, regulatory agreements, etc.</div>
+        ) : propDocs.length > 0 && (
+          <table style={s.table}>
+            <thead><tr>{["Name", "Type", "Notes", "Uploaded", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+            <tbody>
+              {propDocs.map(d => {
+                const typeLabels = { plan: "Plan", manual: "Manual", regulatory_agreement: "Regulatory Agreement", inspection_report: "Inspection Report", insurance: "Insurance", lease_template: "Lease Template", other: "Other" };
+                return (
+                  <tr key={d.id}>
+                    <td style={s.td}><span style={{ fontWeight: 600 }}>{d.name}</span></td>
+                    <td style={s.td}><span style={s.badge(T.accentDim, T.accent)}>{typeLabels[d.doc_type] || d.doc_type}</span></td>
+                    <td style={{ ...s.td, color: T.muted, fontSize: 12, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>{d.notes || "—"}</td>
+                    <td style={{ ...s.td, fontSize: 12, color: T.muted }}>{d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString() : "—"}</td>
+                    <td style={s.td}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={async () => {
+                          try { const url = await getPropertyDocumentUrl(d.path); if (url) window.open(url, "_blank"); else showUnitSuccess("Could not generate link"); }
+                          catch (err) { showUnitSuccess("Error: " + err.message); }
+                        }}>Open</button>
+                        <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", color: T.danger }} onClick={async () => {
+                          if (!confirm(`Delete "${d.name}"?`)) return;
+                          try { await deletePropertyDocument(d.id, d.path); setPropDocs(prev => prev.filter(x => x.id !== d.id)); showUnitSuccess("Deleted"); }
+                          catch (err) { showUnitSuccess("Error: " + err.message); }
+                        }}>🗑</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
 
@@ -8886,7 +9040,7 @@ export default function App() {
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} vendors={vendors} profile={profile} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} onScheduleReg={scheduleRegInspection} onUpdateReg={updateRegInspectionN} onDeleteReg={deleteRegInspectionN} inspectionTemplates={inspectionTemplates} onSaveTemplate={async (tpl) => { const saved = await insertInspectionTemplate(tpl); setInspectionTemplates(prev => [saved, ...prev]); return saved; }} onUpdateTemplate={async (code, changes) => { await updateInspectionTemplate(code, changes); setInspectionTemplates(prev => prev.map(t => t.id === code ? { ...t, ...changes } : t)); }} onDeleteTemplate={async (code) => { await deleteInspectionTemplate(code); setInspectionTemplates(prev => prev.filter(t => t.id !== code)); }} />;
-        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} />;
+        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} threads={threads} setPage={setPage} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;

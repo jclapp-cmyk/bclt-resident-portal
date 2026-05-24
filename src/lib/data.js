@@ -680,6 +680,48 @@ export async function deleteRegInspection(code) {
   if (error) throw error;
 }
 
+// ── PROPERTY DOCUMENTS (plans, manuals, regulatory agreements) ──
+
+export async function fetchPropertyDocuments(propertyUuid) {
+  if (!propertyUuid) return [];
+  const { data, error } = await supabase
+    .from('property_documents')
+    .select('*')
+    .eq('property_id', propertyUuid)
+    .order('uploaded_at', { ascending: false });
+  if (error) { console.warn('fetchPropertyDocuments:', error.message); return []; }
+  return data || [];
+}
+
+export async function uploadPropertyDocument(file, propertyUuid, docType, name, notes, uploadedBy) {
+  const safeName = (file.name || 'doc').replace(/[^A-Za-z0-9._-]/g, '_');
+  const path = `${propertyUuid}/${Date.now()}_${safeName}`;
+  const { error: upErr } = await supabase.storage.from('property-documents').upload(path, file, { upsert: false });
+  if (upErr) throw upErr;
+  const { data, error } = await supabase.from('property_documents').insert({
+    property_id: propertyUuid, doc_type: docType || 'other',
+    name: name || file.name, path, notes: notes || null,
+    uploaded_by: uploadedBy || null,
+  }).select().single();
+  if (error) {
+    // Roll back the storage object so we don't orphan it
+    await supabase.storage.from('property-documents').remove([path]).catch(() => {});
+    throw error;
+  }
+  return data;
+}
+
+export async function getPropertyDocumentUrl(path) {
+  const { data } = await supabase.storage.from('property-documents').createSignedUrl(path, 3600);
+  return data?.signedUrl || null;
+}
+
+export async function deletePropertyDocument(id, path) {
+  if (path) await supabase.storage.from('property-documents').remove([path]).catch(() => {});
+  const { error } = await supabase.from('property_documents').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── INSPECTION TEMPLATES (custom checklists) ──
 
 export async function fetchInspectionTemplates() {
