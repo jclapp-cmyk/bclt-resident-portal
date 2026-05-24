@@ -7380,6 +7380,17 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
   const [editingStaff, setEditingStaff] = useState(null);
   const [editStaffForm, setEditStaffForm] = useState({});
   const [settingsPropIdx, setSettingsPropIdx] = useState(0);
+  const [householdMembers, setHouseholdMembers] = useState([]);
+
+  // When inviting a resident and a unit is picked, load that household's members
+  // so the admin can quick-fill the form from an existing co-resident record.
+  useEffect(() => {
+    if (inviteForm.role === "resident" && inviteForm.residentId) {
+      fetchHouseholdMembers(inviteForm.residentId).then(setHouseholdMembers).catch(() => setHouseholdMembers([]));
+    } else {
+      setHouseholdMembers([]);
+    }
+  }, [inviteForm.role, inviteForm.residentId]);
 
   useEffect(() => {
     if (tab === "Audit Log") {
@@ -7475,7 +7486,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                 </select>
               </div>
               {inviteForm.role === "resident" && (
-                <div>
+                <div style={{ gridColumn: "1 / -1" }}>
                   <label style={s.label}>Link to Unit / Resident</label>
                   <select style={{ ...s.mSelect(mobile), width: "100%" }} value={inviteForm.residentId} onChange={e => setInviteForm(p => ({ ...p, residentId: e.target.value }))}>
                     <option value="">Select unit (optional)...</option>
@@ -7492,6 +7503,37 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                   <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>
                     Multiple people (e.g. spouses) can be linked to the same unit — they'll each get their own login but share rent, maintenance, and lease data.
                   </div>
+                  {householdMembers.length > 0 && (
+                    <div style={{ marginTop: 12, padding: 10, background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>
+                        Household Members on File — click to quick-fill
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {householdMembers.map(hm => {
+                          const nameParts = (hm.name || "").trim().split(/\s+/);
+                          const fn = nameParts[0] || "";
+                          const ln = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+                          const alreadyInvited = userProfiles.some(p => (p.email || "").toLowerCase() === (hm.email || "").toLowerCase() && hm.email);
+                          return (
+                            <button key={hm.id} type="button" disabled={alreadyInvited} onClick={() => setInviteForm(p => ({ ...p, firstName: fn, lastName: ln, email: hm.email || "", phone: hm.phone || "" }))}
+                              style={{
+                                padding: "6px 10px", fontSize: 12, fontWeight: 600, borderRadius: T.radiusSm,
+                                cursor: alreadyInvited ? "not-allowed" : "pointer",
+                                background: alreadyInvited ? T.dimLight : T.surface,
+                                color: alreadyInvited ? T.dim : T.text,
+                                border: `1px solid ${T.border}`,
+                                textAlign: "left",
+                              }}
+                              title={alreadyInvited ? "This person already has a portal login" : `Use ${hm.name}'s info`}
+                            >
+                              {hm.name} <span style={{ color: T.muted, fontWeight: 400 }}>· {hm.relationship}</span>{alreadyInvited ? <span style={{ color: T.success, marginLeft: 4 }}> ✓ invited</span> : ""}
+                              {hm.phone && <div style={{ fontSize: 11, color: T.muted, fontWeight: 400 }}>{hm.phone}{hm.email ? ` · ${hm.email}` : ""}</div>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
