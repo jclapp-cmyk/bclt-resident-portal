@@ -4136,11 +4136,17 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               {unitList.map(u => {
                 const uid = u._uuid || u.id;
                 const unitResident = propResidents.find(r => r.unit === u.number);
+                const openUnit = () => setUnitDetailModal({ unit: u, tab: "Overview" });
                 return (
-                  <tr key={uid}>
-                    <td style={s.td}><button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={() => setUnitDetailModal({ unit: u, tab: "Overview" })}>{u.number}</button></td>
+                  <tr key={uid}
+                    onClick={openUnit}
+                    style={{ cursor: "pointer" }}
+                    onMouseEnter={e => { e.currentTarget.style.background = T.surfaceHover; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+                    <td style={s.td}><span style={{ fontWeight: 600, color: T.accent }}>{u.number}</span></td>
                     <td style={s.td}>{unitResident ? (
-                      <button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={() => {
+                      <button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={e => {
+                        e.stopPropagation();
                         if (onSelectProperty) onSelectProperty(selectedProperty, "residents", unitResident.id);
                       }}>{unitResident.name}</button>
                     ) : <span style={{ color: T.dim, fontSize: 12 }}>Vacant</span>}</td>
@@ -4155,9 +4161,8 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                       const [bg, fg] = styles[t] || styles.apartment;
                       return <span style={s.badge(bg, fg)}>{labels[t] || t}</span>;
                     })()}</td>
-                    <td style={s.td}>
+                    <td style={s.td} onClick={e => e.stopPropagation()}>
                       <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), amiSetAside: u.ami_set_aside || "", unitType: u.unit_type || (u.is_rv ? "rv" : "apartment"), isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); setUnitDetailModal({ unit: u, tab: "Overview", editing: true }); }}>Edit</button>
                         <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px", color: T.danger }} onClick={async () => {
                           if (!confirm(`Delete unit ${u.number}?`)) return;
                           try {
