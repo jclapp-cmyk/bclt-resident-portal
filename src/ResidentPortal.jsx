@@ -2110,7 +2110,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
             <div style={s.card}>
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Program Type</div>
               <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14 }}>
-                <div><label style={s.label}>Primary Program</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={activeCert.programType || "9% LIHTC"} onChange={e => setActiveCert(c => ({ ...c, programType: e.target.value }))}><option>9% LIHTC</option><option>4% LIHTC</option><option>Tax-Exempt Bond</option><option>HOME</option><option>Section 8</option></select></div>
+                <div><label style={s.label}>Primary Program</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={activeCert.programType || ""} onChange={e => setActiveCert(c => ({ ...c, programType: e.target.value || null }))}><option value="">Select program…</option><option>9% LIHTC</option><option>4% LIHTC</option><option>Tax-Exempt Bond</option><option>HOME</option><option>Section 8</option><option>Section 811</option><option>Section 202</option><option>Market</option><option>Other</option></select></div>
                 <div><label style={s.label}>Federal Assistance Source</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={activeCert.federalAssistanceSource || ""} onChange={e => setActiveCert(c => ({ ...c, federalAssistanceSource: e.target.value }))}><option value="">None/Missing</option><option value="1">HUD PBRA</option><option value="2">Section 8 Mod Rehab</option><option value="3">Public Housing</option><option value="4">HOME Rental Assistance</option><option value="5">HUD HCV (tenant-based)</option><option value="6">HUD PBV</option><option value="7">USDA 521</option><option value="8">Other Federal</option></select></div>
               </div>
             </div>
@@ -2137,9 +2137,9 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Certification Summary</div>
               <DetailRow label="Household Size" value={hhMembers.length} />
               <DetailRow label="Total Annual Income" value={`$${incomeForDetermination.toLocaleString()}`} accent={T.accent} />
-              <DetailRow label="AMI Category" value={eligibility.category} accent={eligibility.eligible ? T.success : T.danger} />
-              <DetailRow label="Income Eligible" value={eligibility.eligible ? "Yes" : "No"} accent={eligibility.eligible ? T.success : T.danger} />
-              <DetailRow label="Program" value={activeCert.programType || "9% LIHTC"} />
+              {isAdmin && <DetailRow label="AMI Category" value={eligibility.category} accent={eligibility.eligible ? T.success : T.danger} />}
+              {isAdmin && <DetailRow label="Income Eligible" value={eligibility.eligible ? "Yes" : "No"} accent={eligibility.eligible ? T.success : T.danger} />}
+              {isAdmin && <DetailRow label="Program" value={activeCert.programType || "—"} />}
             </div>
 
             {/* Supporting Documents */}
@@ -2212,7 +2212,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                       status: isAdmin ? "approved" : "pending_review",
                       stepsCompleted: { household: true, income: true, assets: true, rent: true, eligibility: true, signature: true },
                       tenantRent, utilityAllowance: ua, grossRent: tenantRent + ua,
-                      hapPayment: activeCert.hapPayment || 0, programType: activeCert.programType || "9% LIHTC",
+                      hapPayment: activeCert.hapPayment || 0, programType: activeCert.programType || null,
                       allStudentHousehold: activeCert.allStudentHousehold || false,
                       residentSignature: activeCert.residentSignature, residentSignedAt: activeCert.residentSignature ? new Date().toISOString() : null,
                       adminSignature: activeCert.adminSignature, adminSignedAt: activeCert.adminSignature ? new Date().toISOString() : null,
