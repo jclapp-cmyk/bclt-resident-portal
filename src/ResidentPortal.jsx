@@ -3649,7 +3649,7 @@ const PropertySingleView = ({ p, mobile }) => (
   </>
 );
 
-const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty, onDataRefresh, settings, maintenance = [], threads = [], setPage, onOpenMaintenance }) => {
+const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, onSelectProperty, onDataRefresh, settings, maintenance = [], unitInspections = [], threads = [], setPage, onOpenMaintenance }) => {
   const isAll = !selectedProperty || selectedProperty === "all";
   const totalUnits = LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0);
   const totalResidents = LIVE_RESIDENTS.length;
@@ -4195,7 +4195,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                 const unitResident = propResidents.find(r => r.unit === u.number);
                 return (
                   <tr key={uid}>
-                    <td style={s.td}><button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), amiSetAside: u.ami_set_aside || "", isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); }}>{u.number}</button></td>
+                    <td style={s.td}><button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={() => setUnitDetailModal({ unit: u, tab: "Overview" })}>{u.number}</button></td>
                     <td style={s.td}>{unitResident ? (
                       <button style={{ ...s.btn("ghost"), fontWeight: 600, padding: "2px 6px", fontSize: 13 }} onClick={() => {
                         if (onSelectProperty) onSelectProperty(selectedProperty, "residents", unitResident.id);
@@ -4208,7 +4208,6 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                     <td style={s.td}>{u.is_rv ? <span style={s.badge(T.warnDim, T.warn)}>RV</span> : <span style={{ color: T.dim, fontSize: 12 }}>Standard</span>}</td>
                     <td style={s.td}>
                       <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => setUnitDetailModal({ unit: u, tab: "Appliances" })}>📋 Details</button>
                         <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px" }} onClick={() => { setEditingUnit(uid); setEditUnitForm({ number: u.number, bedrooms: String(u.bedrooms), bathrooms: String(u.bathrooms), sqft: String(u.sqft || ""), amiSetAside: u.ami_set_aside || "", isRv: u.is_rv || false, rvInfo: u.rv_info || {} }); }}>Edit</button>
                         <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 8px", color: T.danger }} onClick={async () => {
                           if (!confirm(`Delete unit ${u.number}?`)) return;
@@ -4229,7 +4228,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               })}
             </tbody>
           </table>
-          {/* Unit Details Modal — appliances + finishes */}
+          {/* Unit Details Modal — full details: overview / resident / appliances / finishes / maintenance / inspections */}
           {unitDetailModal && (() => {
             const u = unitDetailModal.unit;
             const uid = u._uuid || u.id;
@@ -4237,6 +4236,12 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
             const setTab = (t) => setUnitDetailModal(prev => ({ ...prev, tab: t }));
             const appliances = Array.isArray(u.appliances) ? u.appliances : (typeof u.appliances === 'string' ? (() => { try { return JSON.parse(u.appliances); } catch { return []; } })() : []);
             const finishes = Array.isArray(u.finishes) ? u.finishes : (typeof u.finishes === 'string' ? (() => { try { return JSON.parse(u.finishes); } catch { return []; } })() : []);
+            const resident = LIVE_RESIDENTS.find(r => r.unit === u.number && r.propertyId === selectedProperty);
+            const ext = resident ? (LIVE_RESIDENTS_EXTENDED[resident.id] || {}) : {};
+            const unitMaint = (maintenance || []).filter(m => m.unit === u.number && (!selectedProperty || m.propertyId === selectedProperty));
+            const openMaint = unitMaint.filter(m => MAINT_OPEN(m));
+            const doneMaint = unitMaint.filter(m => MAINT_DONE(m));
+            const unitInsp = (unitInspections || []).filter(i => i.unit === u.number).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
             const saveAppliances = async (newList) => {
               try {
                 await updateUnit(uid, { appliances: newList });
@@ -4251,27 +4256,71 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                 setUnitDetailModal(prev => ({ ...prev, unit: { ...prev.unit, finishes: newList } }));
               } catch (err) { showUnitSuccess("Error: " + err.message); }
             };
+            const tabsList = ["Overview", "Resident", "Appliances", "Finishes", "Maintenance", "Inspections"];
+            const counts = { Maintenance: unitMaint.length, Inspections: unitInsp.length, Appliances: appliances.length, Finishes: finishes.length };
             return (
               <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setUnitDetailModal(null)}>
-                <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius, maxWidth: 720, width: "100%", maxHeight: "92vh", overflowY: "auto", padding: 24 }}>
+                <div onClick={e => e.stopPropagation()} style={{ background: T.surface, borderRadius: T.radius, maxWidth: 880, width: "100%", maxHeight: "92vh", overflowY: "auto", padding: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14, gap: 10 }}>
                     <div>
                       <h2 style={{ margin: 0, fontSize: 18 }}>Unit {u.number}</h2>
-                      <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{u.bedrooms}BR / {u.bathrooms}BA{u.sqft ? ` · ${u.sqft} sqft` : ""}{u.ami_set_aside ? ` · ${u.ami_set_aside} AMI` : ""}</div>
+                      <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+                        {u.bedrooms}BR / {u.bathrooms}BA
+                        {u.sqft ? ` · ${u.sqft} sqft` : ""}
+                        {u.ami_set_aside ? ` · ${u.ami_set_aside} AMI` : ""}
+                        {u.is_rv ? " · RV" : ""}
+                      </div>
                     </div>
                     <button style={s.btn("ghost")} onClick={() => setUnitDetailModal(null)}>✕</button>
                   </div>
 
-                  <div style={{ display: "flex", gap: 6, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
-                    {["Appliances", "Finishes"].map(t => (
+                  <div style={{ display: "flex", gap: 4, marginBottom: 14, borderBottom: `1px solid ${T.border}`, overflowX: "auto" }}>
+                    {tabsList.map(t => (
                       <button key={t} onClick={() => setTab(t)} style={{
-                        background: "transparent", border: "none", padding: "8px 14px",
-                        fontWeight: 600, cursor: "pointer", fontSize: 14,
+                        background: "transparent", border: "none", padding: "8px 12px",
+                        fontWeight: 600, cursor: "pointer", fontSize: 13, whiteSpace: "nowrap",
                         borderBottom: tab === t ? `2px solid ${T.accent}` : "2px solid transparent",
                         color: tab === t ? T.accent : T.text,
-                      }}>{t}{t === "Appliances" && appliances.length > 0 ? ` (${appliances.length})` : ""}{t === "Finishes" && finishes.length > 0 ? ` (${finishes.length})` : ""}</button>
+                      }}>{t}{counts[t] > 0 ? ` (${counts[t]})` : ""}</button>
                     ))}
                   </div>
+
+                  {tab === "Overview" && (
+                    <div style={{ ...s.grid("1fr 1fr", mobile), gap: 10, fontSize: 13 }}>
+                      <div><span style={{ color: T.muted }}>Unit Number:</span> <strong>{u.number}</strong></div>
+                      <div><span style={{ color: T.muted }}>Property:</span> <strong>{p?.name || "—"}</strong></div>
+                      <div><span style={{ color: T.muted }}>Bedrooms:</span> <strong>{u.bedrooms || "—"}</strong></div>
+                      <div><span style={{ color: T.muted }}>Bathrooms:</span> <strong>{u.bathrooms || "—"}</strong></div>
+                      <div><span style={{ color: T.muted }}>Square Feet:</span> <strong>{u.sqft ? u.sqft.toLocaleString() : "—"}</strong></div>
+                      <div><span style={{ color: T.muted }}>AMI Set-Aside:</span> <strong>{u.ami_set_aside || "—"}</strong></div>
+                      <div><span style={{ color: T.muted }}>Type:</span> <strong>{u.is_rv ? "RV Unit" : "Standard"}</strong></div>
+                      {u.is_rv && u.rv_info && Object.entries(u.rv_info).map(([k, v]) => (
+                        v ? <div key={k}><span style={{ color: T.muted }}>{k}:</span> <strong>{v}</strong></div> : null
+                      ))}
+                    </div>
+                  )}
+
+                  {tab === "Resident" && (
+                    resident ? (
+                      <div style={{ ...s.grid("1fr 1fr", mobile), gap: 10, fontSize: 13 }}>
+                        <div style={{ gridColumn: "1 / -1", marginBottom: 8 }}>
+                          <button style={{ ...s.btn("primary"), fontSize: 13 }} onClick={() => { setUnitDetailModal(null); if (onSelectProperty) onSelectProperty(selectedProperty, "residents", resident.id); }}>View Full Resident Profile →</button>
+                        </div>
+                        <div><span style={{ color: T.muted }}>Name:</span> <strong>{resident.name}</strong></div>
+                        <div><span style={{ color: T.muted }}>Phone:</span> <strong>{resident.phone || "—"}</strong></div>
+                        <div><span style={{ color: T.muted }}>Email:</span> <strong>{resident.email || "—"}</strong></div>
+                        <div><span style={{ color: T.muted }}>Preferred Channel:</span> <strong>{resident.preferredChannel || "—"}</strong></div>
+                        <div><span style={{ color: T.muted }}>Move-In:</span> <strong>{ext.moveIn || ext.leaseStart || "—"}</strong></div>
+                        <div><span style={{ color: T.muted }}>Lease End:</span> <strong>{ext.leaseEnd || "—"}</strong></div>
+                        <div><span style={{ color: T.muted }}>Monthly Rent:</span> <strong>{ext.rentAmount ? `$${Number(ext.rentAmount).toLocaleString()}` : "—"}</strong></div>
+                        <div><span style={{ color: T.muted }}>Tenant Portion:</span> <strong>{ext.tenantPortion ? `$${Number(ext.tenantPortion).toLocaleString()}` : "—"}</strong></div>
+                        <div><span style={{ color: T.muted }}>HAP Payment:</span> <strong>{ext.hapPayment ? `$${Number(ext.hapPayment).toLocaleString()}` : "—"}</strong></div>
+                        {resident.mailingAddress && <div style={{ gridColumn: "1 / -1" }}><span style={{ color: T.muted }}>Mailing Address:</span> <strong>{resident.mailingAddress}</strong></div>}
+                      </div>
+                    ) : (
+                      <EmptyState icon="🏠" text="Vacant — no resident currently in this unit" />
+                    )
+                  )}
 
                   {tab === "Appliances" && (
                     <div>
@@ -4328,6 +4377,51 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                         const year = window.prompt("Year installed (optional):") || "";
                         await saveFinishes([...finishes, { area, material, color, year }]);
                       }}>＋ Add Finish</button>
+                    </div>
+                  )}
+
+                  {tab === "Maintenance" && (
+                    <div>
+                      <div style={{ fontSize: 13, color: T.muted, marginBottom: 10 }}>{unitMaint.length === 0 ? "No maintenance history for this unit." : `${openMaint.length} open, ${doneMaint.length} closed.`}</div>
+                      {unitMaint.length > 0 && (
+                        <table style={s.table}>
+                          <thead><tr>{["Issue", "Category", "Priority", "Status", "Submitted", "Assigned"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                          <tbody>
+                            {unitMaint.sort((a, b) => (b.submitted || "").localeCompare(a.submitted || "")).map(m => (
+                              <tr key={m.id} onClick={() => { setUnitDetailModal(null); if (onOpenMaintenance) onOpenMaintenance(m.id); }} style={{ cursor: onOpenMaintenance ? "pointer" : "default" }}>
+                                <td style={s.td}><div style={{ fontWeight: 600, color: T.accent }}>{m.description}</div><div style={{ fontSize: 10, color: T.dim }}>{m.id}</div></td>
+                                <td style={s.td}>{m.category}</td>
+                                <td style={s.td}><Badge status={m.priority} type="priority" /></td>
+                                <td style={s.td}><Badge status={m.status} /></td>
+                                <td style={s.td}>{m.submitted || "—"}</td>
+                                <td style={s.td}>{m.assignedTo || <span style={{ color: T.dim }}>Unassigned</span>}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+
+                  {tab === "Inspections" && (
+                    <div>
+                      <div style={{ fontSize: 13, color: T.muted, marginBottom: 10 }}>{unitInsp.length === 0 ? "No inspection history for this unit." : `${unitInsp.length} inspection${unitInsp.length === 1 ? "" : "s"} on file.`}</div>
+                      {unitInsp.length > 0 && (
+                        <table style={s.table}>
+                          <thead><tr>{["Date", "Category", "Inspector", "Result", "Failed Items"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                          <tbody>
+                            {unitInsp.map(i => (
+                              <tr key={i.id}>
+                                <td style={s.td}>{i.date}{i.timeWindow ? <span style={{ color: T.dim, fontSize: 11 }}> · {i.timeWindow}</span> : ""}</td>
+                                <td style={s.td}>{i.category}</td>
+                                <td style={s.td}>{i.inspector || "—"}</td>
+                                <td style={s.td}><Badge status={i.result === "Scheduled" ? "todo" : (i.result || "").toLowerCase()} /></td>
+                                <td style={{ ...s.td, fontSize: 12, color: (i.failedItems || []).length ? T.danger : T.dim }}>{(i.failedItems || []).length ? i.failedItems.join("; ") : (i.notes || "None")}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
                     </div>
                   )}
                 </div>
@@ -9179,7 +9273,7 @@ export default function App() {
         case "maintenance": return <AdminMaintenance mobile={mobile} maintenance={fMaint} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} staffMembers={staffMembers} vendors={vendors} profile={profile} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
         case "recert": return <IncomeCertification role="admin" mobile={mobile} selectedProperty={sp} />;
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} onScheduleReg={scheduleRegInspection} onUpdateReg={updateRegInspectionN} onDeleteReg={deleteRegInspectionN} inspectionTemplates={inspectionTemplates} onSaveTemplate={async (tpl) => { const saved = await insertInspectionTemplate(tpl); setInspectionTemplates(prev => [saved, ...prev]); return saved; }} onUpdateTemplate={async (code, changes) => { await updateInspectionTemplate(code, changes); setInspectionTemplates(prev => prev.map(t => t.id === code ? { ...t, ...changes } : t)); }} onDeleteTemplate={async (code) => { await deleteInspectionTemplate(code); setInspectionTemplates(prev => prev.filter(t => t.id !== code)); }} />;
-        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} threads={threads} setPage={setPage} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
+        case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} unitInspections={fInsp} threads={threads} setPage={setPage} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
