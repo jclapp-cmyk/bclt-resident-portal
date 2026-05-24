@@ -578,7 +578,7 @@ const NAV = {
   admin: [
     { id: "dashboard", label: "Dashboard", icon: "◉" },
     { id: "property", label: "Properties", icon: "🏢" },
-    { id: "residents", label: "Residents", icon: "👥" },
+    { id: "residents", label: "Primary Residents", icon: "👥" },
     { id: "maintenance", label: "Maintenance Requests", icon: "🔧" },
     { id: "financial", label: "Finance", icon: "💰" },
     { id: "recert", label: "Income Certification", icon: "📋" },
@@ -3654,7 +3654,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 8 }}>
-        <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22, marginBottom: 0 }}>Residents</h1>
+        <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22, marginBottom: 0 }}>Primary Residents</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setShowAddForm(v => !v)} style={{ ...s.btn(showAddForm ? "ghost" : "primary"), fontSize: 13 }}>
             {showAddForm ? "Cancel" : "➕ Add Resident"}
