@@ -7054,7 +7054,9 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
     if (onClearPendingOpen) onClearPendingOpen();
   }, [pendingOpenId, maintenance]);
 
-  const intakeRows = maintenance.filter(m => m.status === "new" || m.status === "needs-info");
+  // Intake covers new + needs-info, plus legacy "submitted" rows from before the
+  // status pipeline expanded so nothing hides from the queue.
+  const intakeRows = maintenance.filter(m => m.status === "new" || m.status === "needs-info" || m.status === "submitted");
   const todoRows = maintenance.filter(m => m.status === "todo" || m.status === "in-progress");
   const archiveRows = maintenance.filter(m => m.status === "done" || m.status === "rejected" || m.status === "completed");
 
@@ -7080,7 +7082,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
     { key: "unit", label: "Unit" },
     { key: "category", label: "Category", filterOptions: [...new Set(intakeRows.map(m => m.category))] },
     { key: "priority", label: "Priority", render: v => <Badge status={v} type="priority" />, filterOptions: ["critical", "urgent", "routine"], filterValue: row => row.priority },
-    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["new", "needs-info"], filterValue: row => row.status },
+    { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["new", "needs-info", "submitted"], filterValue: row => row.status },
     { key: "submitted", label: "Submitted" },
   ];
 
