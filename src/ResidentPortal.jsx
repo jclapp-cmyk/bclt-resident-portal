@@ -987,7 +987,9 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile }) =
 };
 
 // --- MAINTENANCE PAGE (Resident) ---
-const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
+const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) => {
+  const [replyDrafts, setReplyDrafts] = useState({}); // { [requestId]: text }
+  const [replySubmitting, setReplySubmitting] = useState({});
   const [showForm, setShowForm] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [success, showSuccess] = useSuccess();
@@ -1175,6 +1177,44 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, rc }) => {
               {(Array.isArray(m.notes) ? m.notes : []).map((n, i) => <div key={i} style={{ fontSize: 13, color: T.text, marginBottom: 4 }}><span style={{ fontWeight: 600 }}>{n.by}</span> <span style={{ color: T.dim }}>({n.date})</span>: {n.text}</div>)}
             </div>
           )}
+          {m.status === "needs-info" && onUpdate && (() => {
+            const notes = Array.isArray(m.notes) ? m.notes : [];
+            const lastInfoReq = [...notes].reverse().find(n => /^Needs info:/i.test(n.text || ""));
+            const submitting = !!replySubmitting[m.id];
+            const draft = replyDrafts[m.id] || "";
+            return (
+              <div style={{ marginTop: 12, padding: 14, background: T.warnDim, borderLeft: `3px solid ${T.warn}`, borderRadius: T.radiusSm }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: T.warn, marginBottom: 6 }}>Management is asking for more info</div>
+                {lastInfoReq && (
+                  <div style={{ fontSize: 13, color: T.text, marginBottom: 10, fontStyle: "italic" }}>
+                    "{lastInfoReq.text.replace(/^Needs info:\s*/i, "")}"
+                  </div>
+                )}
+                <textarea
+                  style={{ ...s.input, width: "100%", minHeight: 80, resize: "vertical", marginBottom: 10 }}
+                  placeholder="Type your response…"
+                  value={draft}
+                  onChange={e => setReplyDrafts(prev => ({ ...prev, [m.id]: e.target.value }))}
+                />
+                <button
+                  disabled={submitting || !draft.trim()}
+                  style={s.btn("primary")}
+                  onClick={async () => {
+                    const text = (draft || "").trim();
+                    if (!text) return;
+                    setReplySubmitting(prev => ({ ...prev, [m.id]: true }));
+                    try {
+                      const newNotes = [...notes, { by: rc?.name || "Resident", date: new Date().toISOString().slice(0, 10), text }];
+                      await onUpdate(m.id, { status: "new", notes: newNotes });
+                      showSuccess("Response sent to management.");
+                      setReplyDrafts(prev => { const next = { ...prev }; delete next[m.id]; return next; });
+                    } catch (err) { showSuccess("Error: " + err.message); }
+                    setReplySubmitting(prev => { const next = { ...prev }; delete next[m.id]; return next; });
+                  }}
+                >{submitting ? "Sending…" : "Send Response"}</button>
+              </div>
+            );
+          })()}
         </div>
       ))}
     </div>
@@ -9303,7 +9343,7 @@ export default function App() {
       const myThreads = rc?.id ? threads.filter(t => t.type === "broadcast" || t.participants.includes(rc.id)) : threads;
       switch (page) {
         case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
-        case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={myMaint} onSubmit={addMaintenanceN} rc={rc} />;
+        case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={myMaint} onSubmit={addMaintenanceN} onUpdate={updateMaintenanceN} rc={rc} />;
         case "rent": return <RentPayments mobile={mobile} rc={rc} />;
         case "recert": return <IncomeCertification role="resident" mobile={mobile} selectedProperty={selectedProperty} rc={rc} pushNotif={pushNotif} />;
         case "unit": return <UnitDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} rc={rc} />;
