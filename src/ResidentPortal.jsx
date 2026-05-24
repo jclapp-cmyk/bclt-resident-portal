@@ -578,7 +578,7 @@ const NAV = {
   admin: [
     { id: "dashboard", label: "Dashboard", icon: "◉" },
     { id: "property", label: "Properties", icon: "🏢" },
-    { id: "residents", label: "Primary Residents", icon: "👥" },
+    { id: "residents", label: "Residents", icon: "👥" },
     { id: "maintenance", label: "Maintenance Requests", icon: "🔧" },
     { id: "financial", label: "Finance", icon: "💰" },
     { id: "recert", label: "Income Certification", icon: "📋" },
@@ -3665,6 +3665,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         )} />
         </div>
       </div>
+      <p style={{ ...s.sectionSub, marginTop: 4 }}>Click a row to see household members, lease details, and portal access.</p>
       {showAddForm && (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
           <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>New Resident</div>
