@@ -580,6 +580,7 @@ const NAV = {
     { id: "property", label: "Properties", icon: "🏢" },
     { id: "residents", label: "Residents", icon: "👥" },
     { id: "maintenance", label: "Maintenance Requests", icon: "🔧" },
+    { id: "vendors", label: "Vendors", icon: "📇" },
     { id: "financial", label: "Finance", icon: "💰" },
     { id: "recert", label: "Income Certification", icon: "📋" },
     { id: "inspections", label: "Inspections", icon: "🔍" },
@@ -6094,7 +6095,13 @@ const Vendors = ({ role, mobile, vendors: vendorData, onAddVendor, onUpdateVendo
   const [vForm, setVForm] = useState({ company: "", contact: "", trade: "Plumbing", phone: "", email: "", license: "", licenseExp: "", insured: "Yes", coiExp: "", notes: "" });
   const [editingVendor, setEditingVendor] = useState(null);
   const [evForm, setEvForm] = useState({});
+  const editPanelRef = useRef(null);
   const vendors = filter === "active" ? vendorData.filter(v => v.active) : filter === "inactive" ? vendorData.filter(v => !v.active) : vendorData;
+  const openEdit = (row) => {
+    setEditingVendor(row);
+    setEvForm({ company: row.company, contact: row.contact, trade: row.trade, phone: row.phone, email: row.email, license: row.license, licenseExp: row.licenseExp, insured: row.insured ? "Yes" : "No", coiExp: row.coiExp, notes: row.notes || "", active: row.active });
+    setTimeout(() => { editPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, 50);
+  };
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
@@ -6167,14 +6174,14 @@ const Vendors = ({ role, mobile, vendors: vendorData, onAddVendor, onUpdateVendo
             { key: "licenseExp", label: "Lic. Exp", render: (v) => `${v}${new Date(v) < new Date("2026-06-01") ? " ⚠" : ""}`, tdStyle: row => ({ color: new Date(row.licenseExp) < new Date("2026-06-01") ? T.danger : T.text, fontWeight: new Date(row.licenseExp) < new Date("2026-06-01") ? 600 : 400 }), filterable: false },
             { key: "insured", label: "Insured", render: (_, row) => <span style={s.badge(row.insured ? T.successDim : T.dangerDim, row.insured ? T.success : T.danger)}>{row.insured ? "Yes" : "No"}</span>, filterOptions: ["Yes", "No"], filterValue: row => row.insured ? "Yes" : "No" },
             { key: "coiExp", label: "COI Exp", render: (v) => `${v}${new Date(v) < new Date("2026-06-01") ? " ⚠" : ""}`, tdStyle: row => ({ color: new Date(row.coiExp) < new Date("2026-06-01") ? T.danger : T.text, fontWeight: new Date(row.coiExp) < new Date("2026-06-01") ? 600 : 400 }), filterable: false },
-            ...(role === "admin" ? [{ key: "_actions", label: "", sortable: false, filterable: false, render: (_, row) => <button style={s.btn("ghost")} onClick={() => { setEditingVendor(row); setEvForm({ company: row.company, contact: row.contact, trade: row.trade, phone: row.phone, email: row.email, license: row.license, licenseExp: row.licenseExp, insured: row.insured ? "Yes" : "No", coiExp: row.coiExp, notes: row.notes || "", active: row.active }); }}>Edit</button> }] : []),
           ]}
           data={vendors}
           rowStyle={row => ({ opacity: row.active ? 1 : 0.55 })}
+          onRowClick={onUpdateVendor ? openEdit : undefined}
         />
       </div>
       {editingVendor && (
-        <div style={{ ...s.card, borderLeft: `3px solid ${T.info}`, marginTop: 16 }}>
+        <div ref={editPanelRef} style={{ ...s.card, borderLeft: `3px solid ${T.info}`, marginTop: 16, position: "sticky", bottom: 16, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Edit Vendor: {editingVendor.company}</div>
             <button style={s.btn("ghost")} onClick={() => setEditingVendor(null)}>Cancel</button>
@@ -9413,7 +9420,7 @@ export default function App() {
         case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
-        case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} />;
+        case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
         case "profile": return <MaintenanceProfile mobile={mobile} />;
