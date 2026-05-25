@@ -936,9 +936,24 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
 };
 
 // --- MAINTENANCE DASHBOARD (Staff) ---
-const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile }) => {
+const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, staffMembers = [] }) => {
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
-  const myOrders = maintenance.filter(m => m.assignedTo === staffName && MAINT_OPEN(m));
+  // Permissive match: case-insensitive equality, substring (so "jeff clapp"
+  // matches "Jeff Clapp"), first-name, and email-linked staff_members rows.
+  const userEmail = (profile?.email || "").toLowerCase();
+  const emailLocal = userEmail.split("@")[0];
+  const myDisplayLc = staffName.toLowerCase().trim();
+  const myFirstName = myDisplayLc.split(/\s+/)[0] || "";
+  const matchesMe = (assignee) => {
+    if (!assignee) return false;
+    const a = assignee.toLowerCase().trim();
+    if (a === myDisplayLc) return true;
+    if (a.includes(myDisplayLc) || myDisplayLc.includes(a)) return true;
+    if (myFirstName && (a === myFirstName || a.startsWith(myFirstName + " "))) return true;
+    if (emailLocal && (a.includes(emailLocal) || emailLocal.includes(a.replace(/\s+/g, "")))) return true;
+    return staffMembers.some(s => s.name && s.name.toLowerCase() === a && (s.email || "").toLowerCase() === userEmail);
+  };
+  const myOrders = maintenance.filter(m => matchesMe(m.assignedTo) && MAINT_OPEN(m));
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>My Dashboard</h1>
@@ -970,14 +985,20 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile }) =
         </div>
       </div>
       <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>My Work Orders</div>
-        {myOrders.map(m => (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>My Work Orders</div>
+          <span style={{ fontSize: 11, color: T.muted }}>Matching: <strong>{staffName}</strong></span>
+        </div>
+        {myOrders.length === 0 ? (
+          <EmptyState icon="🔧" text={`No open work orders assigned to ${staffName}. Open work orders assigned to other names won't show here — check the Work Orders page (All filter).`} />
+        ) : myOrders.map(m => (
           <div key={m.id} style={{ ...s.card, marginBottom: 10, padding: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontWeight: 700 }}>{m.id} — {m.category}</span>
               <Badge status={m.priority} type="priority" />
             </div>
             <div style={{ color: T.muted, fontSize: 13 }}>Unit {m.unit} · {m.description}</div>
+            {m.assignedTo && <div style={{ color: T.dim, fontSize: 12, marginTop: 4 }}>Assigned to: {m.assignedTo}</div>}
             {m.projectedComplete && <div style={{ color: T.dim, fontSize: 12, marginTop: 6 }}>Est. complete: {m.projectedComplete}</div>}
           </div>
         ))}
@@ -9784,7 +9805,7 @@ export default function App() {
     }
     if (role === "maintenance") {
       switch (page) {
-        case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
+        case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} />;
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
@@ -9792,7 +9813,7 @@ export default function App() {
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
         case "profile": return <MaintenanceProfile mobile={mobile} profile={profile} staffMembers={staffMembers} />;
         case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
-        default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
+        default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} />;
       }
     }
     return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} />;
