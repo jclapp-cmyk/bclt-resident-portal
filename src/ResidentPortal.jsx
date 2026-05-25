@@ -189,8 +189,13 @@ const Badge = ({ status, type = "status" }) => {
   return <span style={s.badge(c.bg, c.text)}>{c.label || status}</span>;
 };
 
-const StatCard = ({ label, value, accent = T.accent, mobile }) => (
-  <div style={s.statCard(accent, mobile)}>
+const StatCard = ({ label, value, accent = T.accent, mobile, onClick }) => (
+  <div
+    onClick={onClick}
+    style={{ ...s.statCard(accent, mobile), cursor: onClick ? "pointer" : "default", transition: "transform 0.1s, box-shadow 0.1s" }}
+    onMouseEnter={onClick ? (e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)"; } : undefined}
+    onMouseLeave={onClick ? (e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; } : undefined}
+  >
     <div style={{ fontSize: 12, color: T.muted, marginBottom: 4 }}>{label}</div>
     <div style={{ fontSize: mobile ? 22 : 26, fontWeight: 700 }}>{value}</div>
   </div>
@@ -634,10 +639,10 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, {rc?.firstName || "Resident"}</h1>
       <p style={s.sectionSub}>Unit {rc?.unit || "—"} — {propName}</p>
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-        {(() => { const curMonth = new Date().toISOString().slice(0, 7); const le = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id && l.month === curMonth) || LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id) || {}; const bal = le.balance || 0; return <StatCard label="Rent Balance" value={`$${Math.abs(bal).toFixed(2)}`} accent={bal > 0 ? T.danger : T.success} mobile={mobile} />; })()}
-        <StatCard label="Open Requests" value={openRequests} accent={openRequests > 0 ? T.warn : T.success} mobile={mobile} />
-        <StatCard label="Income Cert" value={certStatus.label} accent={certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success} mobile={mobile} />
-        <StatCard label="Lease Status" value={ext.leaseEnd ? (new Date(ext.leaseEnd) < new Date() ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "M-to-M" : "Active")} accent={ext.leaseEnd && new Date(ext.leaseEnd) < new Date() ? T.danger : T.success} mobile={mobile} />
+        {(() => { const curMonth = new Date().toISOString().slice(0, 7); const le = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id && l.month === curMonth) || LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id) || {}; const bal = le.balance || 0; return <StatCard label="Rent Balance" value={`$${Math.abs(bal).toFixed(2)}`} accent={bal > 0 ? T.danger : T.success} mobile={mobile} onClick={() => onNavigate && onNavigate("rent")} />; })()}
+        <StatCard label="Open Requests" value={openRequests} accent={openRequests > 0 ? T.warn : T.success} mobile={mobile} onClick={() => onNavigate && onNavigate("maintenance")} />
+        <StatCard label="Income Cert" value={certStatus.label} accent={certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success} mobile={mobile} onClick={() => onNavigate && onNavigate("recert")} />
+        <StatCard label="Lease Status" value={ext.leaseEnd ? (new Date(ext.leaseEnd) < new Date() ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "M-to-M" : "Active")} accent={ext.leaseEnd && new Date(ext.leaseEnd) < new Date() ? T.danger : T.success} mobile={mobile} onClick={() => onNavigate && onNavigate("unit")} />
       </div>
       {(() => {
         const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || {};
@@ -668,10 +673,10 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
         </div>
         );
       })()}
-      <div style={{ ...s.card, marginBottom: 24 }}>
+      <div style={{ ...s.card, marginBottom: 24, cursor: onNavigate ? "pointer" : "default" }} onClick={() => onNavigate && onNavigate("rent")}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Payment History</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Payment History {onNavigate && <span style={{ fontSize: 11, color: T.accent, marginLeft: 6 }}>→</span>}</div>
             <div style={{ fontSize: 12, color: T.muted }}>Last 6 months — balance at month end</div>
           </div>
           <span style={{ fontSize: 12, color: T.success, fontWeight: 600 }}>On Track</span>
@@ -698,9 +703,12 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
         })()}
       </div>
       <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Recent Messages</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Recent Messages</div>
+          {onNavigate && <button onClick={() => onNavigate("messages")} style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px" }}>View all →</button>}
+        </div>
         {threads.filter(t => t.type === "broadcast" || t.participants.includes(rc?.id || "")).sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).slice(0, 3).map(t => (
-          <div key={t.id} style={{ padding: "10px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+          <div key={t.id} onClick={() => onNavigate && onNavigate("messages")} style={{ padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, cursor: onNavigate ? "pointer" : "default" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontWeight: 600, fontSize: 14 }}>{t.subject}</span>
               {t.priority === "high" && <span style={s.badge(T.dangerDim, T.danger)}>Important</span>}
@@ -711,9 +719,12 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
         ))}
       </div>
       <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Active Maintenance</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Active Maintenance</div>
+          {onNavigate && <button onClick={() => onNavigate("maintenance")} style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px" }}>View all →</button>}
+        </div>
         {maintenance.filter(m => m.unit === (rc?.unit || "") && MAINT_OPEN(m)).map(m => (
-          <div key={m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+          <div key={m.id} onClick={() => onNavigate && onNavigate("maintenance")} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, cursor: onNavigate ? "pointer" : "default" }}>
             <div>
               <span style={{ fontWeight: 600, fontSize: 14 }}>{m.category}</span>
               <span style={{ color: T.muted, fontSize: 13, marginLeft: 10 }}>{m.description}</span>
@@ -728,7 +739,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
 };
 
 // --- ADMIN DASHBOARD ---
-const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notifications, selectedProperty, onSelectProperty, onOpenMaintenance }) => {
+const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notifications, selectedProperty, onSelectProperty, onOpenMaintenance, onNavigateTo }) => {
   const [dashCerts, setDashCerts] = useState([]);
   useEffect(() => { fetchIncomeCertifications().then(c => setDashCerts(c || [])).catch((err) => { console.error('Failed to fetch certifications:', err); }); }, []);
   const regInsp = filterByProperty(LIVE_REG_INSPECTIONS, selectedProperty);
@@ -771,12 +782,17 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
           {onSelectProperty && <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => onSelectProperty(selectedProperty, "financial")}>Full report →</button>}
         </div>
         <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: finTopDelinquent.length > 0 ? 16 : 0 }}>
-          <StatCard label="Monthly Rent" value={`$${finRent.toLocaleString()}`} accent={T.accent} mobile={mobile} />
-          <StatCard label="Collected" value={`$${finCollected.toLocaleString()}`} accent={T.success} mobile={mobile} />
-          <StatCard label="Tenant Paid" value={`$${finTenantPaid.toLocaleString()}`} accent={T.info} mobile={mobile} />
-          <StatCard label="HAP / Subsidy" value={`$${finHap.toLocaleString()}`} accent={T.info} mobile={mobile} />
-          <StatCard label="Collection Rate" value={`${finRate}%`} accent={finRate >= 95 ? T.success : finRate >= 80 ? T.warn : T.danger} mobile={mobile} />
-          <StatCard label="Outstanding" value={`$${finOutstanding.toLocaleString()}`} accent={finOutstanding > 0 ? T.danger : T.success} mobile={mobile} />
+          {(() => {
+            const goFinance = onNavigateTo ? () => onNavigateTo("financial") : undefined;
+            return <>
+              <StatCard label="Monthly Rent" value={`$${finRent.toLocaleString()}`} accent={T.accent} mobile={mobile} onClick={goFinance} />
+              <StatCard label="Collected" value={`$${finCollected.toLocaleString()}`} accent={T.success} mobile={mobile} onClick={goFinance} />
+              <StatCard label="Tenant Paid" value={`$${finTenantPaid.toLocaleString()}`} accent={T.info} mobile={mobile} onClick={goFinance} />
+              <StatCard label="HAP / Subsidy" value={`$${finHap.toLocaleString()}`} accent={T.info} mobile={mobile} onClick={goFinance} />
+              <StatCard label="Collection Rate" value={`${finRate}%`} accent={finRate >= 95 ? T.success : finRate >= 80 ? T.warn : T.danger} mobile={mobile} onClick={goFinance} />
+              <StatCard label="Outstanding" value={`$${finOutstanding.toLocaleString()}`} accent={finOutstanding > 0 ? T.danger : T.success} mobile={mobile} onClick={goFinance} />
+            </>;
+          })()}
         </div>
         {finTopDelinquent.length > 0 && (
           <div>
@@ -785,7 +801,9 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
               <thead><tr>{["Resident", "Unit", "Month", "Balance"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
               <tbody>
                 {finTopDelinquent.map((l, i) => (
-                  <tr key={i}>
+                  <tr key={i} onClick={() => onNavigateTo && onNavigateTo("financial")} style={{ cursor: onNavigateTo ? "pointer" : "default" }}
+                    onMouseEnter={e => { if (onNavigateTo) e.currentTarget.style.background = T.surfaceHover; }}
+                    onMouseLeave={e => { if (onNavigateTo) e.currentTarget.style.background = "transparent"; }}>
                     <td style={s.td}>{l.resident?.name || "—"}</td>
                     <td style={s.td}>{l.resident?.unit || "—"}</td>
                     <td style={s.td}>{l.month}</td>
@@ -896,7 +914,9 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
                   <thead><tr>{["Resident", "Unit", "Status", "Due", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                   <tbody>
                     {needsAction.map(r => (
-                      <tr key={r.id}>
+                      <tr key={r.id} onClick={() => onNavigateTo && onNavigateTo("recert")} style={{ cursor: onNavigateTo ? "pointer" : "default" }}
+                        onMouseEnter={e => { if (onNavigateTo) e.currentTarget.style.background = T.surfaceHover; }}
+                        onMouseLeave={e => { if (onNavigateTo) e.currentTarget.style.background = "transparent"; }}>
                         <td style={s.td}><span style={{ fontWeight: 600 }}>{r.name}</span></td>
                         <td style={s.td}>{r.unit}</td>
                         <td style={s.td}>
@@ -919,9 +939,12 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
         })()}
       </div>
       <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Upcoming Inspections</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Upcoming Inspections</div>
+          {onNavigateTo && <button onClick={() => onNavigateTo("inspections")} style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px" }}>View all →</button>}
+        </div>
         {regInsp.filter(i => new Date(i.nextDue) < new Date("2027-01-01")).slice(0, 3).map(i => (
-          <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+          <div key={i.id} onClick={() => onNavigateTo && onNavigateTo("inspections")} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, cursor: onNavigateTo ? "pointer" : "default" }}>
             <div>
               <span style={{ fontWeight: 600 }}>{i.type}</span>
               <span style={{ color: T.muted, fontSize: 13, marginLeft: 10 }}>{i.authority}</span>
@@ -936,7 +959,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
 };
 
 // --- MAINTENANCE DASHBOARD (Staff) ---
-const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, staffMembers = [], threads = [], onOpenWorkOrder, onOpenMessages }) => {
+const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, staffMembers = [], threads = [], onOpenWorkOrder, onOpenMessages, onNavigateTo }) => {
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
   // Permissive match: case-insensitive equality, substring (so "jeff clapp"
   // matches "Jeff Clapp"), first-name, and email-linked staff_members rows.
@@ -959,9 +982,9 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, sta
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>My Dashboard</h1>
       <p style={s.sectionSub}>{staffName} — Maintenance Staff</p>
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-        <StatCard label="My Open Orders" value={myOrders.length} accent={T.warn} mobile={mobile} />
-        <StatCard label="Unassigned" value={maintenance.filter(m => !m.assignedTo).length} accent={T.danger} mobile={mobile} />
-        <StatCard label="Completed (Month)" value={maintenance.filter(m => MAINT_DONE(m)).length} accent={T.success} mobile={mobile} />
+        <StatCard label="My Open Orders" value={myOrders.length} accent={T.warn} mobile={mobile} onClick={onNavigateTo ? () => onNavigateTo("work-orders") : undefined} />
+        <StatCard label="Unassigned" value={maintenance.filter(m => !m.assignedTo).length} accent={T.danger} mobile={mobile} onClick={onNavigateTo ? () => onNavigateTo("work-orders") : undefined} />
+        <StatCard label="Completed (Month)" value={maintenance.filter(m => MAINT_DONE(m)).length} accent={T.success} mobile={mobile} onClick={onNavigateTo ? () => onNavigateTo("work-orders") : undefined} />
       </div>
       <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 24 }}>
         <div style={s.card}>
@@ -9822,7 +9845,7 @@ export default function App() {
         case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} rc={rc} staffMembers={staffMembers} />;
         case "profile": return <ResidentProfile mobile={mobile} commPrefs={commPrefs} setCommPrefs={setCommPrefs} emergencyContacts={emergencyContacts} onUpdateEmergencyContacts={updateEmergencyContacts} rc={rc} />;
         case "messages": return <Communications role="resident" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={myThreads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} rc={rc} />;
-        default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} rc={rc} />;
+        default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
       }
     }
     if (role === "admin") {
@@ -9830,7 +9853,7 @@ export default function App() {
       const fMaint = filterByProperty(maintenance, sp);
       const fInsp = filterByProperty(unitInspections, sp);
       switch (page) {
-        case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
+        case "dashboard": return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onSelectProperty={selectProperty} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} onNavigateTo={setPage} />;
         case "residents": return <AdminResidents mobile={mobile} maintenance={fMaint} threads={threads} emergencyContacts={emergencyContacts} adminNotes={adminNotes} onAddAdminNote={addAdminNote} selectedProperty={sp} onDataChanged={reloadData} leaseDocs={leaseDocs} sbRentLedger={sbRentLedger} pendingResidentView={pendingResidentView} onClearPendingResident={() => setPendingResidentView(null)} onAddThread={addThreadN} onAddMessage={addMessageN} onResidentAdded={async () => {
           try { const [res, resExt] = await Promise.all([fetchResidents(), fetchResidentsExtended()]); LIVE_RESIDENTS = res; LIVE_RESIDENTS_EXTENDED = resExt; setSbResidents(res); setSbResidentsExt(resExt); } catch(e) { console.warn(e); }
         }} />;
@@ -9846,12 +9869,12 @@ export default function App() {
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} threads={threads} />;
         case "settings": return <AdminSettings mobile={mobile} settings={settings} setSettings={setSettings} darkMode={darkMode} setDarkMode={setDarkMode} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onReset={resetAllState} staffMembers={staffMembers} allUnits={allUnits} />;
-        default: return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
+        default: return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} onNavigateTo={setPage} />;
       }
     }
     if (role === "maintenance") {
       switch (page) {
-        case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} threads={threads} onOpenWorkOrder={(id) => { setPendingMaintenanceId(id); setPage("work-orders"); }} onOpenMessages={() => setPage("messages")} />;
+        case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} threads={threads} onOpenWorkOrder={(id) => { setPendingMaintenanceId(id); setPage("work-orders"); }} onOpenMessages={() => setPage("messages")} onNavigateTo={setPage} />;
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
@@ -9859,10 +9882,10 @@ export default function App() {
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
         case "profile": return <MaintenanceProfile mobile={mobile} profile={profile} staffMembers={staffMembers} />;
         case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
-        default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} threads={threads} onOpenWorkOrder={(id) => { setPendingMaintenanceId(id); setPage("work-orders"); }} onOpenMessages={() => setPage("messages")} />;
+        default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} threads={threads} onOpenWorkOrder={(id) => { setPendingMaintenanceId(id); setPage("work-orders"); }} onOpenMessages={() => setPage("messages")} onNavigateTo={setPage} />;
       }
     }
-    return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} />;
+    return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} onNavigate={handleNav} />;
   };
 
   const sidebarContent = (
