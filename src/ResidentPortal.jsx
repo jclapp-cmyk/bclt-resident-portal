@@ -1263,17 +1263,21 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
   // Match case-insensitively, and also accept staff names that contain the
   // user's display name (so "jeff clapp maint" matches "Jeff Clapp").
   const userEmail = (profile?.email || "").toLowerCase();
-  const myDisplayLc = staffName.toLowerCase();
+  const emailLocal = userEmail.split("@")[0];
+  const myDisplayLc = staffName.toLowerCase().trim();
+  const myFirstName = myDisplayLc.split(/\s+/)[0] || "";
   const matchesMe = (assignee) => {
     if (!assignee) return false;
     const a = assignee.toLowerCase().trim();
     if (a === myDisplayLc) return true;
     if (a.includes(myDisplayLc) || myDisplayLc.includes(a)) return true;
+    if (myFirstName && (a === myFirstName || a.startsWith(myFirstName + " "))) return true;
+    if (emailLocal && (a.includes(emailLocal) || emailLocal.includes(a.replace(/\s+/g, "")))) return true;
     // Also: a staff_members row whose email matches our auth email
     return staffMembers.some(s => s.name && s.name.toLowerCase() === a && (s.email || "").toLowerCase() === userEmail);
   };
   const [topTab, setTopTab] = useState("workorders");
-  const [assigneeFilter, setAssigneeFilter] = useState("mine");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [success, showSuccess] = useSuccess();
   const [showCreate, setShowCreate] = useState(false);
@@ -1412,7 +1416,12 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, justifyContent: "flex-end", alignItems: "center" }}>
+        {assigneeFilter === "mine" && (
+          <span style={{ fontSize: 11, color: T.muted, marginRight: 8 }}>
+            Matching: <strong>{staffName}</strong>
+          </span>
+        )}
         <button style={s.btn(assigneeFilter === "mine" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("mine")}>My Orders</button>
         <button style={s.btn(assigneeFilter === "all" ? "primary" : "ghost")} onClick={() => setAssigneeFilter("all")}>All</button>
       </div>
