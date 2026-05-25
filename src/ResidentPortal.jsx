@@ -1254,13 +1254,23 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
 };
 
 // --- WORK ORDERS (Maintenance Staff) ---
-const WorkOrders = ({ mobile, maintenance, onUpdate, profile, vendors = [], staffMembers = [] }) => {
+const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [], staffMembers = [] }) => {
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
   const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin" || s.role === "property_manager")).filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i);
+  // The signed-in user might appear in the assignee field under multiple names:
+  // their profile displayName, or any staff_members rows that share their email
+  // (e.g., "Jeff Clapp" the user vs. "jeff clapp maint" the staff record).
+  const userEmail = (profile?.email || "").toLowerCase();
+  const myIdentities = new Set([
+    staffName,
+    ...staffMembers.filter(s => (s.email || "").toLowerCase() === userEmail).map(s => s.name),
+  ].filter(Boolean));
   const [topTab, setTopTab] = useState("workorders");
   const [assigneeFilter, setAssigneeFilter] = useState("mine");
   const [selected, setSelected] = useState(null);
   const [success, showSuccess] = useSuccess();
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ unit: "", category: "Plumbing", priority: "routine", description: "", requesterName: "", assignedTo: staffName, vendorId: "" });
 
   useEffect(() => {
     if (!selected) return;
@@ -1270,7 +1280,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, profile, vendors = [], staf
 
   const todoRows = maintenance.filter(m => m.status === "todo" || m.status === "in-progress");
   const archiveRows = maintenance.filter(m => m.status === "done" || m.status === "rejected" || m.status === "completed");
-  const applyAssignee = (rows) => assigneeFilter === "mine" ? rows.filter(r => r.assignedTo === staffName) : rows;
+  const applyAssignee = (rows) => assigneeFilter === "mine" ? rows.filter(r => r.assignedTo && myIdentities.has(r.assignedTo)) : rows;
 
   const issueCol = {
     key: "description", label: "Issue",
@@ -1313,15 +1323,78 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, profile, vendors = [], staf
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div><h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Work Orders</h1><p style={s.sectionSub}>Manage and update assigned maintenance requests</p></div>
-        <ExportButton mobile={mobile} onClick={() => generateCSV([
-          { label: "Issue", key: "description" }, { label: "Requester", key: "residentName", exportValue: r => r.residentName || r.requesterName || "" },
-          { label: "Property", key: "propertyId", exportValue: r => propertyDisplayName(r.propertyId) }, { label: "Unit", key: "unit" },
-          { label: "Category", key: "category" }, { label: "Status", key: "status" },
-          { label: "Vendor", key: "vendorId", exportValue: r => vendors.find(v => v.id === r.vendorId)?.company || "" },
-          { label: "Projected", key: "projectedComplete" }, { label: "Closed", key: "completedDate" }, { label: "ID", key: "id" },
-        ], currentRows, topTab === "archive" ? "work_orders_archive" : "work_orders")} />
+        <div style={{ display: "flex", gap: 8 }}>
+          {onAdd && <button onClick={() => setShowCreate(v => !v)} style={{ ...s.btn(showCreate ? "ghost" : "primary"), fontSize: 13 }}>{showCreate ? "Cancel" : "➕ New Request"}</button>}
+          <ExportButton mobile={mobile} onClick={() => generateCSV([
+            { label: "Issue", key: "description" }, { label: "Requester", key: "residentName", exportValue: r => r.residentName || r.requesterName || "" },
+            { label: "Property", key: "propertyId", exportValue: r => propertyDisplayName(r.propertyId) }, { label: "Unit", key: "unit" },
+            { label: "Category", key: "category" }, { label: "Status", key: "status" },
+            { label: "Vendor", key: "vendorId", exportValue: r => vendors.find(v => v.id === r.vendorId)?.company || "" },
+            { label: "Projected", key: "projectedComplete" }, { label: "Closed", key: "completedDate" }, { label: "ID", key: "id" },
+          ], currentRows, topTab === "archive" ? "work_orders_archive" : "work_orders")} />
+        </div>
       </div>
       <SuccessMessage message={success} />
+
+      {showCreate && onAdd && (
+        <div style={{ ...s.card, borderLeft: `3px solid ${T.warn}`, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Create Maintenance Request</div>
+          <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+            <div><label style={s.label}>Unit *</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.unit} onChange={e => setCreateForm(f => ({ ...f, unit: e.target.value }))}>
+                <option value="">Select unit...</option>
+                {LIVE_RESIDENTS.map(r => <option key={r.id} value={r.unit}>{r.unit} — {r.name}</option>)}
+              </select>
+            </div>
+            <div><label style={s.label}>Requester (optional)</label>
+              <input style={{ ...s.mInput(mobile), width: "100%" }} value={createForm.requesterName} onChange={e => setCreateForm(f => ({ ...f, requesterName: e.target.value }))} placeholder="Who reported this?" />
+            </div>
+            <div><label style={s.label}>Category</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.category} onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}>
+                {["Plumbing", "Electrical", "HVAC", "Appliance", "Structural", "Pest", "Other"].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div><label style={s.label}>Priority</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.priority} onChange={e => setCreateForm(f => ({ ...f, priority: e.target.value }))}>
+                {["routine", "urgent", "critical"].map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div><label style={s.label}>Assign To</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.assignedTo} onChange={e => setCreateForm(f => ({ ...f, assignedTo: e.target.value }))}>
+                <option value="">Unassigned</option>
+                {maintStaff.map(m => <option key={m.id} value={m.name}>{m.name}{m.role === "property_manager" ? " (PM)" : m.role === "admin" ? " (Admin)" : ""}</option>)}
+              </select>
+            </div>
+            <div><label style={s.label}>Vendor</label>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={createForm.vendorId} onChange={e => setCreateForm(f => ({ ...f, vendorId: e.target.value }))}>
+                <option value="">—</option>
+                {vendors.filter(v => v.active).map(v => <option key={v.id} value={v.id}>{v.company} ({v.trade})</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 14 }}><label style={s.label}>Description *</label><textarea style={{ ...s.mInput(mobile), width: "100%", minHeight: 60, resize: "vertical" }} value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))} placeholder="Describe the issue..." /></div>
+          <button disabled={!createForm.unit || !createForm.description.trim()} onClick={() => {
+            const res = LIVE_RESIDENTS.find(r => r.unit === createForm.unit);
+            const req = {
+              propertyId: res?.propertyId || "",
+              unit: createForm.unit,
+              category: createForm.category,
+              priority: createForm.priority,
+              description: createForm.description.trim(),
+              source: "staff",
+              status: "todo",
+              requesterName: createForm.requesterName.trim() || null,
+              assignedTo: createForm.assignedTo || null,
+              vendorId: createForm.vendorId || null,
+              notes: [],
+            };
+            onAdd(req);
+            showSuccess(`Work order created for unit ${createForm.unit}`);
+            setCreateForm({ unit: "", category: "Plumbing", priority: "routine", description: "", requesterName: "", assignedTo: staffName, vendorId: "" });
+            setShowCreate(false);
+          }} style={{ ...s.mBtn("primary", mobile) }}>Create Work Order</button>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 8, marginBottom: 14, borderBottom: `1px solid ${T.border}` }}>
         {[
@@ -9641,13 +9714,13 @@ export default function App() {
     if (role === "maintenance") {
       switch (page) {
         case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
-        case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
+        case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
         case "profile": return <MaintenanceProfile mobile={mobile} profile={profile} staffMembers={staffMembers} />;
-        case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
+        case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
         default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} />;
       }
     }
