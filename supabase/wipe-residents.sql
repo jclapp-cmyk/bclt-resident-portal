@@ -8,8 +8,8 @@
 --   - All household members
 --   - All leases + lease documents
 --   - All rent payments
---   - All maintenance requests + their notes/photos refs
---   - All income certifications + TIC members/income/assets
+--   - All maintenance requests
+--   - All income certifications + TIC household members / income / assets
 --   - All onboarding workflows
 --   - All compliance documents
 --   - All admin notes attached to residents
@@ -26,69 +26,75 @@
 --
 -- Run this in the Supabase SQL editor (Dashboard → SQL → New query).
 -- It's wrapped in a transaction — if anything fails, everything rolls back.
+-- Each delete is wrapped in an EXISTS check so missing tables don't crash it.
 -- ══════════════════════════════════════════════════════
 
 BEGIN;
 
--- 1. TIC (income certification) child tables — must go before income_certifications
-DELETE FROM tic_income;
-DELETE FROM tic_assets;
-DELETE FROM tic_members;
-
--- 2. Income certifications
-DELETE FROM income_certifications;
-
--- 3. Rent payments
-DELETE FROM rent_payments;
-
--- 4. Maintenance requests (their photos column is JSONB, no separate table)
-DELETE FROM maintenance_requests;
-
--- 5. Lease documents + leases
-DELETE FROM lease_documents;
-DELETE FROM leases;
-
--- 6. Onboarding + compliance
-DELETE FROM onboarding_workflows;
-DELETE FROM compliance_docs;
-
--- 7. Admin notes attached to residents
-DELETE FROM admin_notes WHERE resident_id IS NOT NULL;
-
--- 8. Emergency contacts (table is optional — ignore if it doesn't exist)
 DO $$
+DECLARE
+  t TEXT;
+  resident_table_exists BOOLEAN;
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'emergency_contacts') THEN
-    DELETE FROM emergency_contacts;
+  -- Tables to wipe in FK-safe order
+  FOREACH t IN ARRAY ARRAY[
+    'tic_income_entries',
+    'tic_asset_entries',
+    'tic_household_members',
+    'income_certifications',
+    'rent_payments',
+    'maintenance_requests',
+    'lease_documents',
+    'leases',
+    'onboarding_workflows',
+    'compliance_docs',
+    'emergency_contacts',
+    'household_members'
+  ]
+  LOOP
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
+      EXECUTE format('DELETE FROM %I', t);
+    END IF;
+  END LOOP;
+
+  -- Admin notes: only the ones tied to a resident
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'admin_notes') THEN
+    DELETE FROM admin_notes WHERE resident_id IS NOT NULL;
+  END IF;
+
+  -- Message threads + messages where any resident is a participant.
+  -- Broadcast threads are kept since they don't reference specific residents.
+  SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'residents')
+    INTO resident_table_exists;
+
+  IF resident_table_exists AND EXISTS (
+    SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'message_threads'
+  ) THEN
+    DELETE FROM messages WHERE thread_id IN (
+      SELECT id FROM message_threads
+      WHERE participants && (SELECT COALESCE(array_agg(slug), ARRAY[]::text[]) FROM residents)
+    );
+    DELETE FROM message_threads
+      WHERE participants && (SELECT COALESCE(array_agg(slug), ARRAY[]::text[]) FROM residents);
+  END IF;
+
+  -- Resident portal logins
+  DELETE FROM user_profiles WHERE role = 'resident';
+
+  -- Finally, residents themselves
+  IF resident_table_exists THEN
+    DELETE FROM residents;
   END IF;
 END $$;
 
--- 9. Household members cascade from residents, but be explicit for clarity
-DELETE FROM household_members;
-
--- 10. Message threads + messages where any resident is a participant
---     (Broadcast threads are kept since they don't reference a specific resident.)
-DELETE FROM messages WHERE thread_id IN (
-  SELECT id FROM message_threads
-  WHERE participants && (SELECT array_agg(slug) FROM residents)
-);
-DELETE FROM message_threads
-  WHERE participants && (SELECT array_agg(slug) FROM residents);
-
--- 11. User profiles with role = 'resident' (portal logins)
-DELETE FROM user_profiles WHERE role = 'resident';
-
--- 12. Finally, residents themselves
-DELETE FROM residents;
-
 COMMIT;
 
--- Sanity check — should return 0 for all
+-- ── Sanity check — should return 0 for all ──
 SELECT
-  (SELECT COUNT(*) FROM residents)               AS residents,
-  (SELECT COUNT(*) FROM household_members)       AS household_members,
-  (SELECT COUNT(*) FROM leases)                  AS leases,
-  (SELECT COUNT(*) FROM maintenance_requests)    AS maintenance_requests,
-  (SELECT COUNT(*) FROM income_certifications)   AS income_certifications,
-  (SELECT COUNT(*) FROM rent_payments)           AS rent_payments,
-  (SELECT COUNT(*) FROM user_profiles WHERE role = 'resident') AS resident_logins;
+  (SELECT COUNT(*) FROM residents)                                          AS residents,
+  (SELECT COUNT(*) FROM household_members)                                  AS household_members,
+  (SELECT COUNT(*) FROM leases)                                             AS leases,
+  (SELECT COUNT(*) FROM maintenance_requests)                               AS maintenance_requests,
+  (SELECT COUNT(*) FROM income_certifications)                              AS income_certifications,
+  (SELECT COUNT(*) FROM rent_payments)                                      AS rent_payments,
+  (SELECT COUNT(*) FROM user_profiles WHERE role = 'resident')              AS resident_logins;
