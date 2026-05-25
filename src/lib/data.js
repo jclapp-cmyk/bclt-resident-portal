@@ -339,6 +339,20 @@ export async function updateResident(residentUuid, changes) {
   if (error) throw error;
 }
 
+export async function deleteResident(residentUuid) {
+  // Clean up dependents that don't have ON DELETE CASCADE.
+  // household_members and rent_payments cascade automatically; the rest
+  // (leases, maintenance_requests, threads, user_profiles, etc.) are
+  // either nullified or unlinked here so the resident row can be removed.
+  try { await supabase.from('leases').delete().eq('resident_id', residentUuid); } catch (_) {}
+  try { await supabase.from('lease_documents').delete().eq('resident_id', residentUuid); } catch (_) {}
+  try { await supabase.from('maintenance_requests').delete().eq('resident_id', residentUuid); } catch (_) {}
+  try { await supabase.from('income_certifications').delete().eq('resident_id', residentUuid); } catch (_) {}
+  try { await supabase.from('user_profiles').update({ resident_id: null }).eq('resident_id', residentUuid); } catch (_) {}
+  const { error } = await supabase.from('residents').delete().eq('id', residentUuid);
+  if (error) throw error;
+}
+
 export async function updateLease(leaseUuid, changes) {
   const mapped = {};
   if (changes.startDate !== undefined) mapped.start_date = changes.startDate;
