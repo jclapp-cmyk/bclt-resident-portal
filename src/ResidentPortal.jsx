@@ -1331,7 +1331,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10 }}>
         <div><h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Work Orders</h1><p style={s.sectionSub}>Manage and update assigned maintenance requests</p></div>
         <div style={{ display: "flex", gap: 8 }}>
-          {onAdd && <button onClick={() => setShowCreate(v => !v)} style={{ ...s.btn(showCreate ? "ghost" : "primary"), fontSize: 13 }}>{showCreate ? "Cancel" : "➕ New Request"}</button>}
+          {onAdd && <button onClick={() => setShowCreate(v => !v)} style={{ ...s.btn(showCreate ? "ghost" : "primary"), fontSize: 15, padding: "10px 18px", fontWeight: 600 }}>{showCreate ? "Cancel" : "➕ New Request"}</button>}
           <ExportButton mobile={mobile} onClick={() => generateCSV([
             { label: "Issue", key: "description" }, { label: "Requester", key: "residentName", exportValue: r => r.residentName || r.requesterName || "" },
             { label: "Property", key: "propertyId", exportValue: r => propertyDisplayName(r.propertyId) }, { label: "Unit", key: "unit" },
