@@ -115,23 +115,10 @@ export async function fetchUserProfiles() {
 export async function inviteUser(email, role, residentId, displayName) {
   let warning = null;
 
-  // C1 fix: Call signInWithOtp first (creates auth.users entry), then RPC.
-  // No sleep — if RPC fails because auth.users doesn't exist yet, fall back
-  // to placeholder UUID (trigger and login RPC will handle linking later).
-  const redirectTo = window.location.origin;
-  const { error: otpErr } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: redirectTo, shouldCreateUser: true },
-  });
-
-  // C2 fix: If OTP fails, still create the profile but capture the warning
-  // so the caller can show it to the user.
-  if (otpErr) {
-    warning = `Invite email could not be sent: ${otpErr.message}. The user profile was still created — they can request a login link manually.`;
-  }
-
-  // Create profile via SECURITY DEFINER RPC — it looks up the real auth.users ID
-  const { data, error: rpcErr } = await supabase.rpc('invite_user', {
+  // Create the profile row first (so the user has a role/resident_id when they
+  // click the magic link). The RPC handles auth.users lookup; fall back to a
+  // placeholder UUID if the user doesn't yet exist in auth.users.
+  const { error: rpcErr } = await supabase.rpc('invite_user', {
     invite_email: email,
     invite_role: role,
     invite_resident_id: residentId || null,
@@ -139,7 +126,6 @@ export async function inviteUser(email, role, residentId, displayName) {
   });
 
   if (rpcErr) {
-    // Fallback: insert with placeholder UUID (will be linked on first login)
     console.warn('invite_user RPC failed, using fallback:', rpcErr.message);
     const placeholderId = crypto.randomUUID();
     const { error: insertErr } = await supabase.from('user_profiles').insert({
@@ -150,6 +136,23 @@ export async function inviteUser(email, role, residentId, displayName) {
       display_name: displayName || email.split('@')[0],
     });
     if (insertErr) throw insertErr;
+  }
+
+  // Send the warm welcome email via our serverless function.
+  // It generates a Supabase magic link server-side (using the service role
+  // key) and embeds it in a branded onboarding email.
+  try {
+    const resp = await fetch('/api/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, displayName, role }),
+    });
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      warning = `Profile created, but the welcome email failed to send (${errBody}). The user can request a login link from the sign-in page.`;
+    }
+  } catch (err) {
+    warning = `Profile created, but the welcome email failed to send (${err.message}). The user can request a login link from the sign-in page.`;
   }
 
   return { warning };
