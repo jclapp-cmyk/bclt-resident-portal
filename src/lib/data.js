@@ -893,23 +893,46 @@ export async function insertMaintenanceRequest({ unit, category, priority, descr
   const reqSource = source || 'resident';
   const initialStatus = status || (reqSource === 'resident' ? 'new' : 'todo');
 
-  const code = `MR-${Date.now().toString(36)}`;
+  // Generate a readable MR code: MR-{year}-{4-digit sequence within that year}.
+  // The sequence is "count of MRs this year + 1". If two requests race and land
+  // on the same code, the unique constraint trips and we retry with the next
+  // number — up to 5 attempts.
+  const year = new Date().getFullYear();
+  const generateCode = async () => {
+    const { count } = await supabase
+      .from('maintenance_requests')
+      .select('*', { count: 'exact', head: true })
+      .like('code', `MR-${year}-%`);
+    return `MR-${year}-${String((count || 0) + 1).padStart(4, '0')}`;
+  };
 
-  const { data, error } = await supabase.from('maintenance_requests').insert({
-    code,
-    resident_id: resident?.id || null,
-    property_id: propertyId,
-    unit_id: unitRow?.id || null,
-    category,
-    priority,
-    status: initialStatus,
-    description,
-    assigned_to: assignedTo || null,
-    vendor_id: vendorId || null,
-    source: reqSource,
-    requester_name: requesterName || null,
-    photos: Array.isArray(photos) && photos.length > 0 ? photos : [],
-  }).select().single();
+  let code = await generateCode();
+  let data, error;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    ({ data, error } = await supabase.from('maintenance_requests').insert({
+      code,
+      resident_id: resident?.id || null,
+      property_id: propertyId,
+      unit_id: unitRow?.id || null,
+      category,
+      priority,
+      status: initialStatus,
+      description,
+      assigned_to: assignedTo || null,
+      vendor_id: vendorId || null,
+      source: reqSource,
+      requester_name: requesterName || null,
+      photos: Array.isArray(photos) && photos.length > 0 ? photos : [],
+    }).select().single());
+    if (!error) break;
+    // Unique-constraint violation on `code` → bump the suffix and try again.
+    if (error.code === '23505' && error.message?.includes('code')) {
+      const next = parseInt(code.split('-').pop(), 10) + 1;
+      code = `MR-${year}-${String(next).padStart(4, '0')}`;
+      continue;
+    }
+    throw error;
+  }
   if (error) throw error;
   return { ...data, id: data.code };
 }
