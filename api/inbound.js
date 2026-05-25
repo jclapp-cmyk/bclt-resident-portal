@@ -48,10 +48,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Could not determine thread from subject' });
     }
 
-    // Look up the thread UUID
+    // Look up the thread UUID (include unread so we increment instead of clobber)
     const { data: thread, error: threadErr } = await supabase
       .from('message_threads')
-      .select('id, code, participants')
+      .select('id, code, participants, unread')
       .eq('code', threadId)
       .maybeSingle();
 

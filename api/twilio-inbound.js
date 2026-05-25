@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
     const { data: existingThreads } = await supabase
       .from('message_threads')
-      .select('id, code, participants, last_date, subject')
+      .select('id, code, participants, last_date, subject, unread')
       .gte('last_date', cutoff)
       .order('last_date', { ascending: false })
       .limit(50);

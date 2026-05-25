@@ -961,19 +961,24 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
 // --- MAINTENANCE DASHBOARD (Staff) ---
 const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, staffMembers = [], threads = [], onOpenWorkOrder, onOpenMessages, onNavigateTo }) => {
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
-  // Permissive match: case-insensitive equality, substring (so "jeff clapp"
-  // matches "Jeff Clapp"), first-name, and email-linked staff_members rows.
+  // Permissive match that avoids short-name false positives:
+  //  - case-insensitive equality on full display name
+  //  - whole-word display-name containment (only if display name is >= 4 chars)
+  //  - first-name match only if first name is >= 4 chars
+  //  - staff_members linked by email
   const userEmail = (profile?.email || "").toLowerCase();
-  const emailLocal = userEmail.split("@")[0];
   const myDisplayLc = staffName.toLowerCase().trim();
   const myFirstName = myDisplayLc.split(/\s+/)[0] || "";
+  const wholeWord = (haystack, needle) => {
+    if (!needle || needle.length < 4) return false;
+    return new RegExp(`\\b${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(haystack);
+  };
   const matchesMe = (assignee) => {
     if (!assignee) return false;
     const a = assignee.toLowerCase().trim();
     if (a === myDisplayLc) return true;
-    if (a.includes(myDisplayLc) || myDisplayLc.includes(a)) return true;
-    if (myFirstName && (a === myFirstName || a.startsWith(myFirstName + " "))) return true;
-    if (emailLocal && (a.includes(emailLocal) || emailLocal.includes(a.replace(/\s+/g, "")))) return true;
+    if (wholeWord(a, myDisplayLc)) return true;
+    if (myFirstName.length >= 4 && (a === myFirstName || wholeWord(a, myFirstName))) return true;
     return staffMembers.some(s => s.name && s.name.toLowerCase() === a && (s.email || "").toLowerCase() === userEmail);
   };
   const myOrders = maintenance.filter(m => matchesMe(m.assignedTo) && MAINT_OPEN(m));
@@ -1341,17 +1346,20 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
   // Match case-insensitively, and also accept staff names that contain the
   // user's display name (so "jeff clapp maint" matches "Jeff Clapp").
   const userEmail = (profile?.email || "").toLowerCase();
-  const emailLocal = userEmail.split("@")[0];
   const myDisplayLc = staffName.toLowerCase().trim();
   const myFirstName = myDisplayLc.split(/\s+/)[0] || "";
+  // Substring/word matches require >= 4 chars so short names like "Al"
+  // don't catch every assignee whose name contains those letters.
+  const wholeWord = (haystack, needle) => {
+    if (!needle || needle.length < 4) return false;
+    return new RegExp(`\\b${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(haystack);
+  };
   const matchesMe = (assignee) => {
     if (!assignee) return false;
     const a = assignee.toLowerCase().trim();
     if (a === myDisplayLc) return true;
-    if (a.includes(myDisplayLc) || myDisplayLc.includes(a)) return true;
-    if (myFirstName && (a === myFirstName || a.startsWith(myFirstName + " "))) return true;
-    if (emailLocal && (a.includes(emailLocal) || emailLocal.includes(a.replace(/\s+/g, "")))) return true;
-    // Also: a staff_members row whose email matches our auth email
+    if (wholeWord(a, myDisplayLc)) return true;
+    if (myFirstName.length >= 4 && (a === myFirstName || wholeWord(a, myFirstName))) return true;
     return staffMembers.some(s => s.name && s.name.toLowerCase() === a && (s.email || "").toLowerCase() === userEmail);
   };
   const [topTab, setTopTab] = useState("workorders");
@@ -7452,9 +7460,11 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
     if (!pendingOpenId) return;
     const row = maintenance.find(m => m.id === pendingOpenId);
     if (row) {
-      // Switch to whichever top tab makes the row visible
-      const isIntake = row.status === "new" || row.status === "needs-info";
-      const isArchive = row.status === "done" || row.status === "rejected";
+      // Switch to whichever top tab makes the row visible.
+      // Status taxonomy: intake = new/needs-info/submitted (legacy),
+      // archive = done/rejected/completed, workorders = everything else.
+      const isIntake = row.status === "new" || row.status === "needs-info" || row.status === "submitted";
+      const isArchive = row.status === "done" || row.status === "rejected" || row.status === "completed";
       setTopTab(isIntake ? "intake" : isArchive ? "archive" : "workorders");
       setSelected(row);
     }

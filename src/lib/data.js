@@ -341,13 +341,17 @@ export async function updateResident(residentUuid, changes) {
 
 export async function deleteResident(residentUuid) {
   // Clean up dependents that don't have ON DELETE CASCADE.
-  // household_members and rent_payments cascade automatically; the rest
-  // (leases, maintenance_requests, threads, user_profiles, etc.) are
-  // either nullified or unlinked here so the resident row can be removed.
+  // Only household_members cascades automatically per the schema; everything
+  // else has to be removed (or unlinked) explicitly or the residents delete
+  // throws an FK violation.
+  try { await supabase.from('rent_payments').delete().eq('resident_id', residentUuid); } catch (_) {}
   try { await supabase.from('leases').delete().eq('resident_id', residentUuid); } catch (_) {}
   try { await supabase.from('lease_documents').delete().eq('resident_id', residentUuid); } catch (_) {}
   try { await supabase.from('maintenance_requests').delete().eq('resident_id', residentUuid); } catch (_) {}
   try { await supabase.from('income_certifications').delete().eq('resident_id', residentUuid); } catch (_) {}
+  try { await supabase.from('onboarding_workflows').delete().eq('resident_id', residentUuid); } catch (_) {}
+  try { await supabase.from('compliance_docs').delete().eq('resident_id', residentUuid); } catch (_) {}
+  try { await supabase.from('admin_notes').delete().eq('resident_id', residentUuid); } catch (_) {}
   try { await supabase.from('user_profiles').update({ resident_id: null }).eq('resident_id', residentUuid); } catch (_) {}
   const { error } = await supabase.from('residents').delete().eq('id', residentUuid);
   if (error) throw error;
