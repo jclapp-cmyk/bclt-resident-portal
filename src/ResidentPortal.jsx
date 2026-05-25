@@ -3308,7 +3308,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   if (!selectedResident.email) { showSuccess("No email address on file"); return; }
                   const resUuid = selectedResident._uuid || LIVE_RESIDENTS.find(r => r.id === selectedResident.id || r.name === selectedResident.name)?._uuid;
                   if (!resUuid) { showSuccess("Error: Could not find resident UUID. Try refreshing the page."); return; }
-                  if (!confirm(`Send the welcome / sign-in email to ${selectedResident.name} (${selectedResident.email})? Safe to send again if they missed the first one.`)) return;
+                  if (!confirm(`Send the welcome email to ${selectedResident.name} (${selectedResident.email})?`)) return;
                   try {
                     const result = await inviteUser(selectedResident.email, "resident", resUuid, selectedResident.name);
                     if (result?.warning) showSuccess(result.warning);
