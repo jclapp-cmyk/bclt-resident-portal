@@ -114,33 +114,55 @@ export async function fetchUserProfiles() {
 
 export async function inviteUser(email, role, residentId, displayName) {
   let warning = null;
+  let resent = false;
 
-  // Create the profile row first (so the user has a role/resident_id when they
-  // click the magic link). The RPC handles auth.users lookup; fall back to a
-  // placeholder UUID if the user doesn't yet exist in auth.users.
-  const { error: rpcErr } = await supabase.rpc('invite_user', {
-    invite_email: email,
-    invite_role: role,
-    invite_resident_id: residentId || null,
-    invite_display_name: displayName || email.split('@')[0],
-  });
+  // Idempotent: if a user_profile already exists for this email, skip the
+  // create step and just re-send the welcome email. This lets admins click
+  // "Send Welcome Email" multiple times — for residents who lost the first
+  // one, who deleted it, or who just need another nudge.
+  const emailLc = (email || '').toLowerCase();
+  const { data: existing } = await supabase
+    .from('user_profiles')
+    .select('id, email')
+    .eq('email', emailLc)
+    .maybeSingle();
 
-  if (rpcErr) {
-    console.warn('invite_user RPC failed, using fallback:', rpcErr.message);
-    const placeholderId = crypto.randomUUID();
-    const { error: insertErr } = await supabase.from('user_profiles').insert({
-      id: placeholderId,
-      email,
-      role,
-      resident_id: residentId || null,
-      display_name: displayName || email.split('@')[0],
+  if (existing) {
+    resent = true;
+  } else {
+    // No profile yet — create it. RPC handles auth.users lookup; fall back to
+    // a placeholder UUID if the user doesn't yet exist in auth.users.
+    const { error: rpcErr } = await supabase.rpc('invite_user', {
+      invite_email: email,
+      invite_role: role,
+      invite_resident_id: residentId || null,
+      invite_display_name: displayName || email.split('@')[0],
     });
-    if (insertErr) throw insertErr;
+    if (rpcErr) {
+      console.warn('invite_user RPC failed, using fallback:', rpcErr.message);
+      const placeholderId = crypto.randomUUID();
+      const { error: insertErr } = await supabase.from('user_profiles').insert({
+        id: placeholderId,
+        email,
+        role,
+        resident_id: residentId || null,
+        display_name: displayName || email.split('@')[0],
+      });
+      // If even the fallback failed with a unique-constraint, treat it as a re-send
+      // (the row was created between our check and our insert — rare race).
+      if (insertErr) {
+        if (insertErr.code === '23505' || insertErr.message?.includes('duplicate') || insertErr.message?.includes('unique')) {
+          resent = true;
+        } else {
+          throw insertErr;
+        }
+      }
+    }
   }
 
-  // Send the warm welcome email via our serverless function.
-  // It generates a Supabase magic link server-side (using the service role
-  // key) and embeds it in a branded onboarding email.
+  // Always send the warm welcome email via our serverless function.
+  // It generates a fresh Supabase magic link each call — links are valid for
+  // ~1 hour, so re-sends naturally produce a working link.
   try {
     const resp = await fetch('/api/invite', {
       method: 'POST',
@@ -149,11 +171,11 @@ export async function inviteUser(email, role, residentId, displayName) {
     });
     if (!resp.ok) {
       const errBody = await resp.text();
-      warning = `Profile created, but the welcome email failed to send (${errBody}). The user can request a login link from the sign-in page.`;
+      warning = `Profile ${resent ? 'exists' : 'created'}, but the welcome email failed to send (${errBody}). The user can request a login link from the sign-in page.`;
     }
   } catch (err) {
-    warning = `Profile created, but the welcome email failed to send (${err.message}). The user can request a login link from the sign-in page.`;
+    warning = `Profile ${resent ? 'exists' : 'created'}, but the welcome email failed to send (${err.message}). The user can request a login link from the sign-in page.`;
   }
 
-  return { warning };
+  return { warning, resent };
 }

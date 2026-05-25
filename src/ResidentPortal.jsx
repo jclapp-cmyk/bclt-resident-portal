@@ -3308,15 +3308,15 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   if (!selectedResident.email) { showSuccess("No email address on file"); return; }
                   const resUuid = selectedResident._uuid || LIVE_RESIDENTS.find(r => r.id === selectedResident.id || r.name === selectedResident.name)?._uuid;
                   if (!resUuid) { showSuccess("Error: Could not find resident UUID. Try refreshing the page."); return; }
-                  if (!confirm(`Invite ${selectedResident.name} (${selectedResident.email}) to log in to the portal?`)) return;
+                  if (!confirm(`Send the welcome / sign-in email to ${selectedResident.name} (${selectedResident.email})? Safe to send again if they missed the first one.`)) return;
                   try {
-                    await inviteUser(selectedResident.email, "resident", resUuid, selectedResident.name);
-                    showSuccess(`Portal invite sent to ${selectedResident.email}! They can now sign in with a magic link.`);
+                    const result = await inviteUser(selectedResident.email, "resident", resUuid, selectedResident.name);
+                    if (result?.warning) showSuccess(result.warning);
+                    else showSuccess(`${result?.resent ? "Re-sent" : "Sent"} welcome email to ${selectedResident.email}.`);
                   } catch (err) {
-                    if (err.message?.includes("duplicate") || err.message?.includes("unique")) showSuccess("This resident already has a portal account.");
-                    else showSuccess("Error: " + (err.message || "Failed to create account"));
+                    showSuccess("Error: " + (err.message || "Failed to send"));
                   }
-                }}>📧 Invite to Portal</button>
+                }}>📧 Send Welcome Email</button>
               )}
             </div>
             <div style={s.grid("1fr 1fr", mobile)}>
@@ -3543,7 +3543,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                       const displayName = `${inviteResForm.firstName.trim()} ${inviteResForm.lastName.trim()}`.trim();
                       const result = await inviteUser(inviteResForm.email, "resident", residentUuid, displayName);
                       if (result?.warning) showSuccess(`${displayName} added. ${result.warning}`);
-                      else showSuccess(`${displayName} invited — magic link sent to ${inviteResForm.email}`);
+                      else showSuccess(`${result?.resent ? "Re-sent" : "Sent"} welcome email to ${inviteResForm.email}.`);
                       setInviteResForm({ firstName: "", lastName: "", email: "", phone: "" });
                       loadResidentUsers(residentUuid);
                     } catch (err) {
@@ -7754,9 +7754,9 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
         } catch (staffErr) { /* staff record is supplementary, don't block */ }
       }
       if (result?.warning) {
-        showSuccess(`${displayName || inviteForm.email} added. Warning: ${result.warning}`);
+        showSuccess(`${displayName || inviteForm.email}: ${result.warning}`);
       } else {
-        showSuccess(`${displayName || inviteForm.email} added and invite sent`);
+        showSuccess(`${result?.resent ? "Re-sent welcome email to" : "Added and invited"} ${displayName || inviteForm.email}`);
       }
       setInviteForm({ email: "", role: "maintenance", residentId: "", firstName: "", lastName: "", phone: "", propertyId: "" });
       // Refresh user list
