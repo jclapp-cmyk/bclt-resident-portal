@@ -936,7 +936,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
 };
 
 // --- MAINTENANCE DASHBOARD (Staff) ---
-const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, staffMembers = [] }) => {
+const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, staffMembers = [], threads = [], onOpenWorkOrder, onOpenMessages }) => {
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
   // Permissive match: case-insensitive equality, substring (so "jeff clapp"
   // matches "Jeff Clapp"), first-name, and email-linked staff_members rows.
@@ -992,7 +992,9 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, sta
         {myOrders.length === 0 ? (
           <EmptyState icon="🔧" text={`No open work orders assigned to ${staffName}. Open work orders assigned to other names won't show here — check the Work Orders page (All filter).`} />
         ) : myOrders.map(m => (
-          <div key={m.id} style={{ ...s.card, marginBottom: 10, padding: 14 }}>
+          <div key={m.id} onClick={() => onOpenWorkOrder && onOpenWorkOrder(m.id)} style={{ ...s.card, marginBottom: 10, padding: 14, cursor: onOpenWorkOrder ? "pointer" : "default", transition: "background 0.15s" }}
+            onMouseEnter={e => { if (onOpenWorkOrder) e.currentTarget.style.background = T.surfaceHover; }}
+            onMouseLeave={e => { if (onOpenWorkOrder) e.currentTarget.style.background = T.surface; }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontWeight: 700 }}>{m.id} — {m.category}</span>
               <Badge status={m.priority} type="priority" />
@@ -1003,6 +1005,38 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, sta
           </div>
         ))}
       </div>
+
+      {/* Recent Messages — click to jump to Communications */}
+      <div style={{ ...s.card, marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Recent Messages</div>
+          {onOpenMessages && <button onClick={() => onOpenMessages()} style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px" }}>View all →</button>}
+        </div>
+        {threads.length === 0 ? (
+          <EmptyState icon="💬" text="No messages yet." />
+        ) : (
+          <div>
+            {[...threads].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).slice(0, 5).map(t => {
+              const resident = LIVE_RESIDENTS.find(r => t.participants.includes(r.id));
+              const name = t.type === "broadcast" ? "Broadcast" : (resident?.name || "Unknown");
+              return (
+                <div key={t.id} onClick={() => onOpenMessages && onOpenMessages(t.id)} style={{
+                  padding: "10px 12px", borderRadius: T.radiusSm, marginBottom: 6, cursor: onOpenMessages ? "pointer" : "default",
+                  background: t.unread > 0 ? T.accentDim : "transparent", borderBottom: `1px solid ${T.borderLight}`,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                    <span style={{ fontWeight: t.unread > 0 ? 700 : 600, fontSize: 13 }}>{name}</span>
+                    <span style={{ fontSize: 11, color: T.dim }}>{new Date(t.lastDate).toLocaleDateString()}</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: T.muted, marginBottom: 2 }}>{t.subject}</div>
+                  <div style={{ fontSize: 12, color: T.dim, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.lastMessage}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <ActivityFeed items={notifications} mobile={mobile} />
     </div>
   );
@@ -1275,7 +1309,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
 };
 
 // --- WORK ORDERS (Maintenance Staff) ---
-const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [], staffMembers = [] }) => {
+const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [], staffMembers = [], pendingOpenId, onClearPendingOpen }) => {
   const staffName = profile?.displayName || profile?.email?.split("@")[0] || "Staff";
   const maintStaff = staffMembers.filter(s => s.active && (s.role === "maintenance" || s.role === "admin" || s.role === "property_manager")).filter((s, i, arr) => arr.findIndex(x => x.name === s.name) === i);
   // The signed-in user might appear in the assignee field under multiple names:
@@ -1309,6 +1343,18 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
     const updated = maintenance.find(m => m.id === selected.id);
     if (updated && updated !== selected) setSelected(updated);
   }, [maintenance, selected]);
+
+  // Auto-open a work order when navigated here from the dashboard
+  useEffect(() => {
+    if (!pendingOpenId) return;
+    const row = maintenance.find(m => m.id === pendingOpenId);
+    if (row) {
+      setSelected(row);
+      if (row.status === "done" || row.status === "rejected" || row.status === "completed") setTopTab("archive");
+      else setTopTab("workorders");
+    }
+    if (onClearPendingOpen) onClearPendingOpen();
+  }, [pendingOpenId, maintenance]);
 
   const todoRows = maintenance.filter(m => m.status === "todo" || m.status === "in-progress");
   const archiveRows = maintenance.filter(m => m.status === "done" || m.status === "rejected" || m.status === "completed");
@@ -9805,15 +9851,15 @@ export default function App() {
     }
     if (role === "maintenance") {
       switch (page) {
-        case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} />;
-        case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
+        case "dashboard": return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} threads={threads} onOpenWorkOrder={(id) => { setPendingMaintenanceId(id); setPage("work-orders"); }} onOpenMessages={() => setPage("messages")} />;
+        case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
         case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
         case "profile": return <MaintenanceProfile mobile={mobile} profile={profile} staffMembers={staffMembers} />;
-        case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} />;
-        default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} />;
+        case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
+        default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} threads={threads} onOpenWorkOrder={(id) => { setPendingMaintenanceId(id); setPage("work-orders"); }} onOpenMessages={() => setPage("messages")} />;
       }
     }
     return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} />;
