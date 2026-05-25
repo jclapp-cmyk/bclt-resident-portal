@@ -94,8 +94,7 @@ export default async function handler(req, res) {
 
 function buildResidentInvite({ firstName, actionLink }) {
   return `
-    <p style="font-size:16px;">Hi ${firstName},</p>
-    <p>Welcome! We're so glad you're part of the Bolinas Community Land Trust community.</p>
+    <p style="font-size:16px;">Welcome! We're so glad you're part of the BCLT community.</p>
     <p>We've set up <strong>BCLT HomeBase</strong> for you — a simple online portal where you can take care of everything related to your home with us:</p>
     <ul style="line-height:1.7;padding-left:20px;">
       <li>💳 <strong>Pay rent</strong> and see your payment history</li>
@@ -111,7 +110,7 @@ function buildResidentInvite({ firstName, actionLink }) {
       </a>
     </p>
     <p style="font-size:13px;color:#666;">If the button doesn't work, paste this link into your browser:<br><a href="${actionLink}" style="color:#2E5090;word-break:break-all;">${actionLink}</a></p>
-    <p style="margin-top:24px;">Have questions or run into trouble? Just reply to this email or call us at (415) 555-0100 — we're happy to help walk you through it.</p>
+    <p style="margin-top:24px;">Have questions or run into trouble? Please contact Keith at <a href="mailto:kciampa@bolinaslandtrust.org" style="color:#2E5090;">kciampa@bolinaslandtrust.org</a></p>
     <p style="margin-top:20px;">Warmly,<br><strong>The BCLT Team</strong></p>
   `;
 }
@@ -143,7 +142,7 @@ function buildStaffInvite({ firstName, actionLink, role }) {
       </a>
     </p>
     <p style="font-size:13px;color:#666;">If the button doesn't work, paste this link into your browser:<br><a href="${actionLink}" style="color:#2E5090;word-break:break-all;">${actionLink}</a></p>
-    <p style="margin-top:24px;">Reach out anytime at (415) 555-0100 or just reply to this email if you need help getting set up.</p>
+    <p style="margin-top:24px;">Reach out to Keith at <a href="mailto:kciampa@bolinaslandtrust.org" style="color:#2E5090;">kciampa@bolinaslandtrust.org</a> if you need help getting set up.</p>
     <p style="margin-top:20px;">Welcome aboard,<br><strong>The BCLT Team</strong></p>
   `;
 }
