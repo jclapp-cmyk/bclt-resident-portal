@@ -1313,6 +1313,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
     { key: "category", label: "Category", filterOptions: [...new Set(maintenance.map(m => m.category))] },
     { key: "priority", label: "Priority", render: v => <Badge status={v} type="priority" />, filterOptions: ["critical", "urgent", "routine"], filterValue: row => row.priority },
     { key: "status", label: "Status", render: v => <Badge status={v} />, filterOptions: ["todo", "in-progress"], filterValue: row => row.status },
+    { key: "assignedTo", label: "Assigned To", render: v => v || <span style={{ color: T.dim }}>Unassigned</span> },
     { key: "vendorId", label: "Vendor", render: v => vendors.find(x => x.id === v)?.company || "—", filterOptions: [...new Set(vendors.map(v => v.company))], filterValue: row => vendors.find(x => x.id === row.vendorId)?.company || "" },
     { key: "projectedComplete", label: "Projected", render: v => v || "—" },
   ];
