@@ -7692,7 +7692,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
 };
 
 // --- ADMIN SETTINGS ---
-const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers, allUnits: parentAllUnits }) => {
+const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers, allUnits: parentAllUnits, onDataChanged }) => {
   const tabs = ["Staff", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
@@ -7902,6 +7902,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                                 setUserProfiles(prev => prev.map(p => p.id === u.id ? { ...p, display_name: newName || p.display_name, role: newRole } : p));
                                 setEditingStaff(null);
                                 showSuccess(`${newName || u.email} updated`);
+                                if (onDataChanged) onDataChanged();
                               } catch (err) { showSuccess("Error: " + (err.message || "Update failed")); }
                             }}>Save</button>
                             <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px" }} onClick={() => setEditingStaff(null)}>Cancel</button>
@@ -7946,6 +7947,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                             }
                             setUserProfiles(prev => prev.filter(p => p.id !== u.id));
                             showSuccess(`${u.email} removed`);
+                            if (onDataChanged) onDataChanged();
                           } catch (err) { showSuccess("Error: " + err.message); }
                         }}>Remove</button>
                       </td>
@@ -7989,6 +7991,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                               await deleteStaffMember(st.id);
                               setStaffList(prev => prev.filter(s2 => s2.id !== st.id));
                               showSuccess(`${st.name} removed`);
+                              if (onDataChanged) onDataChanged();
                             } catch (err) { showSuccess("Error: " + err.message); }
                           }}>Remove</button>
                         </td>
@@ -9878,7 +9881,7 @@ export default function App() {
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} threads={threads} />;
-        case "settings": return <AdminSettings mobile={mobile} settings={settings} setSettings={setSettings} darkMode={darkMode} setDarkMode={setDarkMode} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onReset={resetAllState} staffMembers={staffMembers} allUnits={allUnits} />;
+        case "settings": return <AdminSettings mobile={mobile} settings={settings} setSettings={setSettings} darkMode={darkMode} setDarkMode={setDarkMode} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onReset={resetAllState} staffMembers={staffMembers} allUnits={allUnits} onDataChanged={reloadData} />;
         default: return <AdminDashboard mobile={mobile} maintenance={fMaint} vendors={vendors} notifications={roleNotifs} selectedProperty={sp} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} onNavigateTo={setPage} />;
       }
     }
