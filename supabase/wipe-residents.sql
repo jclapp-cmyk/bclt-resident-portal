@@ -70,12 +70,18 @@ BEGIN
   IF resident_table_exists AND EXISTS (
     SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'message_threads'
   ) THEN
-    DELETE FROM messages WHERE thread_id IN (
-      SELECT id FROM message_threads
-      WHERE participants && (SELECT COALESCE(array_agg(slug), ARRAY[]::text[]) FROM residents)
-    );
-    DELETE FROM message_threads
-      WHERE participants && (SELECT COALESCE(array_agg(slug), ARRAY[]::text[]) FROM residents);
+    -- participants is JSONB (array of resident slugs); use ?| to test
+    -- whether any of the resident slugs appears in the JSONB array.
+    -- Skip the whole step if there are no residents (?| with an empty
+    -- text[] would just be no-op anyway).
+    IF EXISTS (SELECT 1 FROM residents) THEN
+      DELETE FROM messages WHERE thread_id IN (
+        SELECT id FROM message_threads
+        WHERE participants ?| (SELECT array_agg(slug) FROM residents)
+      );
+      DELETE FROM message_threads
+        WHERE participants ?| (SELECT array_agg(slug) FROM residents);
+    END IF;
   END IF;
 
   -- Resident portal logins
