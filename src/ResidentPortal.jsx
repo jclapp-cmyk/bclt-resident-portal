@@ -1260,11 +1260,18 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
   // The signed-in user might appear in the assignee field under multiple names:
   // their profile displayName, or any staff_members rows that share their email
   // (e.g., "Jeff Clapp" the user vs. "jeff clapp maint" the staff record).
+  // Match case-insensitively, and also accept staff names that contain the
+  // user's display name (so "jeff clapp maint" matches "Jeff Clapp").
   const userEmail = (profile?.email || "").toLowerCase();
-  const myIdentities = new Set([
-    staffName,
-    ...staffMembers.filter(s => (s.email || "").toLowerCase() === userEmail).map(s => s.name),
-  ].filter(Boolean));
+  const myDisplayLc = staffName.toLowerCase();
+  const matchesMe = (assignee) => {
+    if (!assignee) return false;
+    const a = assignee.toLowerCase().trim();
+    if (a === myDisplayLc) return true;
+    if (a.includes(myDisplayLc) || myDisplayLc.includes(a)) return true;
+    // Also: a staff_members row whose email matches our auth email
+    return staffMembers.some(s => s.name && s.name.toLowerCase() === a && (s.email || "").toLowerCase() === userEmail);
+  };
   const [topTab, setTopTab] = useState("workorders");
   const [assigneeFilter, setAssigneeFilter] = useState("mine");
   const [selected, setSelected] = useState(null);
@@ -1280,7 +1287,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
 
   const todoRows = maintenance.filter(m => m.status === "todo" || m.status === "in-progress");
   const archiveRows = maintenance.filter(m => m.status === "done" || m.status === "rejected" || m.status === "completed");
-  const applyAssignee = (rows) => assigneeFilter === "mine" ? rows.filter(r => r.assignedTo && myIdentities.has(r.assignedTo)) : rows;
+  const applyAssignee = (rows) => assigneeFilter === "mine" ? rows.filter(r => matchesMe(r.assignedTo)) : rows;
 
   const issueCol = {
     key: "description", label: "Issue",
@@ -7828,6 +7835,48 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
             )}
             </>); })()}
           </div>
+
+          {/* Orphaned staff_members — directory entries with no portal user.
+              Surfaced here so admins can clean up legacy / test rows that
+              still appear in the maintenance assignee dropdowns. */}
+          {(() => {
+            const userEmails = new Set(userProfiles.map(u => (u.email || "").toLowerCase()).filter(Boolean));
+            const orphans = staffList.filter(s => !s.email || !userEmails.has((s.email || "").toLowerCase()));
+            if (orphans.length === 0) return null;
+            return (
+              <div style={{ ...s.card, borderLeft: `3px solid ${T.warn}` }}>
+                <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Directory-Only Staff Records ({orphans.length})</div>
+                <p style={{ fontSize: 12, color: T.muted, marginTop: 0, marginBottom: 14 }}>
+                  These staff entries don't have a portal login. They show up in maintenance assignee dropdowns — remove any that are stale or test rows.
+                </p>
+                <table style={s.table}>
+                  <thead><tr>{["Name", "Role", "Email", "Phone", "Property", "Active", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {orphans.map(st => (
+                      <tr key={st.id} style={{ opacity: st.active === false ? 0.55 : 1 }}>
+                        <td style={s.td}><span style={{ fontWeight: 600 }}>{st.name}</span></td>
+                        <td style={s.td}><span style={s.badge(st.role === "admin" ? T.accentDim : st.role === "property_manager" ? T.infoDim : T.warnDim, st.role === "admin" ? T.accent : st.role === "property_manager" ? T.info : T.warn)}>{st.role === "property_manager" ? "PM" : st.role === "admin" ? "Admin" : "Maint"}</span></td>
+                        <td style={s.td}><span style={{ fontSize: 12 }}>{st.email || "—"}</span></td>
+                        <td style={s.td}><span style={{ fontSize: 12 }}>{st.phone || "—"}</span></td>
+                        <td style={s.td}><span style={{ fontSize: 12 }}>{st.propertyName || "All"}</span></td>
+                        <td style={s.td}><span style={s.badge(st.active !== false ? T.successDim : T.dangerDim, st.active !== false ? T.success : T.danger)}>{st.active !== false ? "Yes" : "No"}</span></td>
+                        <td style={s.td}>
+                          <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 12, padding: "2px 8px" }} onClick={async () => {
+                            if (!confirm(`Remove "${st.name}" from the staff directory?`)) return;
+                            try {
+                              await deleteStaffMember(st.id);
+                              setStaffList(prev => prev.filter(s2 => s2.id !== st.id));
+                              showSuccess(`${st.name} removed`);
+                            } catch (err) { showSuccess("Error: " + err.message); }
+                          }}>Remove</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
         </div>
       )}
 
