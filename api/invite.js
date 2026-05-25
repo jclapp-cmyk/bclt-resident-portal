@@ -161,9 +161,6 @@ function wrapHtml(body) {
         </div>
         ${body}
       </div>
-      <div style="margin-top:16px;padding:12px;font-size:11px;color:#999;text-align:center;">
-        <p style="margin:0;">Bolinas Community Land Trust · 123 Wharf Rd, Bolinas, CA 94924 · (415) 555-0100</p>
-      </div>
     </body>
     </html>
   `;
