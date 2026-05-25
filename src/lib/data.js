@@ -231,6 +231,7 @@ export async function fetchResidents() {
     phone: r.phone,
     email: r.email,
     preferredChannel: r.preferred_channel,
+    status: r.status || 'active',
     mailingStreet: r.mailing_street || '',
     mailingCity: r.mailing_city || '',
     mailingState: r.mailing_state || '',

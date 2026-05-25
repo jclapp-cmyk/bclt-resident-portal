@@ -9929,7 +9929,7 @@ export default function App() {
           {viewAsRole === "resident" && (
             <select value={viewAsResident || ""} onChange={e => setViewAsResident(e.target.value || null)} style={{ ...s.select, width: "100%", fontSize: 12, marginBottom: 6 }}>
               <option value="">Pick a resident…</option>
-              {LIVE_RESIDENTS.map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
+              {LIVE_RESIDENTS.filter(r => (r.status || "active") !== "inactive").map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
             </select>
           )}
         </div>
