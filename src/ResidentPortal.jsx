@@ -697,13 +697,15 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           const latest = [...myThreads].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate))[0];
           // Figure out who sent the latest message in the latest thread — so
           // we can show "Awaiting reply" when the resident is the last sender.
+          // We treat anything that ISN'T "admin" as the resident side (handles
+          // slugs, fallback "resident" string, and inbound email senders).
           let awaitingReply = false;
           if (latest && unreadCount === 0) {
             const threadMsgs = messages.filter(m => m.threadId === latest.id);
             const lastMsg = threadMsgs.length > 0
               ? threadMsgs.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0]
               : null;
-            if (lastMsg && lastMsg.from === rc?.id) awaitingReply = true;
+            if (lastMsg && lastMsg.from && lastMsg.from !== "admin") awaitingReply = true;
           }
           let value, accent;
           if (unreadCount > 0) {
