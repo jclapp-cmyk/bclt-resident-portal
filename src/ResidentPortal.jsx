@@ -715,10 +715,17 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
             value = "Awaiting reply";
             accent = T.warn;
           } else if (latest) {
-            value = "No new messages";
+            // Show recency instead of "No new messages" so the tile always
+            // gives useful context when there's been activity.
+            const daysAgo = Math.floor((Date.now() - new Date(latest.lastDate)) / 86400000);
+            if (daysAgo === 0) value = "Active today";
+            else if (daysAgo === 1) value = "Active yesterday";
+            else if (daysAgo < 7) value = `${daysAgo} days ago`;
+            else if (daysAgo < 30) value = `${Math.floor(daysAgo / 7)} wk ago`;
+            else value = "All caught up";
             accent = T.success;
           } else {
-            value = "No messages";
+            value = "No messages yet";
             accent = T.success;
           }
           return (
