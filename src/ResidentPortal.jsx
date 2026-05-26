@@ -632,17 +632,81 @@ const BOTTOM_TABS = {
 const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, onNavigate }) => {
   const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
   const certStatus = getCertStatus(ext.moveIn || ext.leaseStart, null);
-  const openRequests = maintenance.filter(m => m.unit === rc?.unit && MAINT_OPEN(m)).length;
+  const openRequests = maintenance.filter(m => m.unit === rc?.unit && MAINT_OPEN(m));
+  const openCount = openRequests.length;
   const propName = LIVE_PROPERTIES.find(p => p.id === rc?.propertyId)?.name || "BCLT";
+  const curMonth = new Date().toISOString().slice(0, 7);
+  const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id && l.month === curMonth) || LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id) || {};
+  const bal = ledgerEntry.balance || 0;
+  const leaseExpired = ext.leaseEnd && new Date(ext.leaseEnd) < new Date();
+  const leaseLabel = ext.leaseEnd ? (leaseExpired ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "Month-to-Month" : "Active");
+
+  // Big tile component — large, friendly, clickable
+  const Tile = ({ icon, label, value, sub, accent, onClick }) => (
+    <div onClick={onClick} style={{
+      flex: "1 1 calc(50% - 8px)",
+      minWidth: mobile ? "100%" : 240,
+      padding: mobile ? 18 : 22,
+      borderRadius: 12,
+      background: T.surface,
+      border: `1px solid ${T.border}`,
+      borderLeft: `4px solid ${accent}`,
+      cursor: onClick ? "pointer" : "default",
+      transition: "transform 0.12s, box-shadow 0.12s",
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
+    }}
+      onMouseEnter={onClick ? (e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(0,0,0,0.08)"; } : undefined}
+      onMouseLeave={onClick ? (e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; } : undefined}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontSize: 30, lineHeight: 1 }}>{icon}</div>
+        {onClick && <div style={{ fontSize: 18, color: T.dim, fontWeight: 600 }}>→</div>}
+      </div>
+      <div style={{ fontSize: 13, color: T.muted, fontWeight: 500, marginTop: 8 }}>{label}</div>
+      <div style={{ fontSize: mobile ? 24 : 28, fontWeight: 700, color: accent, lineHeight: 1.1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, {rc?.firstName || "Resident"}</h1>
       <p style={s.sectionSub}>Unit {rc?.unit || "—"} — {propName}</p>
-      <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-        {(() => { const curMonth = new Date().toISOString().slice(0, 7); const le = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id && l.month === curMonth) || LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id) || {}; const bal = le.balance || 0; return <StatCard label="Rent Balance" value={`$${Math.abs(bal).toFixed(2)}`} accent={bal > 0 ? T.danger : T.success} mobile={mobile} onClick={() => onNavigate && onNavigate("rent")} />; })()}
-        <StatCard label="Open Requests" value={openRequests} accent={openRequests > 0 ? T.warn : T.success} mobile={mobile} onClick={() => onNavigate && onNavigate("maintenance")} />
-        <StatCard label="Income Cert" value={certStatus.label} accent={certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success} mobile={mobile} onClick={() => onNavigate && onNavigate("recert")} />
-        <StatCard label="Lease Status" value={ext.leaseEnd ? (new Date(ext.leaseEnd) < new Date() ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "M-to-M" : "Active")} accent={ext.leaseEnd && new Date(ext.leaseEnd) < new Date() ? T.danger : T.success} mobile={mobile} onClick={() => onNavigate && onNavigate("unit")} />
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
+        <Tile
+          icon="💳"
+          label="Rent Balance"
+          value={`$${Math.abs(bal).toFixed(2)}`}
+          sub={bal > 0 ? "Outstanding — tap to pay" : "All paid up"}
+          accent={bal > 0 ? T.danger : T.success}
+          onClick={() => onNavigate && onNavigate("rent")}
+        />
+        <Tile
+          icon="🔧"
+          label="Maintenance"
+          value={openCount === 0 ? "All clear" : `${openCount} Open`}
+          sub={openCount > 0 ? openRequests[0]?.description?.slice(0, 50) || "Tap to view" : "Submit a request anytime"}
+          accent={openCount > 0 ? T.warn : T.success}
+          onClick={() => onNavigate && onNavigate("maintenance")}
+        />
+        <Tile
+          icon="📋"
+          label="Income Certification"
+          value={certStatus.label}
+          sub={certStatus.daysUntil != null ? (certStatus.daysUntil < 0 ? `${Math.abs(certStatus.daysUntil)} days overdue` : `${certStatus.daysUntil} days remaining`) : "Annual update"}
+          accent={certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success}
+          onClick={() => onNavigate && onNavigate("recert")}
+        />
+        <Tile
+          icon="🏠"
+          label="My Unit"
+          value={leaseLabel}
+          sub={ext.leaseEnd ? `Lease ends ${ext.leaseEnd}` : `Unit ${rc?.unit || "—"} · ${propName}`}
+          accent={leaseExpired ? T.danger : T.success}
+          onClick={() => onNavigate && onNavigate("unit")}
+        />
       </div>
       {(() => {
         const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || {};
