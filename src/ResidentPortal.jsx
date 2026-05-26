@@ -773,36 +773,35 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
           );
         })()}
       </div>
-      <div style={s.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Recent Messages</div>
-          {onNavigate && <button onClick={() => onNavigate("messages")} style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px" }}>View all →</button>}
+      <div style={{ ...s.card, cursor: onNavigate ? "pointer" : "default", borderLeft: `3px solid ${certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.info}` }}
+        onClick={() => onNavigate && onNavigate("recert")}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>📋 Income Certification</div>
+          {onNavigate && <span style={{ fontSize: 12, color: T.accent, fontWeight: 600 }}>Open →</span>}
         </div>
-        {threads.filter(t => t.type === "broadcast" || t.participants.includes(rc?.id || "")).sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).slice(0, 3).map(t => (
-          <div key={t.id} onClick={() => onNavigate && onNavigate("messages")} style={{ padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, cursor: onNavigate ? "pointer" : "default" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>{t.subject}</span>
-              {t.priority === "high" && <span style={s.badge(T.dangerDim, T.danger)}>Important</span>}
-              {t.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent }} />}
-            </div>
-            <div style={{ color: T.muted, fontSize: 13, marginTop: 4 }}>{new Date(t.lastDate).toLocaleDateString()}</div>
+        <p style={{ fontSize: 13, color: T.muted, marginTop: 0, marginBottom: 14 }}>
+          BCLT verifies your household income once a year to keep your unit's affordable rent in place. Quick — usually about 10 minutes.
+        </p>
+        <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 140, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
+            <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Status</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success }}>{certStatus.label}</div>
           </div>
-        ))}
-      </div>
-      <div style={s.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Active Maintenance</div>
-          {onNavigate && <button onClick={() => onNavigate("maintenance")} style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px" }}>View all →</button>}
+          <div style={{ flex: 1, minWidth: 140, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
+            <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Time</div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>
+              {certStatus.daysUntil != null
+                ? (certStatus.daysUntil < 0 ? `${Math.abs(certStatus.daysUntil)} days overdue` : `${certStatus.daysUntil} days remaining`)
+                : "—"}
+            </div>
+          </div>
+          <div style={{ flex: 1, minWidth: 140, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
+            <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Next Step</div>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>
+              {certStatus.color === "danger" ? "Submit now" : certStatus.color === "warn" ? "Submit soon" : "All good"}
+            </div>
+          </div>
         </div>
-        {maintenance.filter(m => m.unit === (rc?.unit || "") && MAINT_OPEN(m)).map(m => (
-          <div key={m.id} onClick={() => onNavigate && onNavigate("maintenance")} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}`, cursor: onNavigate ? "pointer" : "default" }}>
-            <div>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>{m.category}</span>
-              <span style={{ color: T.muted, fontSize: 13, marginLeft: 10 }}>{m.description}</span>
-            </div>
-            <Badge status={m.status} />
-          </div>
-        ))}
       </div>
       <ActivityFeed items={notifications} mobile={mobile} />
     </div>
