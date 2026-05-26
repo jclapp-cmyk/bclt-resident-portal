@@ -691,14 +691,21 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
           accent={openCount > 0 ? T.warn : T.success}
           onClick={() => onNavigate && onNavigate("maintenance")}
         />
-        <Tile
-          icon="📋"
-          label="Income Certification"
-          value={certStatus.label}
-          sub={certStatus.daysUntil != null ? (certStatus.daysUntil < 0 ? `${Math.abs(certStatus.daysUntil)} days overdue` : `${certStatus.daysUntil} days remaining`) : "Annual update"}
-          accent={certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success}
-          onClick={() => onNavigate && onNavigate("recert")}
-        />
+        {(() => {
+          const myThreads = threads.filter(t => t.type === "broadcast" || t.participants.includes(rc?.id || ""));
+          const unreadCount = myThreads.reduce((sum, t) => sum + (t.unread || 0), 0);
+          const latest = [...myThreads].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate))[0];
+          return (
+            <Tile
+              icon="💬"
+              label="Messages"
+              value={unreadCount > 0 ? `${unreadCount} New` : "Up to date"}
+              sub={latest ? latest.subject?.slice(0, 50) : "Reach out anytime"}
+              accent={unreadCount > 0 ? T.accent : T.success}
+              onClick={() => onNavigate && onNavigate("messages")}
+            />
+          );
+        })()}
         <Tile
           icon="🏠"
           label="My Unit"
