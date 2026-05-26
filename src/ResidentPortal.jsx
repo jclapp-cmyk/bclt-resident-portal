@@ -629,7 +629,7 @@ const BOTTOM_TABS = {
 // ── PAGE COMPONENTS ────────────────────────────────────────
 
 // --- RESIDENT DASHBOARD ---
-const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, onNavigate }) => {
+const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifications, rc, onNavigate }) => {
   const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
   const certStatus = getCertStatus(ext.moveIn || ext.leaseStart, null);
   const openRequests = maintenance.filter(m => m.unit === rc?.unit && MAINT_OPEN(m));
@@ -695,13 +695,37 @@ const ResidentDashboard = ({ mobile, maintenance, threads, notifications, rc, on
           const myThreads = threads.filter(t => t.type === "broadcast" || t.participants.includes(rc?.id || ""));
           const unreadCount = myThreads.reduce((sum, t) => sum + (t.unread || 0), 0);
           const latest = [...myThreads].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate))[0];
+          // Figure out who sent the latest message in the latest thread — so
+          // we can show "Awaiting reply" when the resident is the last sender.
+          let awaitingReply = false;
+          if (latest && unreadCount === 0) {
+            const threadMsgs = messages.filter(m => m.threadId === latest.id);
+            const lastMsg = threadMsgs.length > 0
+              ? threadMsgs.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0]
+              : null;
+            if (lastMsg && lastMsg.from === rc?.id) awaitingReply = true;
+          }
+          let value, accent;
+          if (unreadCount > 0) {
+            value = `${unreadCount} new`;
+            accent = T.accent;
+          } else if (awaitingReply) {
+            value = "Awaiting reply";
+            accent = T.warn;
+          } else if (latest) {
+            value = "No new messages";
+            accent = T.success;
+          } else {
+            value = "No messages";
+            accent = T.success;
+          }
           return (
             <Tile
               icon="💬"
               label="Messages"
-              value={unreadCount > 0 ? `${unreadCount} New` : "Up to date"}
-              sub={latest ? latest.subject?.slice(0, 50) : "Reach out anytime"}
-              accent={unreadCount > 0 ? T.accent : T.success}
+              value={value}
+              sub={latest ? `Latest: ${latest.subject?.slice(0, 40)}` : "Reach out anytime"}
+              accent={accent}
               onClick={() => onNavigate && onNavigate("messages")}
             />
           );
@@ -9920,7 +9944,7 @@ export default function App() {
       const myMaint = rc?.unit ? maintenance.filter(m => m.unit === rc.unit) : maintenance;
       const myThreads = rc?.id ? threads.filter(t => t.type === "broadcast" || t.participants.includes(rc.id)) : threads;
       switch (page) {
-        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
+        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} messages={messages} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
         case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={myMaint} onSubmit={addMaintenanceN} onUpdate={updateMaintenanceN} rc={rc} />;
         case "rent": return <RentPayments mobile={mobile} rc={rc} />;
         case "recert": return <IncomeCertification role="resident" mobile={mobile} selectedProperty={selectedProperty} rc={rc} pushNotif={pushNotif} />;
@@ -9928,7 +9952,7 @@ export default function App() {
         case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} rc={rc} staffMembers={staffMembers} />;
         case "profile": return <ResidentProfile mobile={mobile} commPrefs={commPrefs} setCommPrefs={setCommPrefs} emergencyContacts={emergencyContacts} onUpdateEmergencyContacts={updateEmergencyContacts} rc={rc} />;
         case "messages": return <Communications role="resident" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={myThreads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} rc={rc} />;
-        default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
+        default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} messages={messages} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
       }
     }
     if (role === "admin") {
@@ -9968,7 +9992,7 @@ export default function App() {
         default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} threads={threads} onOpenWorkOrder={(id) => { setPendingMaintenanceId(id); setPage("work-orders"); }} onOpenMessages={() => setPage("messages")} onNavigateTo={setPage} />;
       }
     }
-    return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} notifications={roleNotifs} onNavigate={handleNav} />;
+    return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} messages={messages} notifications={roleNotifs} onNavigate={handleNav} />;
   };
 
   const sidebarContent = (
