@@ -790,35 +790,6 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
         </div>
         );
       })()}
-      <div style={{ ...s.card, marginBottom: 24, cursor: onNavigate ? "pointer" : "default" }} onClick={() => onNavigate && onNavigate("rent")}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Payment History {onNavigate && <span style={{ fontSize: 11, color: T.accent, marginLeft: 6 }}>→</span>}</div>
-            <div style={{ fontSize: 12, color: T.muted }}>Last 6 months — balance at month end</div>
-          </div>
-          <span style={{ fontSize: 12, color: T.success, fontWeight: 600 }}>On Track</span>
-        </div>
-        {(() => {
-          const now = new Date();
-          const months = [];
-          const points = [];
-          for (let i = 5; i >= 0; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const monthKey = d.toISOString().slice(0, 7);
-            months.push(d.toLocaleString("default", { month: "short" }));
-            const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id && l.month === monthKey);
-            points.push(ledgerEntry ? (ledgerEntry.balance || 0) : 0);
-          }
-          return (
-            <>
-              <SparkLine points={points} color={points.some(p => p > 0) ? T.warn : T.success} width={mobile ? 260 : 400} height={48} mobile={mobile} />
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.dim, marginTop: 6, maxWidth: mobile ? 160 : 400 }}>
-                {months.map((m, i) => <span key={i}>{m}</span>)}
-              </div>
-            </>
-          );
-        })()}
-      </div>
       <div style={{ ...s.card, cursor: onNavigate ? "pointer" : "default", borderLeft: `3px solid ${certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.info}` }}
         onClick={() => onNavigate && onNavigate("recert")}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
@@ -849,7 +820,6 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           </div>
         </div>
       </div>
-      <ActivityFeed items={notifications} mobile={mobile} />
     </div>
   );
 };
