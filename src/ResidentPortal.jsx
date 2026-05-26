@@ -6816,7 +6816,18 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   const ThreadItem = ({ thread: t }) => {
     const isBroadcast = t.type === "broadcast";
     const resident = !isBroadcast ? LIVE_RESIDENTS.find(r => t.participants.includes(r.id)) : null;
-    const name = isBroadcast ? "All Residents" : (resident?.name || "Unknown");
+    // For resident view: every thread is between them and management, so
+    // showing their own name is meaningless. Show "Management" (or
+    // "Broadcast from Management") instead.
+    // For admin/staff view: show which resident wrote in.
+    let name;
+    if (isBroadcast) {
+      name = role === "resident" ? "Broadcast from Management" : "All Residents";
+    } else if (role === "resident") {
+      name = "Management";
+    } else {
+      name = resident?.name || "Unknown";
+    }
     const chBadge = CHANNEL_BADGES[t.channel];
     return (
       <div onClick={() => setSelectedThread(t)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", cursor: "pointer", borderBottom: `1px solid ${T.borderLight}`, background: t.unread > 0 ? T.accentDim : "transparent", transition: "background 0.15s" }}
