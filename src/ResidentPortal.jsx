@@ -641,12 +641,12 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
   const leaseExpired = ext.leaseEnd && new Date(ext.leaseEnd) < new Date();
   const leaseLabel = ext.leaseEnd ? (leaseExpired ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "Month-to-Month" : "Active");
 
-  // Tile component — used for the 3 small status tiles up top
+  // Tile component — 2x2 grid up top
   const Tile = ({ icon, label, value, sub, accent, onClick }) => (
     <div onClick={onClick} style={{
-      flex: `1 1 ${mobile ? "100%" : "calc(33.33% - 11px)"}`,
-      minWidth: mobile ? "100%" : 200,
-      padding: mobile ? 18 : 20,
+      flex: `1 1 ${mobile ? "100%" : "calc(50% - 8px)"}`,
+      minWidth: mobile ? "100%" : 240,
+      padding: mobile ? 18 : 22,
       borderRadius: 12,
       background: T.surface,
       border: `1px solid ${T.border}`,
@@ -655,48 +655,30 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
       transition: "transform 0.12s, box-shadow 0.12s",
       display: "flex",
       flexDirection: "column",
-      gap: 4,
+      gap: 6,
     }}
       onMouseEnter={onClick ? (e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(0,0,0,0.08)"; } : undefined}
       onMouseLeave={onClick ? (e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; } : undefined}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 28, lineHeight: 1 }}>{icon}</div>
-        {onClick && <div style={{ fontSize: 16, color: T.dim, fontWeight: 600 }}>→</div>}
+        <div style={{ fontSize: 30, lineHeight: 1 }}>{icon}</div>
+        {onClick && <div style={{ fontSize: 18, color: T.dim, fontWeight: 600 }}>→</div>}
       </div>
-      <div style={{ fontSize: 12, color: T.muted, fontWeight: 500, marginTop: 6 }}>{label}</div>
-      <div style={{ fontSize: mobile ? 22 : 24, fontWeight: 700, color: accent, lineHeight: 1.1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontSize: 13, color: T.muted, fontWeight: 500, marginTop: 8 }}>{label}</div>
+      <div style={{ fontSize: mobile ? 22 : 24, fontWeight: 700, color: accent, lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: T.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</div>}
     </div>
   );
 
-  // Pre-compute the last 3 threads for the Messages card
+  // Pre-compute for Messages tile
   const myThreads = threads.filter(t => t.type === "broadcast" || t.participants.includes(rc?.id || ""));
-  const recentThreads = [...myThreads].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate)).slice(0, 3);
+  const latestThread = [...myThreads].sort((a, b) => new Date(b.lastDate) - new Date(a.lastDate))[0];
   const unreadCount = myThreads.reduce((sum, t) => sum + (t.unread || 0), 0);
-  const formatMsgTime = (d) => {
-    const days = Math.floor((Date.now() - new Date(d)) / 86400000);
-    if (days === 0) return new Date(d).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    if (days === 1) return "Yesterday";
-    if (days < 7) return `${days}d ago`;
-    return new Date(d).toLocaleDateString([], { month: "short", day: "numeric" });
-  };
-  const senderForThread = (t) => {
-    if (t.type === "broadcast") return "Management (Broadcast)";
-    // Find most recent message; if last sender is admin, label as Management;
-    // otherwise treat as resident.
-    const tmsgs = messages.filter(m => m.threadId === t.id);
-    if (tmsgs.length === 0) return "Management";
-    const lastMsg = tmsgs.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    if (lastMsg?.from === "admin") return "Management";
-    return rc?.name || "You";
-  };
 
   return (
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, {rc?.firstName || "Resident"}</h1>
       <p style={s.sectionSub}>Unit {rc?.unit || "—"} — {propName}</p>
-      {/* Top row: 3 status tiles */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
         <Tile
           icon="💳"
@@ -715,6 +697,14 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           onClick={() => onNavigate && onNavigate("maintenance")}
         />
         <Tile
+          icon="💬"
+          label="Messages"
+          value={unreadCount > 0 ? `${unreadCount} new` : (latestThread ? latestThread.subject?.slice(0, 30) : "—")}
+          sub={latestThread ? "Tap to view" : "Reach out anytime"}
+          accent={unreadCount > 0 ? T.accent : T.success}
+          onClick={() => onNavigate && onNavigate("messages")}
+        />
+        <Tile
           icon="🏠"
           label="My Unit"
           value={leaseLabel}
@@ -722,44 +712,6 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           accent={leaseExpired ? T.danger : T.success}
           onClick={() => onNavigate && onNavigate("unit")}
         />
-      </div>
-
-      {/* Messages — wider card showing the 3 most recent threads */}
-      <div style={{ ...s.card, borderLeft: `4px solid ${unreadCount > 0 ? T.accent : T.info}`, marginBottom: 16, cursor: onNavigate ? "pointer" : "default" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 22 }}>💬</span>
-            <span style={{ fontWeight: 700, fontSize: 16 }}>Messages</span>
-            {unreadCount > 0 && <span style={s.badge(T.accentDim, T.accent)}>{unreadCount} new</span>}
-          </div>
-          {onNavigate && <button onClick={() => onNavigate("messages")} style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }}>View all →</button>}
-        </div>
-        {recentThreads.length === 0 ? (
-          <div style={{ padding: 12, color: T.muted, fontSize: 13 }}>No messages yet. Reach out anytime.</div>
-        ) : (
-          <div>
-            {recentThreads.map((t, idx) => (
-              <div key={t.id}
-                onClick={() => onNavigate && onNavigate("messages")}
-                style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  padding: "10px 4px",
-                  borderTop: idx === 0 ? "none" : `1px solid ${T.borderLight}`,
-                  cursor: onNavigate ? "pointer" : "default",
-                }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                    <span style={{ fontWeight: 600, fontSize: 13, color: T.text }}>{senderForThread(t)}</span>
-                    {t.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent }} />}
-                    {t.priority === "high" && <span style={s.badge(T.dangerDim, T.danger)}>Important</span>}
-                  </div>
-                  <div style={{ fontSize: 14, color: t.unread > 0 ? T.text : T.muted, fontWeight: t.unread > 0 ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</div>
-                </div>
-                <div style={{ fontSize: 11, color: T.dim, marginLeft: 12, flexShrink: 0 }}>{formatMsgTime(t.lastDate)}</div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
       <div style={{ ...s.card, cursor: onNavigate ? "pointer" : "default", borderLeft: `3px solid ${certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.info}`, marginBottom: 16 }}
         onClick={() => onNavigate && onNavigate("recert")}>
