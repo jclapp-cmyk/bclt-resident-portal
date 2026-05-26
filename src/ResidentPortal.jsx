@@ -641,32 +641,35 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
   const leaseExpired = ext.leaseEnd && new Date(ext.leaseEnd) < new Date();
   const leaseLabel = ext.leaseEnd ? (leaseExpired ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "Month-to-Month" : "Active");
 
-  // Tile component — 3 small tiles in a row up top
+  // Shared tile container (2x2 grid sizing + hover behavior)
+  const tileWrapStyle = (accent, onClick) => ({
+    flex: `1 1 ${mobile ? "100%" : "calc(50% - 8px)"}`,
+    minWidth: mobile ? "100%" : 240,
+    padding: mobile ? 18 : 22,
+    borderRadius: 12,
+    background: T.surface,
+    border: `1px solid ${T.border}`,
+    borderLeft: `4px solid ${accent}`,
+    cursor: onClick ? "pointer" : "default",
+    transition: "transform 0.12s, box-shadow 0.12s",
+    display: "flex",
+    flexDirection: "column",
+  });
+  const tileHover = (onClick) => onClick ? {
+    onMouseEnter: (e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(0,0,0,0.08)"; },
+    onMouseLeave: (e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; },
+  } : {};
+
+  // Standard status tile
   const Tile = ({ icon, label, value, sub, accent, onClick }) => (
-    <div onClick={onClick} style={{
-      flex: `1 1 ${mobile ? "100%" : "calc(33.33% - 11px)"}`,
-      minWidth: mobile ? "100%" : 200,
-      padding: mobile ? 18 : 20,
-      borderRadius: 12,
-      background: T.surface,
-      border: `1px solid ${T.border}`,
-      borderLeft: `4px solid ${accent}`,
-      cursor: onClick ? "pointer" : "default",
-      transition: "transform 0.12s, box-shadow 0.12s",
-      display: "flex",
-      flexDirection: "column",
-      gap: 4,
-    }}
-      onMouseEnter={onClick ? (e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(0,0,0,0.08)"; } : undefined}
-      onMouseLeave={onClick ? (e) => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; } : undefined}
-    >
+    <div onClick={onClick} style={tileWrapStyle(accent, onClick)} {...tileHover(onClick)}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 28, lineHeight: 1 }}>{icon}</div>
-        {onClick && <div style={{ fontSize: 16, color: T.dim, fontWeight: 600 }}>→</div>}
+        <div style={{ fontSize: 30, lineHeight: 1 }}>{icon}</div>
+        {onClick && <div style={{ fontSize: 18, color: T.dim, fontWeight: 600 }}>→</div>}
       </div>
-      <div style={{ fontSize: 12, color: T.muted, fontWeight: 500, marginTop: 6 }}>{label}</div>
-      <div style={{ fontSize: mobile ? 22 : 24, fontWeight: 700, color: accent, lineHeight: 1.1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontSize: 13, color: T.muted, fontWeight: 500, marginTop: 8 }}>{label}</div>
+      <div style={{ fontSize: mobile ? 22 : 24, fontWeight: 700, color: accent, lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: T.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub}</div>}
     </div>
   );
 
@@ -694,7 +697,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, {rc?.firstName || "Resident"}</h1>
       <p style={s.sectionSub}>Unit {rc?.unit || "—"} — {propName}</p>
-      {/* Top row: 3 status tiles */}
+      {/* 2x2 tile grid */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
         <Tile
           icon="💳"
@@ -712,6 +715,50 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           accent={openCount > 0 ? T.warn : T.success}
           onClick={() => onNavigate && onNavigate("maintenance")}
         />
+
+        {/* Messages — same tile dimensions, but shows the 3 most recent threads */}
+        {(() => {
+          const accent = unreadCount > 0 ? T.accent : T.success;
+          const handle = () => onNavigate && onNavigate("messages");
+          return (
+            <div onClick={handle} style={tileWrapStyle(accent, handle)} {...tileHover(handle)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 30, lineHeight: 1 }}>💬</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {unreadCount > 0 && <span style={s.badge(T.accentDim, T.accent)}>{unreadCount} new</span>}
+                  <div style={{ fontSize: 18, color: T.dim, fontWeight: 600 }}>→</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 13, color: T.muted, fontWeight: 500, marginTop: 8, marginBottom: 6 }}>Messages</div>
+              {recentThreads.length === 0 ? (
+                <div style={{ fontSize: 13, color: T.muted }}>No messages yet — reach out anytime.</div>
+              ) : (
+                <div>
+                  {recentThreads.map((t, idx) => (
+                    <div key={t.id} style={{
+                      padding: "8px 0",
+                      borderTop: idx === 0 ? "none" : `1px solid ${T.borderLight}`,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      alignItems: "center",
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 1 }}>
+                          <span style={{ fontWeight: 600, fontSize: 12, color: T.text }}>{senderForThread(t)}</span>
+                          {t.unread > 0 && <span style={{ width: 7, height: 7, borderRadius: "50%", background: T.accent }} />}
+                        </div>
+                        <div style={{ fontSize: 13, color: t.unread > 0 ? T.text : T.muted, fontWeight: t.unread > 0 ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</div>
+                      </div>
+                      <div style={{ fontSize: 10, color: T.dim, flexShrink: 0 }}>{formatMsgTime(t.lastDate)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         <Tile
           icon="🏠"
           label="My Unit"
@@ -720,44 +767,6 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           accent={leaseExpired ? T.danger : T.success}
           onClick={() => onNavigate && onNavigate("unit")}
         />
-      </div>
-
-      {/* Messages — wider card showing the 3 most recent threads */}
-      <div style={{ ...s.card, borderLeft: `4px solid ${unreadCount > 0 ? T.accent : T.info}`, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 22 }}>💬</span>
-            <span style={{ fontWeight: 700, fontSize: 16 }}>Messages</span>
-            {unreadCount > 0 && <span style={s.badge(T.accentDim, T.accent)}>{unreadCount} new</span>}
-          </div>
-          {onNavigate && <button onClick={() => onNavigate("messages")} style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }}>View all →</button>}
-        </div>
-        {recentThreads.length === 0 ? (
-          <div style={{ padding: 12, color: T.muted, fontSize: 13 }}>No messages yet. Reach out anytime.</div>
-        ) : (
-          <div>
-            {recentThreads.map((t, idx) => (
-              <div key={t.id}
-                onClick={() => onNavigate && onNavigate("messages")}
-                style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  padding: "10px 4px",
-                  borderTop: idx === 0 ? "none" : `1px solid ${T.borderLight}`,
-                  cursor: onNavigate ? "pointer" : "default",
-                }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
-                    <span style={{ fontWeight: 600, fontSize: 13, color: T.text }}>{senderForThread(t)}</span>
-                    {t.unread > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.accent }} />}
-                    {t.priority === "high" && <span style={s.badge(T.dangerDim, T.danger)}>Important</span>}
-                  </div>
-                  <div style={{ fontSize: 14, color: t.unread > 0 ? T.text : T.muted, fontWeight: t.unread > 0 ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</div>
-                </div>
-                <div style={{ fontSize: 11, color: T.dim, marginLeft: 12, flexShrink: 0 }}>{formatMsgTime(t.lastDate)}</div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
       <div style={{ ...s.card, cursor: onNavigate ? "pointer" : "default", borderLeft: `3px solid ${certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.info}`, marginBottom: 16 }}
         onClick={() => onNavigate && onNavigate("recert")}>
