@@ -761,36 +761,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           </div>
         )}
       </div>
-      {(() => {
-        const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || {};
-        return (
-        <div style={{ ...s.card, marginBottom: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>My Contact Info</div>
-            <button onClick={() => onNavigate && onNavigate("profile")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: T.accent, fontWeight: 600, padding: 0 }}>Edit in My Profile →</button>
-          </div>
-          <div style={{ display: "flex", gap: mobile ? 12 : 20, flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: 150 }}>
-              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Phone</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.phone || "Not set"}</div>
-            </div>
-            <div style={{ flex: 1, minWidth: 150 }}>
-              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Email</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.email || "Not set"}</div>
-            </div>
-            <div style={{ flex: 1, minWidth: 150 }}>
-              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Preferred Contact</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{(myRes.preferredChannel || "email").toUpperCase()}</div>
-            </div>
-            <div style={{ flex: 1, minWidth: 150 }}>
-              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>SMS Consent</div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: myRes.smsConsent ? T.success : T.warn }}>{myRes.smsConsent ? "✓ Opted In" : "Not opted in"}</div>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
-      <div style={{ ...s.card, cursor: onNavigate ? "pointer" : "default", borderLeft: `3px solid ${certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.info}` }}
+      <div style={{ ...s.card, cursor: onNavigate ? "pointer" : "default", borderLeft: `3px solid ${certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.info}`, marginBottom: 16 }}
         onClick={() => onNavigate && onNavigate("recert")}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
           <div style={{ fontWeight: 700, fontSize: 15 }}>📋 Income Certification</div>
@@ -820,6 +791,36 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           </div>
         </div>
       </div>
+
+      {(() => {
+        const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || {};
+        return (
+        <div style={s.card}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>My Contact Info</div>
+            <button onClick={() => onNavigate && onNavigate("profile")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: T.accent, fontWeight: 600, padding: 0 }}>Edit in My Profile →</button>
+          </div>
+          <div style={{ display: "flex", gap: mobile ? 12 : 20, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Phone</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.phone || "Not set"}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Email</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.email || "Not set"}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Preferred Contact</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{(myRes.preferredChannel || "email").toUpperCase()}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 150 }}>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>SMS Consent</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: myRes.smsConsent ? T.success : T.warn }}>{myRes.smsConsent ? "✓ Opted In" : "Not opted in"}</div>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
     </div>
   );
 };
