@@ -685,11 +685,11 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
     return new Date(d).toLocaleDateString([], { month: "short", day: "numeric" });
   };
   const senderForThread = (t) => {
-    if (t.type === "broadcast") return "Management (Broadcast)";
+    if (t.type === "broadcast") return "Broadcast from BCLT Team";
     const tmsgs = messages.filter(m => m.threadId === t.id);
-    if (tmsgs.length === 0) return "Management";
+    if (tmsgs.length === 0) return "BCLT Team";
     const lastMsg = tmsgs.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    if (lastMsg?.from === "admin") return "Management";
+    if (lastMsg?.from === "admin") return "BCLT Team";
     return rc?.name || "You";
   };
 
@@ -6697,7 +6697,7 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
         <div>
           <h2 style={{ fontSize: mobile ? 16 : 18, fontWeight: 700, marginBottom: 4 }}>{thread.subject}</h2>
           <div style={{ fontSize: 13, color: T.muted }}>
-            {isBroadcast ? "Broadcast to all residents" : role === "resident" ? "Management" : `${resident?.name || "Unknown"} — Unit ${resident?.unit || "?"}`}
+            {isBroadcast ? "Broadcast to all residents" : role === "resident" ? "BCLT Team" : `${resident?.name || "Unknown"} — Unit ${resident?.unit || "?"}`}
             <span style={{ ...s.badge(CHANNEL_BADGES[thread.channel].bg, CHANNEL_BADGES[thread.channel].text), marginLeft: 10 }}>{CHANNEL_BADGES[thread.channel].label}</span>
           </div>
         </div>
@@ -6708,7 +6708,7 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
           {messages.map(msg => {
             const isMe = msg.from === currentSender;
             const isStaffMsg = msg.from === "admin";
-            const sender = isStaffMsg ? "Management" : (LIVE_RESIDENTS.find(r => r.id === msg.from)?.name || msg.from);
+            const sender = isStaffMsg ? "BCLT Team" : (LIVE_RESIDENTS.find(r => r.id === msg.from)?.name || msg.from);
             return (
               <div key={msg.id} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start", marginBottom: 12 }}>
                 <div style={{ maxWidth: mobile ? "85%" : "70%", padding: "10px 14px", borderRadius: 12, background: isMe ? T.accent : T.bg, color: isMe ? T.white : T.text, borderBottomRightRadius: isMe ? 4 : 12, borderBottomLeftRadius: isMe ? 12 : 4 }}>
@@ -6822,9 +6822,9 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
     // For admin/staff view: show which resident wrote in.
     let name;
     if (isBroadcast) {
-      name = role === "resident" ? "Broadcast from Management" : "All Residents";
+      name = role === "resident" ? "Broadcast from BCLT Team" : "All Residents";
     } else if (role === "resident") {
-      name = "Management";
+      name = "BCLT Team";
     } else {
       name = resident?.name || "Unknown";
     }
