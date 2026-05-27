@@ -3044,6 +3044,9 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
   const [editingEC, setEditingEC] = useState(null);
   const [ecForm, setEcForm] = useState({ name: "", relationship: "", phone: "", email: "" });
   const [success, showSuccess] = useSuccess();
+  // SMS consent in local state so the checkbox actually updates after save
+  const [smsConsent, setSmsConsent] = useState(!!myRes.smsConsent);
+  useEffect(() => { setSmsConsent(!!myRes.smsConsent); }, [myRes._uuid, myRes.smsConsent]);
   const myContacts = emergencyContacts[rc?.id || ""] || [];
   const [householdMembers, setHouseholdMembers] = useState([]);
   const [loadingHousehold, setLoadingHousehold] = useState(false);
@@ -3338,13 +3341,18 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
             <div style={{ marginBottom: 14, padding: "12px 14px", background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
               <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>SMS Text Message Consent</div>
               <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
-                <input type="checkbox" checked={myRes.smsConsent || false} onChange={async (e) => {
+                <input type="checkbox" checked={smsConsent} onChange={async (e) => {
                   const consent = e.target.checked;
+                  const prev = smsConsent;
+                  setSmsConsent(consent); // optimistic
                   try {
                     await updateResident(myRes._uuid, { smsConsent: consent });
                     myRes.smsConsent = consent;
                     showSuccess(consent ? "SMS consent recorded. You will receive text messages from BCLT." : "SMS consent removed. You will no longer receive text messages.");
-                  } catch (err) { showSuccess("Error: " + err.message); }
+                  } catch (err) {
+                    setSmsConsent(prev); // roll back on failure
+                    showSuccess("Error: " + err.message);
+                  }
                 }} style={{ marginTop: 3, width: 18, height: 18 }} />
                 <span style={{ fontSize: 13, lineHeight: 1.5, color: T.text }}>
                   I agree to receive text messages from Bolinas Community Land Trust at the phone number on file. Message frequency varies. Message and data rates may apply. Reply STOP to cancel at any time. Reply HELP for help.
@@ -6935,6 +6943,11 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   // Inbox sort + filter (admin only — but keep in shared state for simplicity)
   const [inboxSort, setInboxSort] = useState("recent"); // recent | resident | building
   const [inboxPropertyFilter, setInboxPropertyFilter] = useState("");
+  // SMS consent local state (for resident view's Preferences tab) — checkbox needs
+  // to react immediately on toggle, not wait for a re-render of LIVE_RESIDENTS.
+  const myResForPrefs = !isStaff ? (LIVE_RESIDENTS.find(r => r.id === rc?.id) || {}) : {};
+  const [smsConsent, setSmsConsent] = useState(!!myResForPrefs.smsConsent);
+  useEffect(() => { setSmsConsent(!!myResForPrefs.smsConsent); }, [myResForPrefs._uuid, myResForPrefs.smsConsent]);
 
   const getInitials = (name) => name.split(" ").map(w => w[0]).join("").slice(0, 2);
   const formatTime = (dateStr) => {
@@ -7470,13 +7483,18 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             <div style={{ padding: "12px 14px", background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
               <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>SMS Text Message Consent</div>
               <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: myRes._uuid ? "pointer" : "not-allowed" }}>
-                <input type="checkbox" checked={myRes.smsConsent || false} disabled={!myRes._uuid} onChange={async (e) => {
+                <input type="checkbox" checked={smsConsent} disabled={!myRes._uuid} onChange={async (e) => {
                   const consent = e.target.checked;
+                  const prev = smsConsent;
+                  setSmsConsent(consent); // optimistic
                   try {
                     await updateResident(myRes._uuid, { smsConsent: consent });
                     myRes.smsConsent = consent;
                     showSuccess(consent ? "SMS consent recorded." : "SMS consent removed.");
-                  } catch (err) { showSuccess("Error: " + err.message); }
+                  } catch (err) {
+                    setSmsConsent(prev); // roll back
+                    showSuccess("Error: " + err.message);
+                  }
                 }} style={{ marginTop: 3, width: 18, height: 18 }} />
                 <span style={{ fontSize: 13, lineHeight: 1.5, color: T.text }}>
                   I agree to receive text messages from Bolinas Community Land Trust at the phone number on file. Message frequency varies. Message and data rates may apply. Reply STOP to cancel at any time. Reply HELP for help.
