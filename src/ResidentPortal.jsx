@@ -4139,8 +4139,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         mobile={mobile}
         columns={[
           { key: "name", label: "Name", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+          ...(selectedProperty === "all" ? [{ key: "propertyId", label: "Property", render: v => getProperty(v)?.name || v, filterOptions: [...new Set(LIVE_RESIDENTS.map(r => getProperty(r.propertyId)?.name).filter(Boolean))], filterValue: row => getProperty(row.propertyId)?.name || "" }] : []),
           { key: "unit", label: "Unit" },
-          ...(selectedProperty === "all" ? [{ key: "propertyId", label: "Property", render: v => getProperty(v)?.name?.split(" ")[0] || v }] : []),
           { key: "bedrooms", label: "BR", render: v => v ? `${v}BR` : "—" },
           { key: "rentAmount", label: "Rent", render: v => v ? `$${v.toLocaleString()}` : "—" },
           { key: "leaseEnd", label: "Lease End", render: v => {
