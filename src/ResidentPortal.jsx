@@ -7429,7 +7429,9 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       )}
 
       {/* PREFERENCES TAB (Resident) */}
-      {tab === "Preferences" && !isStaff && (
+      {tab === "Preferences" && !isStaff && (() => {
+        const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || {};
+        return (
         <div>
           <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Contact Preferences</div>
@@ -7450,9 +7452,36 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 {commPrefs.preferredChannel === "phone" && "Management will call you for important communications."}
               </div>
             </div>
-            <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-              <div><label style={s.label}>Phone Number</label><input style={s.mInput(mobile)} value={commPrefs.phone} onChange={e => setCommPrefs(prev => ({ ...prev, phone: e.target.value }))} /></div>
-              <div><label style={s.label}>Email Address</label><input style={s.mInput(mobile)} type="email" value={commPrefs.email} onChange={e => setCommPrefs(prev => ({ ...prev, email: e.target.value }))} /></div>
+            {/* Read-only display of contact info pulled from My Profile → Contact */}
+            <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 6, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
+              <div>
+                <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Phone on file</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.phone || "Not set"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Email on file</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.email || "Not set"}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 14 }}>
+              Update these from <strong>My Profile → Contact</strong>.
+            </div>
+            {/* SMS Consent — same as My Profile */}
+            <div style={{ padding: "12px 14px", background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>SMS Text Message Consent</div>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: myRes._uuid ? "pointer" : "not-allowed" }}>
+                <input type="checkbox" checked={myRes.smsConsent || false} disabled={!myRes._uuid} onChange={async (e) => {
+                  const consent = e.target.checked;
+                  try {
+                    await updateResident(myRes._uuid, { smsConsent: consent });
+                    myRes.smsConsent = consent;
+                    showSuccess(consent ? "SMS consent recorded." : "SMS consent removed.");
+                  } catch (err) { showSuccess("Error: " + err.message); }
+                }} style={{ marginTop: 3, width: 18, height: 18 }} />
+                <span style={{ fontSize: 13, lineHeight: 1.5, color: T.text }}>
+                  I agree to receive text messages from Bolinas Community Land Trust at the phone number on file. Message frequency varies. Message and data rates may apply. Reply STOP to cancel at any time. Reply HELP for help.
+                </span>
+              </label>
             </div>
           </div>
           <div style={s.card}>
@@ -7473,7 +7502,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
