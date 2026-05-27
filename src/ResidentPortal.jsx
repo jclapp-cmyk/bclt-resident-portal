@@ -5405,7 +5405,12 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 failedItems: [],
                 notes: `Notification: ${schedForm.notify}`,
               };
-              onSchedule(inspectionRecord);
+              try {
+                await onSchedule(inspectionRecord);
+              } catch (err) {
+                showSuccess(`Failed to save inspection: ${err.message || "unknown error"}`);
+                return; // stop here — don't send notification if save failed
+              }
 
               // Send the resident a heads-up email when "Yes" is selected
               if (schedForm.notify === "Yes — 24 hour notice" && schedResident?.email) {
@@ -9765,7 +9770,16 @@ export default function App() {
   };
   const addInspection = async (insp) => {
     setUnitInspections(prev => [insp, ...prev]);
-    try { await insertUnitInspection(insp); } catch (err) { console.warn('Supabase insert inspection failed:', err); }
+    try {
+      const saved = await insertUnitInspection(insp);
+      // Replace optimistic record with the saved version (so we have the real UUID)
+      if (saved) setUnitInspections(prev => prev.map(i => i.id === insp.id ? saved : i));
+    } catch (err) {
+      console.error('Supabase insert inspection failed:', err);
+      // Roll back the optimistic update so the row doesn't ghost-disappear later
+      setUnitInspections(prev => prev.filter(i => i.id !== insp.id));
+      throw new Error(err.message || 'Failed to save inspection to database');
+    }
   };
   const updateInspection = async (id, changes) => {
     const prev = unitInspections;
@@ -9893,9 +9907,14 @@ export default function App() {
     addVendor(v);
     pushNotif({ id: `N-${Date.now()}`, type: "vendor", icon: "📇", message: `New vendor added: ${v.company}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance"] });
   };
-  const addInspectionN = (insp) => {
-    addInspection(insp);
-    pushNotif({ id: `N-${Date.now()}`, type: "inspection", icon: "🔍", message: `Inspection scheduled: ${insp.category} — ${insp.unit}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance", ...(insp.unit === (residentCtx?.unit || "") ? ["resident"] : [])] });
+  const addInspectionN = async (insp) => {
+    try {
+      await addInspection(insp);
+      pushNotif({ id: `N-${Date.now()}`, type: "inspection", icon: "🔍", message: `Inspection scheduled: ${insp.category} — ${insp.unit}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance", ...(insp.unit === (residentCtx?.unit || "") ? ["resident"] : [])] });
+    } catch (err) {
+      // Surface the actual DB error so we can tell why the insert failed
+      throw err;
+    }
   };
   const updateInspectionN = (id, changes) => {
     updateInspection(id, changes);

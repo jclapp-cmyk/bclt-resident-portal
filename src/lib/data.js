@@ -619,7 +619,18 @@ export async function fetchUnitInspections() {
 }
 
 export async function insertUnitInspection(insp) {
-  let { data: prop } = await supabase.from('properties').select('id').eq('slug', insp.propertyId || 'wharf').maybeSingle();
+  // Property lookup — accept either a slug or a UUID
+  let prop = null;
+  if (insp.propertyId) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(insp.propertyId);
+    if (isUuid) {
+      const { data } = await supabase.from('properties').select('id').eq('id', insp.propertyId).maybeSingle();
+      prop = data;
+    } else {
+      const { data } = await supabase.from('properties').select('id').eq('slug', insp.propertyId).maybeSingle();
+      prop = data;
+    }
+  }
   if (!prop) {
     const { data: fallback } = await supabase.from('properties').select('id').limit(1).single();
     if (!fallback) throw new Error('No properties found');
@@ -627,15 +638,29 @@ export async function insertUnitInspection(insp) {
   }
   const { data: unitRow } = await supabase.from('units').select('id').eq('number', insp.unit).eq('property_id', prop.id).maybeSingle();
   const code = `UI-${Date.now().toString(36)}`;
-  const { data, error } = await supabase.from('unit_inspections').insert({
+  const payload = {
     code, property_id: prop.id, unit_id: unitRow?.id || null,
-    category: insp.category, inspection_date: insp.date, time_window: insp.timeWindow || null,
-    inspector: insp.inspector || 'Mike R.',
+    category: insp.category, inspection_date: insp.date,
+    inspector: insp.inspector || null,
     result: insp.result || 'Pass', score: insp.score || null,
     failed_items: insp.failedItems || [], notes: insp.notes || '',
-  }).select().single();
+  };
+  // Only include time_window if the column likely exists (post-migration).
+  // We try with it first; if that fails with a column-doesn't-exist error,
+  // retry without it.
+  if (insp.timeWindow) payload.time_window = insp.timeWindow;
+  let { data, error } = await supabase.from('unit_inspections').insert(payload).select().single();
+  if (error && error.message?.includes('time_window')) {
+    delete payload.time_window;
+    ({ data, error } = await supabase.from('unit_inspections').insert(payload).select().single());
+  }
   if (error) throw error;
-  return { ...insp, id: code, _uuid: data.id };
+  return {
+    ...insp,
+    id: code,
+    _uuid: data.id,
+    propertyId: insp.propertyId, // keep as-is for caller consistency
+  };
 }
 
 export async function updateUnitInspection(code, changes) {
