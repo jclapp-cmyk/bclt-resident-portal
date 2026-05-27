@@ -631,7 +631,18 @@ const BOTTOM_TABS = {
 // --- RESIDENT DASHBOARD ---
 const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitInspections = [], notifications, rc, onNavigate }) => {
   const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
-  const certStatus = getCertStatus(ext.moveIn || ext.leaseStart, null);
+  // Find this resident's most recent approved income certification
+  const [myCerts, setMyCerts] = useState([]);
+  useEffect(() => {
+    if (!rc?.id) return;
+    fetchIncomeCertifications()
+      .then(all => setMyCerts((all || []).filter(c => c.residentSlug === rc.id || c.residentId === rc._uuid)))
+      .catch(err => console.warn("fetchIncomeCertifications (resident dash) failed:", err));
+  }, [rc?.id, rc?._uuid]);
+  const approvedCerts = myCerts.filter(c => c.status === "approved");
+  const lastCert = approvedCerts.sort((a, b) => new Date(b.adminSignedAt || b.updatedAt || b.createdAt) - new Date(a.adminSignedAt || a.updatedAt || a.createdAt))[0];
+  const lastCertDate = lastCert?.adminSignedAt || lastCert?.updatedAt || lastCert?.createdAt || null;
+  const certStatus = getCertStatus(ext.moveIn || ext.leaseStart, lastCertDate);
   const openRequests = maintenance.filter(m => m.unit === rc?.unit && MAINT_OPEN(m));
   const openCount = openRequests.length;
   const propName = LIVE_PROPERTIES.find(p => p.id === rc?.propertyId)?.name || "BCLT";
@@ -738,14 +749,34 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
             />
           );
         })()}
-        <Tile
-          icon="📋"
-          label="Income Certification"
-          value={certStatus.label}
-          sub={certStatus.daysUntil != null ? (certStatus.daysUntil < 0 ? `${Math.abs(certStatus.daysUntil)} days overdue` : `${certStatus.daysUntil} days remaining`) : "Annual update"}
-          accent={certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success}
-          onClick={() => onNavigate && onNavigate("recert")}
-        />
+        {(() => {
+          const fmt = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : null;
+          let value, sub, accent;
+          if (lastCert) {
+            const isCurrent = certStatus.status === "current" || certStatus.status === "ok";
+            value = `Verified ${fmt(lastCertDate)}`;
+            sub = isCurrent
+              ? (certStatus.daysUntil != null ? `Next due in ${certStatus.daysUntil} days` : "Up to date")
+              : (certStatus.daysUntil != null && certStatus.daysUntil < 0
+                  ? `Overdue by ${Math.abs(certStatus.daysUntil)} days`
+                  : `Due in ${certStatus.daysUntil}d`);
+            accent = isCurrent ? T.success : (certStatus.color === "danger" ? T.danger : T.warn);
+          } else {
+            value = "Verification Required";
+            sub = "Complete your annual income update";
+            accent = T.danger;
+          }
+          return (
+            <Tile
+              icon="📋"
+              label="Income Certification"
+              value={value}
+              sub={sub}
+              accent={accent}
+              onClick={() => onNavigate && onNavigate("recert")}
+            />
+          );
+        })()}
         <Tile
           icon="🏠"
           label="My Unit"
