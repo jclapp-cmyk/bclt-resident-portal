@@ -7435,17 +7435,18 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Contact Preferences</div>
             <div style={{ marginBottom: 14 }}>
               <label style={s.label}>Preferred Channel</label>
-              <div style={{ display: "flex", gap: 10 }}>
-                {["sms", "email", "phone"].map(ch => (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {["email", "sms", "both", "phone"].map(ch => (
                   <button key={ch} onClick={() => setCommPrefs(prev => ({ ...prev, preferredChannel: ch }))}
-                    style={{ ...s.btn(commPrefs.preferredChannel === ch ? "primary" : "ghost"), flex: 1, textTransform: "uppercase", fontSize: 12 }}>
-                    {ch === "sms" ? "📱 SMS" : ch === "email" ? "📧 Email" : "📞 Phone"}
+                    style={{ ...s.btn(commPrefs.preferredChannel === ch ? "primary" : "ghost"), flex: 1, minWidth: 100, textTransform: ch === "both" ? "none" : "uppercase", fontSize: 12 }}>
+                    {ch === "sms" ? "📱 SMS" : ch === "email" ? "📧 Email" : ch === "both" ? "📧 + 📱 Email + SMS" : "📞 Phone"}
                   </button>
                 ))}
               </div>
               <div style={{ fontSize: 12, color: T.muted, marginTop: 6 }}>
                 {commPrefs.preferredChannel === "sms" && "You'll receive messages via text. Standard rates may apply."}
                 {commPrefs.preferredChannel === "email" && "You'll receive messages at your email address."}
+                {commPrefs.preferredChannel === "both" && "Important messages go to both your email and phone (SMS)."}
                 {commPrefs.preferredChannel === "phone" && "Management will call you for important communications."}
               </div>
             </div>
