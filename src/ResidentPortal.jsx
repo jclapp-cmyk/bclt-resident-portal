@@ -1248,6 +1248,28 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22, marginBottom: 4 }}>Maintenance Requests</h1>
       <p style={s.sectionSub}>Submit and track maintenance issues for your unit</p>
+
+      {/* Emergency call-out — always visible at the top */}
+      <div style={{
+        background: T.dangerDim,
+        border: `1px solid ${T.danger}`,
+        borderLeft: `4px solid ${T.danger}`,
+        borderRadius: T.radiusSm,
+        padding: mobile ? "12px 14px" : "14px 18px",
+        marginBottom: 16,
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 12,
+      }}>
+        <div style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>🚨</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: T.danger, marginBottom: 2 }}>If this is an emergency, call 911.</div>
+          <div style={{ fontSize: 13, color: T.text }}>
+            Fire, gas leak, flooding, medical emergency, or anything that needs immediate response — dial <strong><a href="tel:911" style={{ color: T.danger, textDecoration: "none" }}>911</a></strong> first. Use this form for non-emergency repairs.
+          </div>
+        </div>
+      </div>
+
       {!showForm && (
         <button onClick={() => setShowForm(true)} style={{
           width: "100%", padding: mobile ? "16px" : "18px 22px", marginBottom: 16,
