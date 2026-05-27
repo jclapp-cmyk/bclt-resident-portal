@@ -629,7 +629,7 @@ const BOTTOM_TABS = {
 // ── PAGE COMPONENTS ────────────────────────────────────────
 
 // --- RESIDENT DASHBOARD ---
-const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifications, rc, onNavigate }) => {
+const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitInspections = [], notifications, rc, onNavigate }) => {
   const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
   const certStatus = getCertStatus(ext.moveIn || ext.leaseStart, null);
   const openRequests = maintenance.filter(m => m.unit === rc?.unit && MAINT_OPEN(m));
@@ -697,8 +697,16 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
     <div>
       <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, {rc?.firstName || "Resident"}</h1>
       <p style={s.sectionSub}>Unit {rc?.unit || "—"} — {propName}</p>
-      {/* 2x2 tile grid */}
+      {/* 6 uniform tiles, 2 columns × 3 rows on desktop, stacked on mobile */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
+        <Tile
+          icon="🔧"
+          label="Maintenance"
+          value={openCount === 0 ? "All clear" : `${openCount} Open`}
+          sub={openCount > 0 ? openRequests[0]?.description?.slice(0, 50) || "Tap to view" : "Submit a request anytime"}
+          accent={openCount > 0 ? T.warn : T.success}
+          onClick={() => onNavigate && onNavigate("maintenance")}
+        />
         <Tile
           icon="💳"
           label="Rent Balance"
@@ -708,57 +716,36 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           onClick={() => onNavigate && onNavigate("rent")}
         />
         <Tile
-          icon="🔧"
-          label="Maintenance"
-          value={openCount === 0 ? "All clear" : `${openCount} Open`}
-          sub={openCount > 0 ? openRequests[0]?.description?.slice(0, 50) || "Tap to view" : "Submit a request anytime"}
-          accent={openCount > 0 ? T.warn : T.success}
-          onClick={() => onNavigate && onNavigate("maintenance")}
+          icon="💬"
+          label="Messages"
+          value={unreadCount > 0 ? `${unreadCount} new` : (recentThreads[0] ? recentThreads[0].subject?.slice(0, 30) : "—")}
+          sub={recentThreads[0] ? `Latest from ${senderForThread(recentThreads[0])}` : "Reach out anytime"}
+          accent={unreadCount > 0 ? T.accent : T.success}
+          onClick={() => onNavigate && onNavigate("messages")}
         />
-
-        {/* Messages — same tile dimensions, but shows the 3 most recent threads */}
         {(() => {
-          const accent = unreadCount > 0 ? T.accent : T.success;
-          const handle = () => onNavigate && onNavigate("messages");
+          const scheduled = unitInspections.filter(i => i.unit === (rc?.unit || "") && i.result === "Scheduled")
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+          const next = scheduled[0];
           return (
-            <div onClick={handle} style={tileWrapStyle(accent, handle)} {...tileHover(handle)}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 30, lineHeight: 1 }}>💬</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {unreadCount > 0 && <span style={s.badge(T.accentDim, T.accent)}>{unreadCount} new</span>}
-                  <div style={{ fontSize: 18, color: T.dim, fontWeight: 600 }}>→</div>
-                </div>
-              </div>
-              <div style={{ fontSize: 13, color: T.muted, fontWeight: 500, marginTop: 8, marginBottom: 6 }}>Messages</div>
-              {recentThreads.length === 0 ? (
-                <div style={{ fontSize: 13, color: T.muted }}>No messages yet — reach out anytime.</div>
-              ) : (
-                <div>
-                  {recentThreads.map((t, idx) => (
-                    <div key={t.id} style={{
-                      padding: "8px 0",
-                      borderTop: idx === 0 ? "none" : `1px solid ${T.borderLight}`,
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      alignItems: "center",
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 1 }}>
-                          <span style={{ fontWeight: 600, fontSize: 12, color: T.text }}>{senderForThread(t)}</span>
-                          {t.unread > 0 && <span style={{ width: 7, height: 7, borderRadius: "50%", background: T.accent }} />}
-                        </div>
-                        <div style={{ fontSize: 13, color: t.unread > 0 ? T.text : T.muted, fontWeight: t.unread > 0 ? 600 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.subject}</div>
-                      </div>
-                      <div style={{ fontSize: 10, color: T.dim, flexShrink: 0 }}>{formatMsgTime(t.lastDate)}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <Tile
+              icon="🔍"
+              label="Inspections"
+              value={next ? next.date : "None scheduled"}
+              sub={next ? `${next.category}${next.timeWindow ? ` · ${next.timeWindow}` : ""}` : "Check inspection history"}
+              accent={next ? T.warn : T.success}
+              onClick={() => onNavigate && onNavigate("inspections")}
+            />
           );
         })()}
-
+        <Tile
+          icon="📋"
+          label="Income Certification"
+          value={certStatus.label}
+          sub={certStatus.daysUntil != null ? (certStatus.daysUntil < 0 ? `${Math.abs(certStatus.daysUntil)} days overdue` : `${certStatus.daysUntil} days remaining`) : "Annual update"}
+          accent={certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success}
+          onClick={() => onNavigate && onNavigate("recert")}
+        />
         <Tile
           icon="🏠"
           label="My Unit"
@@ -767,36 +754,6 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], notifi
           accent={leaseExpired ? T.danger : T.success}
           onClick={() => onNavigate && onNavigate("unit")}
         />
-      </div>
-      <div style={{ ...s.card, cursor: onNavigate ? "pointer" : "default", borderLeft: `3px solid ${certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.info}`, marginBottom: 16 }}
-        onClick={() => onNavigate && onNavigate("recert")}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>📋 Income Certification</div>
-          {onNavigate && <span style={{ fontSize: 12, color: T.accent, fontWeight: 600 }}>Open →</span>}
-        </div>
-        <p style={{ fontSize: 13, color: T.muted, marginTop: 0, marginBottom: 14 }}>
-          BCLT verifies your household income once a year to keep your unit's affordable rent in place. Quick — usually about 10 minutes.
-        </p>
-        <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 140, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
-            <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Status</div>
-            <div style={{ fontWeight: 700, fontSize: 14, color: certStatus.color === "danger" ? T.danger : certStatus.color === "warn" ? T.warn : T.success }}>{certStatus.label}</div>
-          </div>
-          <div style={{ flex: 1, minWidth: 140, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
-            <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Time</div>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>
-              {certStatus.daysUntil != null
-                ? (certStatus.daysUntil < 0 ? `${Math.abs(certStatus.daysUntil)} days overdue` : `${certStatus.daysUntil} days remaining`)
-                : "—"}
-            </div>
-          </div>
-          <div style={{ flex: 1, minWidth: 140, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
-            <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Next Step</div>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>
-              {certStatus.color === "danger" ? "Submit now" : certStatus.color === "warn" ? "Submit soon" : "All good"}
-            </div>
-          </div>
-        </div>
       </div>
 
       {(() => {
@@ -10070,7 +10027,7 @@ export default function App() {
       const myMaint = rc?.unit ? maintenance.filter(m => m.unit === rc.unit) : maintenance;
       const myThreads = rc?.id ? threads.filter(t => t.type === "broadcast" || t.participants.includes(rc.id)) : threads;
       switch (page) {
-        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} messages={messages} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
+        case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} messages={messages} unitInspections={unitInspections} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
         case "maintenance": return <ResidentMaintenance mobile={mobile} maintenance={myMaint} onSubmit={addMaintenanceN} onUpdate={updateMaintenanceN} rc={rc} />;
         case "rent": return <RentPayments mobile={mobile} rc={rc} />;
         case "recert": return <IncomeCertification role="resident" mobile={mobile} selectedProperty={selectedProperty} rc={rc} pushNotif={pushNotif} />;
@@ -10078,7 +10035,7 @@ export default function App() {
         case "inspections": return <Inspections role="resident" mobile={mobile} unitInspections={unitInspections} rc={rc} staffMembers={staffMembers} />;
         case "profile": return <ResidentProfile mobile={mobile} commPrefs={commPrefs} setCommPrefs={setCommPrefs} emergencyContacts={emergencyContacts} onUpdateEmergencyContacts={updateEmergencyContacts} rc={rc} />;
         case "messages": return <Communications role="resident" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={myThreads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} rc={rc} />;
-        default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} messages={messages} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
+        default: return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} messages={messages} unitInspections={unitInspections} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
       }
     }
     if (role === "admin") {
@@ -10118,7 +10075,7 @@ export default function App() {
         default: return <MaintenanceDashboard mobile={mobile} maintenance={maintenance} notifications={roleNotifs} profile={profile} staffMembers={staffMembers} threads={threads} onOpenWorkOrder={(id) => { setPendingMaintenanceId(id); setPage("work-orders"); }} onOpenMessages={() => setPage("messages")} onNavigateTo={setPage} />;
       }
     }
-    return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} messages={messages} notifications={roleNotifs} onNavigate={handleNav} />;
+    return <ResidentDashboard mobile={mobile} maintenance={maintenance} threads={threads} messages={messages} unitInspections={unitInspections} notifications={roleNotifs} onNavigate={handleNav} />;
   };
 
   const sidebarContent = (
