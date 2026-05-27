@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -3047,15 +3047,21 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
   const myContacts = emergencyContacts[rc?.id || ""] || [];
   const [householdMembers, setHouseholdMembers] = useState([]);
   const [loadingHousehold, setLoadingHousehold] = useState(false);
+  const [showAddHh, setShowAddHh] = useState(false);
+  const [hhForm, setHhForm] = useState({ name: "", relationship: "Spouse", dob: "", phone: "", email: "" });
+  const [editingHh, setEditingHh] = useState(null);
+  const [editHhForm, setEditHhForm] = useState({});
 
+  // fetchHouseholdMembers expects the resident UUID, not the slug
+  const residentUuid = rc?._uuid || null;
   useEffect(() => {
-    if (!rc?.id) return;
+    if (!residentUuid) { setHouseholdMembers([]); return; }
     setLoadingHousehold(true);
-    fetchHouseholdMembers(rc.id).then(members => {
+    fetchHouseholdMembers(residentUuid).then(members => {
       setHouseholdMembers(members || []);
       setLoadingHousehold(false);
     }).catch(() => setLoadingHousehold(false));
-  }, [rc?.id]);
+  }, [residentUuid]);
 
   const saveContact = async () => {
     try {
@@ -3191,28 +3197,107 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
       )}
 
       {tab === "Household" && (
-        <div style={s.card}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Household Members</div>
-          {loadingHousehold ? (
-            <div style={{ textAlign: "center", padding: 24, color: T.muted }}>Loading household members...</div>
-          ) : householdMembers.length > 0 ? (
-            <table style={s.table}>
-              <thead><tr>{["Name", "Relationship", "Date of Birth"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-              <tbody>
-                {householdMembers.map((m, i) => (
-                  <tr key={m.id || i}>
-                    <td style={s.td}><span style={{ fontWeight: 600 }}>{m.name}</span></td>
-                    <td style={s.td}>{m.relationship}</td>
-                    <td style={s.td}>{m.date_of_birth || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <EmptyState icon="👥" text="No household members on file. Contact management to update your household composition." />
-          )}
-          <div style={{ marginTop: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm, fontSize: 12, color: T.muted }}>
-            Household composition changes require a recertification. Contact management for assistance.
+        <div>
+          <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Add Household Member</div>
+              <button onClick={() => setShowAddHh(v => !v)} style={{ ...s.btn(showAddHh ? "ghost" : "primary"), fontSize: 13, padding: "8px 14px" }}>
+                {showAddHh ? "Cancel" : "➕ Add Member"}
+              </button>
+            </div>
+            <p style={{ fontSize: 12, color: T.muted, marginTop: 0, marginBottom: showAddHh ? 14 : 0 }}>
+              Spouses, children, and other people living in your unit. Updating here keeps your household info current between annual certifications.
+            </p>
+            {showAddHh && (
+              <div style={{ ...s.grid("1fr 1fr", mobile), gap: 12, marginTop: 4 }}>
+                <div><label style={s.label}>Full Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={hhForm.name} onChange={e => setHhForm(f => ({ ...f, name: e.target.value }))} /></div>
+                <div><label style={s.label}>Relationship</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={hhForm.relationship} onChange={e => setHhForm(f => ({ ...f, relationship: e.target.value }))}><option>Spouse</option><option>Partner</option><option>Child</option><option>Parent</option><option>Sibling</option><option>Roommate</option><option>Other</option></select></div>
+                <div><label style={s.label}>Date of Birth</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={hhForm.dob} onChange={e => setHhForm(f => ({ ...f, dob: e.target.value }))} /></div>
+                <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="(415) 555-0000" value={hhForm.phone} onChange={e => setHhForm(f => ({ ...f, phone: e.target.value }))} /></div>
+                <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} placeholder="email@example.com" value={hhForm.email} onChange={e => setHhForm(f => ({ ...f, email: e.target.value }))} /></div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <button disabled={!hhForm.name.trim() || !residentUuid} onClick={async () => {
+                    try {
+                      const newMem = await insertHouseholdMember({ residentId: residentUuid, name: hhForm.name.trim(), relationship: hhForm.relationship, phone: hhForm.phone, email: hhForm.email, dob: hhForm.dob });
+                      setHouseholdMembers(prev => [...prev, newMem]);
+                      setHhForm({ name: "", relationship: "Spouse", dob: "", phone: "", email: "" });
+                      setShowAddHh(false);
+                      showSuccess(`Added ${newMem.name}`);
+                    } catch (err) { showSuccess("Error: " + err.message); }
+                  }} style={{ ...s.mBtn("primary", mobile) }}>Save Member</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Household Members ({householdMembers.length})</div>
+            {loadingHousehold ? (
+              <div style={{ textAlign: "center", padding: 24, color: T.muted }}>Loading household members...</div>
+            ) : householdMembers.length > 0 ? (
+              <table style={s.table}>
+                <thead><tr>{["Name", "Relationship", "Date of Birth", "Phone", "Email", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {householdMembers.map((m) => {
+                    const isEditing = editingHh === m.id;
+                    if (isEditing) {
+                      return (
+                        <tr key={m.id} style={{ background: T.accentDim }}>
+                          <td style={s.td}><input value={editHhForm.name || ""} onChange={e => setEditHhForm(f => ({ ...f, name: e.target.value }))} style={{ ...s.input, padding: "4px 6px", fontSize: 13, width: "100%" }} /></td>
+                          <td style={s.td}>
+                            <select value={editHhForm.relationship || "Spouse"} onChange={e => setEditHhForm(f => ({ ...f, relationship: e.target.value }))} style={{ ...s.select, fontSize: 12, padding: "2px 6px" }}>
+                              <option>Spouse</option><option>Partner</option><option>Child</option><option>Parent</option><option>Sibling</option><option>Roommate</option><option>Other</option>
+                            </select>
+                          </td>
+                          <td style={s.td}><input type="date" value={editHhForm.dob || ""} onChange={e => setEditHhForm(f => ({ ...f, dob: e.target.value }))} style={{ ...s.input, padding: "4px 6px", fontSize: 13 }} /></td>
+                          <td style={s.td}><input value={editHhForm.phone || ""} onChange={e => setEditHhForm(f => ({ ...f, phone: e.target.value }))} placeholder="(415) 555-0000" style={{ ...s.input, padding: "4px 6px", fontSize: 13, width: "100%" }} /></td>
+                          <td style={s.td}><input value={editHhForm.email || ""} onChange={e => setEditHhForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" style={{ ...s.input, padding: "4px 6px", fontSize: 13, width: "100%" }} /></td>
+                          <td style={s.td}>
+                            <button style={{ ...s.btn("primary"), fontSize: 12, padding: "2px 8px", marginRight: 4 }} onClick={async () => {
+                              try {
+                                await updateHouseholdMember(m.id, editHhForm);
+                                setHouseholdMembers(prev => prev.map(x => x.id === m.id ? { ...x, name: editHhForm.name, relationship: editHhForm.relationship, date_of_birth: editHhForm.dob || null, phone: editHhForm.phone || null, email: editHhForm.email || null } : x));
+                                setEditingHh(null);
+                                showSuccess("Updated");
+                              } catch (err) { showSuccess("Error: " + err.message); }
+                            }}>Save</button>
+                            <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px" }} onClick={() => setEditingHh(null)}>Cancel</button>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return (
+                      <tr key={m.id}>
+                        <td style={s.td}><span style={{ fontWeight: 600 }}>{m.name}</span></td>
+                        <td style={s.td}>{m.relationship}</td>
+                        <td style={s.td}>{m.date_of_birth || "—"}</td>
+                        <td style={s.td}><span style={{ fontSize: 12 }}>{m.phone || "—"}</span></td>
+                        <td style={s.td}><span style={{ fontSize: 12 }}>{m.email || "—"}</span></td>
+                        <td style={s.td}>
+                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "2px 8px", marginRight: 4 }} onClick={() => {
+                            setEditingHh(m.id);
+                            setEditHhForm({ name: m.name, relationship: m.relationship, dob: m.date_of_birth || "", phone: m.phone || "", email: m.email || "" });
+                          }}>Edit</button>
+                          <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 12, padding: "2px 8px" }} onClick={async () => {
+                            if (!confirm(`Remove ${m.name} from your household?`)) return;
+                            try {
+                              await deleteHouseholdMember(m.id);
+                              setHouseholdMembers(prev => prev.filter(x => x.id !== m.id));
+                              showSuccess(`${m.name} removed`);
+                            } catch (err) { showSuccess("Error: " + err.message); }
+                          }}>Remove</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              <EmptyState icon="👥" text="No household members on file. Use the form above to add anyone living in your unit." />
+            )}
+            <div style={{ marginTop: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm, fontSize: 12, color: T.muted }}>
+              Changes are saved immediately. The next time you complete an income certification, your updated household will be reflected automatically.
+            </div>
           </div>
         </div>
       )}
@@ -9770,10 +9855,10 @@ export default function App() {
     // Admin viewing as a specific resident
     if (actualRole === "admin" && viewAsRole === "resident" && viewAsResident) {
       const r = LIVE_RESIDENTS.find(x => x.id === viewAsResident || x._uuid === viewAsResident || x.slug === viewAsResident);
-      if (r) return { id: r.id, name: r.name, firstName: r.name?.split(" ")[0], unit: r.unit, propertyId: r.propertyId, email: r.email, phone: r.phone };
+      if (r) return { id: r.id, _uuid: r._uuid, name: r.name, firstName: r.name?.split(" ")[0], unit: r.unit, propertyId: r.propertyId, email: r.email, phone: r.phone };
     }
     if (profile?.role === "resident" && profile.residentSlug) {
-      return { id: profile.residentSlug, name: profile.residentName, firstName: profile.residentName?.split(" ")[0], unit: profile.unit, propertyId: profile.propertySlug };
+      return { id: profile.residentSlug, _uuid: profile.residentId, name: profile.residentName, firstName: profile.residentName?.split(" ")[0], unit: profile.unit, propertyId: profile.propertySlug };
     }
     // Resident not linked to a resident record — show minimal context
     return { id: "", name: profile?.displayName || "Resident", firstName: profile?.displayName?.split(" ")[0] || "Resident", unit: "—", propertyId: "" };

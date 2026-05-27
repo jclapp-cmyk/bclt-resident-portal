@@ -1137,6 +1137,19 @@ export async function insertHouseholdMember(member) {
   return data;
 }
 
+export async function updateHouseholdMember(id, changes) {
+  const mapped = {};
+  if (changes.name !== undefined) mapped.name = changes.name;
+  if (changes.relationship !== undefined) mapped.relationship = changes.relationship;
+  if (changes.phone !== undefined) mapped.phone = changes.phone || null;
+  if (changes.email !== undefined) mapped.email = changes.email || null;
+  if (changes.dob !== undefined) mapped.date_of_birth = changes.dob || null;
+  if (changes.isAdult !== undefined) mapped.is_adult = changes.isAdult;
+  if (changes.notes !== undefined) mapped.notes = changes.notes || null;
+  const { error } = await supabase.from('household_members').update(mapped).eq('id', id);
+  if (error) throw error;
+}
+
 export async function deleteHouseholdMember(id) {
   const { error } = await supabase.from('household_members').delete().eq('id', id);
   if (error) throw error;
