@@ -752,15 +752,25 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
         {(() => {
           const fmt = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : null;
           let value, sub, accent;
-          if (lastCert) {
-            const isCurrent = certStatus.status === "current" || certStatus.status === "ok";
+          if (lastCert && lastCertDate) {
+            // Anniversary-based "next due": one year after the last verification
+            const nextDue = new Date(lastCertDate);
+            nextDue.setFullYear(nextDue.getFullYear() + 1);
+            const daysUntilNext = Math.ceil((nextDue - new Date()) / 86400000);
             value = `Verified ${fmt(lastCertDate)}`;
-            sub = isCurrent
-              ? (certStatus.daysUntil != null ? `Next due in ${certStatus.daysUntil} days` : "Up to date")
-              : (certStatus.daysUntil != null && certStatus.daysUntil < 0
-                  ? `Overdue by ${Math.abs(certStatus.daysUntil)} days`
-                  : `Due in ${certStatus.daysUntil}d`);
-            accent = isCurrent ? T.success : (certStatus.color === "danger" ? T.danger : T.warn);
+            if (daysUntilNext < 0) {
+              sub = `Overdue by ${Math.abs(daysUntilNext)} days`;
+              accent = T.danger;
+            } else if (daysUntilNext <= 30) {
+              sub = `Due in ${daysUntilNext} day${daysUntilNext === 1 ? "" : "s"}`;
+              accent = T.danger;
+            } else if (daysUntilNext <= 60) {
+              sub = `Due in ${daysUntilNext} days`;
+              accent = T.warn;
+            } else {
+              sub = `Next due in ${daysUntilNext} days`;
+              accent = T.success;
+            }
           } else {
             value = "Verification Required";
             sub = "Complete your annual income update";
