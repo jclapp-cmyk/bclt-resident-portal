@@ -5277,7 +5277,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
   // Reset sub-tab when top-tab flips
   useEffect(() => { if (!isResident) setTab(subTabs[0]); }, [topTab]);
   const [success, showSuccess] = useSuccess();
-  const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", timeWindow: "", inspector: "", notify: "Yes — 48hr notice" });
+  const [schedForm, setSchedForm] = useState({ category: "", unit: "", date: "", timeWindow: "", inspector: "", notify: "Yes — 24 hour notice" });
   const [regSchedForm, setRegSchedForm] = useState({ type: "HQS", authority: "", propertyId: "", date: "", timeWindow: "", nextDue: "", units: "", notifyResidents: true });
   const [selectedInsp, setSelectedInsp] = useState(null);
   const [selectedReg, setSelectedReg] = useState(null);
@@ -5375,15 +5375,24 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
               <div><label style={s.label}>Unit</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.unit} onChange={e => setSchedForm(p => ({ ...p, unit: e.target.value }))}><option value="">Select unit...</option>{unitOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
               <div><label style={s.label}>Date</label><input style={s.mInput(mobile)} type="date" value={schedForm.date} onChange={e => setSchedForm(p => ({ ...p, date: e.target.value }))} /></div>
             </div>
-            <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
+            <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 6 }}>
               <div><label style={s.label}>Time / Window</label><input style={s.mInput(mobile)} placeholder="e.g. 9am–12pm or 10:30 AM" value={schedForm.timeWindow} onChange={e => setSchedForm(p => ({ ...p, timeWindow: e.target.value }))} /></div>
               <div><label style={s.label}>Inspector</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.inspector} onChange={e => setSchedForm(p => ({ ...p, inspector: e.target.value }))}>{inspectorOptions.map(n => <option key={n} value={n}>{n}</option>)}<option value="External Vendor">External Vendor</option></select></div>
-              <div><label style={s.label}>Notify Resident</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.notify} onChange={e => setSchedForm(p => ({ ...p, notify: e.target.value }))}><option>Yes — 48hr notice</option><option>Yes — 24hr notice</option><option>No notification</option></select></div>
+              <div>
+                <label style={s.label}>Notify Resident</label>
+                <select style={{ ...s.mSelect(mobile), width: "100%" }} value={schedForm.notify} onChange={e => setSchedForm(p => ({ ...p, notify: e.target.value }))}>
+                  <option value="Yes — 24 hour notice">Yes — 24 hour notice</option>
+                  <option value="No">No</option>
+                </select>
+              </div>
             </div>
-            <button style={s.btn()} onClick={() => {
+            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14, marginLeft: 2 }}>
+              <strong>Yes</strong> sends an email to the resident with the inspection details. <strong>No</strong> means nothing is sent.
+            </div>
+            <button style={s.btn()} onClick={async () => {
               if (!schedForm.category || !schedForm.date || !schedForm.unit) { showSuccess("Please select a category, unit, and date"); return; }
               const schedResident = LIVE_RESIDENTS.find(r => r.unit === schedForm.unit);
-              onSchedule({
+              const inspectionRecord = {
                 id: `UI-${Date.now()}`,
                 unit: schedForm.unit,
                 propertyId: schedResident?.propertyId || LIVE_PROPERTIES[0]?.id || "wharf",
@@ -5395,9 +5404,32 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 score: null,
                 failedItems: [],
                 notes: `Notification: ${schedForm.notify}`,
-              });
-              setSchedForm({ category: "", unit: "", date: "", timeWindow: "", inspector: "", notify: "Yes — 48hr notice" });
-              showSuccess("Inspection scheduled!");
+              };
+              onSchedule(inspectionRecord);
+
+              // Send the resident a heads-up email when "Yes" is selected
+              if (schedForm.notify === "Yes — 24 hour notice" && schedResident?.email) {
+                const property = LIVE_PROPERTIES.find(p => p.id === inspectionRecord.propertyId);
+                const propName = property?.name || "your building";
+                const whenStr = `${schedForm.date}${schedForm.timeWindow ? ` · ${schedForm.timeWindow}` : ""}`;
+                const subject = `Heads up: ${schedForm.category} inspection on ${schedForm.date}`;
+                const body =
+                  `<p>Hi${schedResident.firstName ? ` ${schedResident.firstName}` : ""},</p>` +
+                  `<p>This is a 24-hour notice that a <strong>${schedForm.category}</strong> inspection has been scheduled for your unit (${schedForm.unit}) at <strong>${propName}</strong> on <strong>${whenStr}</strong>.</p>` +
+                  (schedForm.inspector ? `<p>The inspection will be conducted by <strong>${schedForm.inspector}</strong>.</p>` : "") +
+                  `<p>Please ensure access to your unit. If you need to reschedule or have questions, just reply to this email or reach out to the BCLT Team.</p>` +
+                  `<p>Thanks,<br>The BCLT Team</p>`;
+                try {
+                  await sendNotification("custom", { to: schedResident.email, subject, body });
+                  showSuccess(`Inspection scheduled — notice sent to ${schedResident.email}`);
+                } catch (err) {
+                  showSuccess(`Inspection scheduled, but the notice email failed to send: ${err.message}`);
+                }
+              } else {
+                showSuccess(schedForm.notify === "No" ? "Inspection scheduled — no notice sent" : "Inspection scheduled");
+              }
+
+              setSchedForm({ category: "", unit: "", date: "", timeWindow: "", inspector: "", notify: "Yes — 24 hour notice" });
             }}>Schedule Inspection</button>
           </div>
 
