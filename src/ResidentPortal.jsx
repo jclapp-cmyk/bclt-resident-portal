@@ -5412,23 +5412,65 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 return; // stop here — don't send notification if save failed
               }
 
-              // Send the resident a heads-up email when "Yes" is selected
-              if (schedForm.notify === "Yes — 24 hour notice" && schedResident?.email) {
+              // Send the resident a heads-up email + portal message when "Yes" is selected
+              if (schedForm.notify === "Yes — 24 hour notice" && schedResident) {
                 const property = LIVE_PROPERTIES.find(p => p.id === inspectionRecord.propertyId);
                 const propName = property?.name || "your building";
                 const whenStr = `${schedForm.date}${schedForm.timeWindow ? ` · ${schedForm.timeWindow}` : ""}`;
                 const subject = `Heads up: ${schedForm.category} inspection on ${schedForm.date}`;
-                const body =
+                const htmlBody =
                   `<p>Hi${schedResident.firstName ? ` ${schedResident.firstName}` : ""},</p>` +
                   `<p>This is a 24-hour notice that a <strong>${schedForm.category}</strong> inspection has been scheduled for your unit (${schedForm.unit}) at <strong>${propName}</strong> on <strong>${whenStr}</strong>.</p>` +
                   (schedForm.inspector ? `<p>The inspection will be conducted by <strong>${schedForm.inspector}</strong>.</p>` : "") +
                   `<p>Please ensure access to your unit. If you need to reschedule or have questions, just reply to this email or reach out to the BCLT Team.</p>` +
                   `<p>Thanks,<br>The BCLT Team</p>`;
+                // Plain-text version for the portal thread (no HTML tags)
+                const plainBody =
+                  `This is a 24-hour notice that a ${schedForm.category} inspection has been scheduled for your unit (${schedForm.unit}) at ${propName} on ${whenStr}.` +
+                  (schedForm.inspector ? `\n\nThe inspection will be conducted by ${schedForm.inspector}.` : "") +
+                  `\n\nPlease ensure access to your unit. If you need to reschedule or have questions, just reply here or reach out to the BCLT Team.`;
+
+                // 1. Post to the resident's portal Messages (in-app thread)
+                const threadCode = `THR-INSP-${Date.now()}`;
+                let portalOk = false;
                 try {
-                  await sendNotification("custom", { to: schedResident.email, subject, body });
-                  showSuccess(`Inspection scheduled — notice sent to ${schedResident.email}`);
-                } catch (err) {
-                  showSuccess(`Inspection scheduled, but the notice email failed to send: ${err.message}`);
+                  await insertThread({
+                    id: threadCode,
+                    participants: [schedResident.id],
+                    subject,
+                    lastMessage: plainBody.slice(0, 200),
+                    lastDate: new Date().toISOString(),
+                    unread: 1,
+                    channel: "email",
+                    type: "direct",
+                  });
+                  await insertMessage({
+                    id: `MSG-${Date.now()}`,
+                    threadId: threadCode,
+                    from: "admin",
+                    body: plainBody,
+                    date: new Date().toISOString(),
+                  });
+                  portalOk = true;
+                } catch (err) { console.warn("Portal message create failed:", err); }
+
+                // 2. Send the email
+                let emailOk = false;
+                if (schedResident.email) {
+                  try {
+                    await sendNotification("custom", { to: schedResident.email, subject, body: htmlBody, threadCode });
+                    emailOk = true;
+                  } catch (err) { console.warn("Inspection email failed:", err); }
+                }
+
+                if (emailOk && portalOk) {
+                  showSuccess(`Inspection scheduled — email + portal message sent to ${schedResident.email || schedResident.name}`);
+                } else if (emailOk) {
+                  showSuccess(`Inspection scheduled — email sent to ${schedResident.email} (portal message failed)`);
+                } else if (portalOk) {
+                  showSuccess(`Inspection scheduled — portal message posted (email ${schedResident.email ? "failed" : "skipped, no address on file"})`);
+                } else {
+                  showSuccess("Inspection scheduled, but neither email nor portal message went out — check console");
                 }
               } else {
                 showSuccess(schedForm.notify === "No" ? "Inspection scheduled — no notice sent" : "Inspection scheduled");
