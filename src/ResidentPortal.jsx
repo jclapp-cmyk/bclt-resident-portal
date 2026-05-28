@@ -7447,10 +7447,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
           <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
             <div>
               <label style={s.label}>Send to</label>
-              <select style={{ ...s.select, width: "100%" }} value={composeData.to || "management"} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))}>
-                <option value="management">BCLT Management</option>
+              <select style={{ ...s.select, width: "100%" }} value={composeData.to || "property_manager"} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))}>
                 <option value="property_manager">Property Manager</option>
-                <option value="maintenance">Maintenance Team</option>
                 <option value="rent">Rent / Billing</option>
               </select>
             </div>
@@ -7478,9 +7476,9 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               setSending(true);
               const threadId = `THR-${Date.now()}`;
               const now = new Date().toISOString();
-              const recipientKey = composeData.to || "management";
-              const recipientLabels = { management: "BCLT Management", property_manager: "Property Manager", maintenance: "Maintenance Team", rent: "Rent / Billing" };
-              const recipientLabel = recipientLabels[recipientKey] || "BCLT Management";
+              const recipientKey = composeData.to || "property_manager";
+              const recipientLabels = { property_manager: "Property Manager", rent: "Rent / Billing" };
+              const recipientLabel = recipientLabels[recipientKey] || "Property Manager";
               const taggedSubject = `[${recipientLabel}] ${composeData.subject.trim()}`;
               // Upload attachments (if any). HEIC images get converted to JPEG first.
               const uploaded = [];
