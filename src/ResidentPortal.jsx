@@ -3021,6 +3021,7 @@ const formatFileSize = (bytes) => {
 };
 
 const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDelete = false, residentSlug }) => {
+  const { t } = useI18n();
   const [showUpload, setShowUpload] = useState(false);
   const [docType, setDocType] = useState("lease");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -3060,25 +3061,25 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
   return (
     <div style={s.card}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, fontSize: 15 }}>Lease Documents</div>
-        {canUpload && <button style={s.btn()} onClick={() => setShowUpload(!showUpload)}>{showUpload ? "Cancel" : "+ Upload"}</button>}
+        <div style={{ fontWeight: 700, fontSize: 15 }}>{t("leasedocs_title")}</div>
+        {canUpload && <button style={s.btn()} onClick={() => setShowUpload(!showUpload)}>{showUpload ? t("leasedocs_cancel") : `+ ${t("leasedocs_upload")}`}</button>}
       </div>
       {showUpload && (
         <div style={{ padding: 14, background: T.bg, borderRadius: T.radiusSm, marginBottom: 14 }}>
           <div style={{ ...s.grid("2fr 1fr", false), gap: 10, marginBottom: 10 }}>
             <div>
-              <label style={s.label}>Choose File</label>
+              <label style={s.label}>{t("leasedocs_choose_file")}</label>
               <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={e => setSelectedFile(e.target.files?.[0] || null)}
                 style={{ fontSize: 13, color: T.text }} />
               {selectedFile && <div style={{ fontSize: 12, color: T.muted, marginTop: 4 }}>{selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)</div>}
             </div>
-            <div><label style={s.label}>Type</label><select style={{ ...s.select, width: "100%" }} value={docType} onChange={e => setDocType(e.target.value)}>{Object.entries(LEASE_DOC_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+            <div><label style={s.label}>{t("leasedocs_doc_type")}</label><select style={{ ...s.select, width: "100%" }} value={docType} onChange={e => setDocType(e.target.value)}>{Object.entries(LEASE_DOC_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           </div>
-          <button style={s.btn()} disabled={!selectedFile || uploading} onClick={handleUpload}>{uploading ? "Uploading..." : "Upload Document"}</button>
+          <button style={s.btn()} disabled={!selectedFile || uploading} onClick={handleUpload}>{uploading ? t("leasedocs_uploading") : t("leasedocs_upload")}</button>
         </div>
       )}
       {sorted.length === 0 ? (
-        <EmptyState icon="📄" text="No documents uploaded yet" />
+        <EmptyState icon="📄" text={t("leasedocs_empty")} />
       ) : (
         sorted.map(doc => (
           <div key={doc.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.borderLight}` }}>
@@ -3094,8 +3095,8 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
                 if (doc.storagePath) {
                   try { const url = await getLeaseFileUrl(doc.storagePath); if (url) window.open(url, "_blank"); else alert("File not found"); } catch { alert("Error opening file"); }
                 } else { alert("No file stored — metadata only"); }
-              }}>View</button>
-              {canDelete && onDelete && <button style={{ ...s.btn("danger"), padding: "4px 10px", fontSize: 12 }} onClick={() => onDelete(doc.id)}>Delete</button>}
+              }}>{t("leasedocs_download")}</button>
+              {canDelete && onDelete && <button style={{ ...s.btn("danger"), padding: "4px 10px", fontSize: 12 }} onClick={() => onDelete(doc.id)}>{t("leasedocs_delete")}</button>}
             </div>
           </div>
         ))
@@ -3140,7 +3141,7 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("unit_appliance_inv")}</div>
         <table style={s.table}>
-          <thead><tr>{["Appliance", "Make", "Model", "Age", "Warranty"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+          <thead><tr>{[t("appl_appliance"), t("appl_make"), t("appl_model"), t("appl_age"), t("appl_warranty")].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>
             {u.appliances.map((a, i) => (
               <tr key={i}><td style={s.td}>{a.name}</td><td style={s.td}>{a.make}</td><td style={s.td}>{a.model}</td><td style={s.td}>{a.age}</td><td style={s.td}><span style={s.badge(a.warranty === "Active" ? T.successDim : T.dangerDim, a.warranty === "Active" ? T.success : T.danger)}>{a.warranty}</span></td></tr>
@@ -3150,17 +3151,17 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("unit_last_inspection")}</div>
-        <DetailRow label="Date" value={u.lastInspection?.date || "—"} />
-        <DetailRow label="Type" value={u.lastInspection?.type || "—"} />
-        <DetailRow label="Result" value={u.lastInspection?.result || "—"} accent={u.lastInspection?.result === "Pass" ? T.success : T.danger} />
+        <DetailRow label={t("insp_date")} value={u.lastInspection?.date || "—"} />
+        <DetailRow label={t("insp_type")} value={u.lastInspection?.type || "—"} />
+        <DetailRow label={t("insp_result")} value={u.lastInspection?.result || "—"} accent={u.lastInspection?.result === "Pass" ? T.success : T.danger} />
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("unit_property_mgmt")}</div>
         {(() => { const prop = getProperty(rc?.propertyId); return (<>
-          <DetailRow label="Manager" value={prop?.manager || "—"} />
+          <DetailRow label={t("propmgmt_manager")} value={prop?.manager || "—"} />
           <DetailRow label={t("profile_contact_phone")} value={prop?.managerPhone || "—"} />
           <DetailRow label={t("profile_contact_email")} value={prop?.managerEmail || "—"} />
-          <DetailRow label="Office Hours" value={prop?.officeHours || "—"} />
+          <DetailRow label={t("propmgmt_office_hours")} value={prop?.officeHours || "—"} />
         </>); })()}
       </div>
       <LeaseDocumentsPanel docs={residentDocs} onUpload={handleUpload} canUpload={true} canDelete={false} residentSlug={rc?.id} />

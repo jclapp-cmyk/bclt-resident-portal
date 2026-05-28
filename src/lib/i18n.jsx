@@ -255,6 +255,36 @@ export const TRANSLATIONS = {
     lease_type: "Lease Type",
     lease_type_fixed: "Fixed Term",
     lease_rent_breakdown: "Rent Breakdown",
+
+    // ── Appliance inventory + Last Inspection + Property Management ──
+    appl_appliance: "Appliance",
+    appl_make: "Make",
+    appl_model: "Model",
+    appl_age: "Age",
+    appl_warranty: "Warranty",
+    insp_date: "Date",
+    insp_type: "Type",
+    insp_result: "Result",
+    propmgmt_manager: "Manager",
+    propmgmt_office_hours: "Office Hours",
+
+    // ── Lease Documents panel ──
+    leasedocs_title: "Lease Documents",
+    leasedocs_upload: "Upload Document",
+    leasedocs_cancel: "Cancel",
+    leasedocs_choose_file: "Choose file",
+    leasedocs_doc_type: "Document Type",
+    leasedocs_type_lease: "Lease",
+    leasedocs_type_addendum: "Addendum",
+    leasedocs_type_id: "ID",
+    leasedocs_type_other: "Other",
+    leasedocs_uploading: "Uploading...",
+    leasedocs_upload_btn: "Upload",
+    leasedocs_empty: "No documents on file yet.",
+    leasedocs_uploaded_at: "Uploaded {date}",
+    leasedocs_uploaded_by: "by {who}",
+    leasedocs_download: "Download",
+    leasedocs_delete: "Delete",
   },
 
   es: {
@@ -495,6 +525,36 @@ export const TRANSLATIONS = {
     lease_type: "Tipo de Contrato",
     lease_type_fixed: "Plazo Fijo",
     lease_rent_breakdown: "Desglose de Renta",
+
+    // ── Appliance inventory + Last Inspection + Property Management ──
+    appl_appliance: "Electrodoméstico",
+    appl_make: "Marca",
+    appl_model: "Modelo",
+    appl_age: "Antigüedad",
+    appl_warranty: "Garantía",
+    insp_date: "Fecha",
+    insp_type: "Tipo",
+    insp_result: "Resultado",
+    propmgmt_manager: "Administrador",
+    propmgmt_office_hours: "Horario de Oficina",
+
+    // ── Lease Documents panel ──
+    leasedocs_title: "Documentos del Contrato",
+    leasedocs_upload: "Subir Documento",
+    leasedocs_cancel: "Cancelar",
+    leasedocs_choose_file: "Elegir archivo",
+    leasedocs_doc_type: "Tipo de Documento",
+    leasedocs_type_lease: "Contrato",
+    leasedocs_type_addendum: "Adenda",
+    leasedocs_type_id: "Identificación",
+    leasedocs_type_other: "Otro",
+    leasedocs_uploading: "Subiendo...",
+    leasedocs_upload_btn: "Subir",
+    leasedocs_empty: "Aún no hay documentos registrados.",
+    leasedocs_uploaded_at: "Subido el {date}",
+    leasedocs_uploaded_by: "por {who}",
+    leasedocs_download: "Descargar",
+    leasedocs_delete: "Eliminar",
   },
 };
 
