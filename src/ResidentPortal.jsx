@@ -1176,6 +1176,9 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
   const [statusFilter, setStatusFilter] = useState("active");
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ category: "", priority: "", description: "" });
+  const [editExistingPhotos, setEditExistingPhotos] = useState([]); // photos that came in on the request
+  const [editNewPhotoFiles, setEditNewPhotoFiles] = useState([]); // newly-picked File objects to upload on save
+  const [editSaving, setEditSaving] = useState(false);
   const RESIDENT_EDITABLE_STATUSES = ["new", "submitted", "needs-info"];
   const photoInputRef = useRef(null);
   const allMyRequests = maintenance.filter(m => m.unit === (rc?.unit || ""));
@@ -1361,6 +1364,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
         const isEditing = editingId === m.id;
         const isEditable = RESIDENT_EDITABLE_STATUSES.includes(m.status) && onUpdate;
         if (isEditing) {
+          const totalPhotos = editExistingPhotos.length + editNewPhotoFiles.length;
           return (
             <div key={m.id} style={{ ...s.card, borderLeft: `4px solid ${T.accent}` }}>
               <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>Edit Request #{m.id}</div>
@@ -1382,15 +1386,80 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
                 <label style={s.label}>Description</label>
                 <textarea style={{ ...s.input, width: "100%", minHeight: 80, resize: "vertical" }} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
               </div>
+              {/* Photos: existing + new */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>Photos ({totalPhotos}/5)</label>
+                {editExistingPhotos.length > 0 && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                    {editExistingPhotos.map((p, i) => {
+                      const url = typeof p === "string" ? p : p.url;
+                      const name = typeof p === "string" ? `photo-${i + 1}` : (p.name || `photo-${i + 1}`);
+                      return (
+                        <div key={i} style={{ position: "relative", width: 80, height: 80 }}>
+                          <a href={url} target="_blank" rel="noreferrer" title={name}>
+                            <img src={url} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: T.radiusSm, border: `1px solid ${T.border}` }} />
+                          </a>
+                          <button type="button" onClick={() => setEditExistingPhotos(prev => prev.filter((_, j) => j !== i))} style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: "50%", border: "none", background: T.danger, color: "#fff", cursor: "pointer", fontSize: 12, lineHeight: 1, padding: 0 }} aria-label="Remove">✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {editNewPhotoFiles.length > 0 && (
+                  <div style={{ fontSize: 12, color: T.muted, marginBottom: 8 }}>
+                    {editNewPhotoFiles.map((f, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span>📎 {f.name} ({(f.size / 1024).toFixed(1)} KB)</span>
+                        <button type="button" onClick={() => setEditNewPhotoFiles(prev => prev.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", fontSize: 12 }}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label style={{ ...s.btn("ghost"), display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, cursor: totalPhotos >= 5 ? "not-allowed" : "pointer", opacity: totalPhotos >= 5 ? 0.5 : 1 }}>
+                  📎 Add Photo
+                  <input type="file" multiple accept="image/*,.heic,.heif" disabled={totalPhotos >= 5} style={{ display: "none" }} onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    const imageFiles = files.filter(f => {
+                      const t = (f.type || "").toLowerCase();
+                      const n = (f.name || "").toLowerCase();
+                      return t.startsWith("image/") || t.includes("heic") || t.includes("heif") || n.endsWith(".heic") || n.endsWith(".heif");
+                    });
+                    setEditNewPhotoFiles(prev => [...prev, ...imageFiles].slice(0, 5 - editExistingPhotos.length));
+                    e.target.value = ""; // allow re-picking the same file
+                  }} />
+                </label>
+                <div style={{ fontSize: 11, color: T.muted, marginTop: 6 }}>Up to 5 photos total. iPhone HEIC photos convert automatically.</div>
+              </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button disabled={!editForm.description.trim()} style={s.btn("primary")} onClick={async () => {
+                <button disabled={!editForm.description.trim() || editSaving} style={s.btn("primary")} onClick={async () => {
+                  setEditSaving(true);
                   try {
-                    await onUpdate(m.id, { category: editForm.category, priority: editForm.priority, description: editForm.description.trim() });
+                    // Upload any newly-picked photos
+                    const uploadedPhotos = [];
+                    for (const original of editNewPhotoFiles) {
+                      try {
+                        const file = await convertHeicIfNeeded(original);
+                        const photo = await uploadMaintenancePhoto(file, m.unit || rc?.unit || "unknown");
+                        if (photo?.url) uploadedPhotos.push({ url: photo.url, name: photo.name, path: photo.path });
+                      } catch (err) {
+                        console.warn(`Photo ${original.name} upload failed during edit:`, err);
+                      }
+                    }
+                    const photos = [...editExistingPhotos, ...uploadedPhotos];
+                    await onUpdate(m.id, {
+                      category: editForm.category,
+                      priority: editForm.priority,
+                      description: editForm.description.trim(),
+                      photos,
+                    });
                     setEditingId(null);
-                    showSuccess("Request updated");
-                  } catch (err) { showSuccess("Error: " + err.message); }
-                }}>Save Changes</button>
-                <button style={s.btn("ghost")} onClick={() => setEditingId(null)}>Cancel</button>
+                    setEditNewPhotoFiles([]);
+                    showSuccess(`Request updated${uploadedPhotos.length > 0 ? ` (${uploadedPhotos.length} photo${uploadedPhotos.length > 1 ? "s" : ""} added)` : ""}`);
+                  } catch (err) {
+                    showSuccess("Error: " + err.message);
+                  } finally { setEditSaving(false); }
+                }}>{editSaving ? "Saving..." : "Save Changes"}</button>
+                <button style={s.btn("ghost")} disabled={editSaving} onClick={() => { setEditingId(null); setEditNewPhotoFiles([]); }}>Cancel</button>
               </div>
             </div>
           );
@@ -1409,6 +1478,8 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
                 <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => {
                   setEditingId(m.id);
                   setEditForm({ category: m.category, priority: m.priority, description: m.description });
+                  setEditExistingPhotos(Array.isArray(m.photos) ? m.photos : []);
+                  setEditNewPhotoFiles([]);
                 }}>Edit</button>
               )}
             </div>

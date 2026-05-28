@@ -977,6 +977,7 @@ export async function updateMaintenanceRequest(code, changes) {
   if (changes.rejectionReason !== undefined) updateData.rejection_reason = changes.rejectionReason;
   if (changes.convertedAt !== undefined) updateData.converted_at = changes.convertedAt;
   if (changes.notes !== undefined) updateData.notes = JSON.stringify(changes.notes);
+  if (changes.photos !== undefined) updateData.photos = changes.photos;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase
