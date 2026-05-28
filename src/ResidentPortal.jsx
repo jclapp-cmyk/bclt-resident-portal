@@ -4,6 +4,7 @@ import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocs
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
+import { I18nProvider, useI18n, TRANSLATIONS } from "./lib/i18n";
 
 // HEIC files (default iPhone photo format) don't render in <img> on
 // Chrome/Firefox/Edge — only Safari. Convert client-side to JPEG so
@@ -630,6 +631,7 @@ const BOTTOM_TABS = {
 
 // --- RESIDENT DASHBOARD ---
 const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitInspections = [], notifications, rc, onNavigate }) => {
+  const { t } = useI18n();
   const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
   // Find this resident's most recent approved income certification
   const [myCerts, setMyCerts] = useState([]);
@@ -706,31 +708,31 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
 
   return (
     <div>
-      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Welcome back, {rc?.firstName || "Resident"}</h1>
-      <p style={s.sectionSub}>Unit {rc?.unit || "—"} — {propName}</p>
+      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>{t("dash_welcome", { name: rc?.firstName || "Resident" })}</h1>
+      <p style={s.sectionSub}>{t("dash_unit_at", { unit: rc?.unit || "—", property: propName })}</p>
       {/* 6 uniform tiles, 2 columns × 3 rows on desktop, stacked on mobile */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
         <Tile
           icon="🔧"
-          label="Maintenance"
-          value={openCount === 0 ? "All clear" : `${openCount} Open`}
-          sub={openCount > 0 ? openRequests[0]?.description?.slice(0, 50) || "Tap to view" : "Submit a request anytime"}
+          label={t("tile_maint_label")}
+          value={openCount === 0 ? t("tile_maint_all_clear") : t("tile_maint_open", { count: openCount })}
+          sub={openCount > 0 ? openRequests[0]?.description?.slice(0, 50) || t("tile_maint_tap_view") : t("tile_maint_default_sub")}
           accent={openCount > 0 ? T.warn : T.success}
           onClick={() => onNavigate && onNavigate("maintenance")}
         />
         <Tile
           icon="💳"
-          label="Rent Balance"
+          label={t("tile_rent_label")}
           value={`$${Math.abs(bal).toFixed(2)}`}
-          sub={bal > 0 ? "Outstanding — tap to pay" : "All paid up"}
+          sub={bal > 0 ? t("tile_rent_outstanding") : t("tile_rent_paid")}
           accent={bal > 0 ? T.danger : T.success}
           onClick={() => onNavigate && onNavigate("rent")}
         />
         <Tile
           icon="💬"
-          label="Messages"
-          value={unreadCount > 0 ? `${unreadCount} new` : (recentThreads[0] ? recentThreads[0].subject?.slice(0, 30) : "—")}
-          sub={recentThreads[0] ? `Latest from ${senderForThread(recentThreads[0])}` : "Reach out anytime"}
+          label={t("tile_msg_label")}
+          value={unreadCount > 0 ? t("tile_msg_new", { count: unreadCount }) : (recentThreads[0] ? recentThreads[0].subject?.slice(0, 30) : t("tile_msg_none"))}
+          sub={recentThreads[0] ? t("tile_msg_latest_from", { sender: senderForThread(recentThreads[0]) }) : t("tile_msg_reach_out")}
           accent={unreadCount > 0 ? T.accent : T.success}
           onClick={() => onNavigate && onNavigate("messages")}
         />
@@ -741,9 +743,9 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
           return (
             <Tile
               icon="🔍"
-              label="Inspections"
-              value={next ? next.date : "None scheduled"}
-              sub={next ? `${next.category}${next.timeWindow ? ` · ${next.timeWindow}` : ""}` : "Check inspection history"}
+              label={t("tile_insp_label")}
+              value={next ? next.date : t("tile_insp_none")}
+              sub={next ? `${next.category}${next.timeWindow ? ` · ${next.timeWindow}` : ""}` : t("tile_insp_check_history")}
               accent={next ? T.warn : T.success}
               onClick={() => onNavigate && onNavigate("inspections")}
             />
@@ -757,29 +759,29 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
             const nextDue = new Date(lastCertDate);
             nextDue.setFullYear(nextDue.getFullYear() + 1);
             const daysUntilNext = Math.ceil((nextDue - new Date()) / 86400000);
-            value = `Verified ${fmt(lastCertDate)}`;
+            value = t("tile_cert_verified", { date: fmt(lastCertDate) });
             if (daysUntilNext < 0) {
-              sub = `Overdue by ${Math.abs(daysUntilNext)} days`;
+              sub = t("tile_cert_overdue", { days: Math.abs(daysUntilNext) });
               accent = T.danger;
             } else if (daysUntilNext <= 30) {
-              sub = `Due in ${daysUntilNext} day${daysUntilNext === 1 ? "" : "s"}`;
+              sub = daysUntilNext === 1 ? t("tile_cert_due_in", { days: daysUntilNext }) : t("tile_cert_due_in_plural", { days: daysUntilNext });
               accent = T.danger;
             } else if (daysUntilNext <= 60) {
-              sub = `Due in ${daysUntilNext} days`;
+              sub = t("tile_cert_due_in_plural", { days: daysUntilNext });
               accent = T.warn;
             } else {
-              sub = `Next due in ${daysUntilNext} days`;
+              sub = t("tile_cert_next_due_in", { days: daysUntilNext });
               accent = T.success;
             }
           } else {
-            value = "Verification Required";
-            sub = "Complete your annual income update";
+            value = t("tile_cert_required");
+            sub = t("tile_cert_required_sub");
             accent = T.danger;
           }
           return (
             <Tile
               icon="📋"
-              label="Income Certification"
+              label={t("tile_cert_label")}
               value={value}
               sub={sub}
               accent={accent}
@@ -789,9 +791,9 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
         })()}
         <Tile
           icon="🏠"
-          label="My Unit"
-          value={leaseLabel}
-          sub={ext.leaseEnd ? `Lease ends ${ext.leaseEnd}` : `Unit ${rc?.unit || "—"} · ${propName}`}
+          label={t("tile_unit_label")}
+          value={leaseLabel === "Active" ? t("tile_unit_active") : leaseLabel === "Expired" ? t("tile_unit_expired") : leaseLabel === "Month-to-Month" ? t("tile_unit_mtm") : leaseLabel}
+          sub={ext.leaseEnd ? t("tile_unit_lease_ends", { date: ext.leaseEnd }) : t("tile_unit_at", { unit: rc?.unit || "—", property: propName })}
           accent={leaseExpired ? T.danger : T.success}
           onClick={() => onNavigate && onNavigate("unit")}
         />
@@ -802,25 +804,25 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
         return (
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>My Contact Info</div>
-            <button onClick={() => onNavigate && onNavigate("profile")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: T.accent, fontWeight: 600, padding: 0 }}>Edit in My Profile →</button>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{t("contact_info")}</div>
+            <button onClick={() => onNavigate && onNavigate("profile")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: T.accent, fontWeight: 600, padding: 0 }}>{t("contact_edit_in_profile")}</button>
           </div>
           <div style={{ display: "flex", gap: mobile ? 12 : 20, flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: 150 }}>
-              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Phone</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.phone || "Not set"}</div>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{t("contact_phone")}</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.phone || t("contact_not_set")}</div>
             </div>
             <div style={{ flex: 1, minWidth: 150 }}>
-              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Email</div>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.email || "Not set"}</div>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{t("contact_email")}</div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.email || t("contact_not_set")}</div>
             </div>
             <div style={{ flex: 1, minWidth: 150 }}>
-              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Preferred Contact</div>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{t("contact_preferred")}</div>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{(myRes.preferredChannel || "email").toUpperCase()}</div>
             </div>
             <div style={{ flex: 1, minWidth: 150 }}>
-              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>SMS Consent</div>
-              <div style={{ fontWeight: 600, fontSize: 14, color: myRes.smsConsent ? T.success : T.warn }}>{myRes.smsConsent ? "✓ Opted In" : "Not opted in"}</div>
+              <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{t("contact_sms_consent")}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: myRes.smsConsent ? T.success : T.warn }}>{myRes.smsConsent ? t("contact_opted_in") : t("contact_not_opted_in")}</div>
             </div>
           </div>
         </div>
@@ -10285,6 +10287,34 @@ export default function App() {
   };
 
   const nav = NAV[role] || [];
+
+  // Local t() for App-level UI (sidebar, header). Children inside the
+  // I18nProvider use useI18n() instead. Both share the same active language.
+  const appLang = role === "resident" ? (commPrefs.language || "en") : "en";
+  const tApp = (key, params) => {
+    const dict = TRANSLATIONS[appLang] || TRANSLATIONS.en;
+    let str = (dict[key] !== undefined ? dict[key] : TRANSLATIONS.en[key]);
+    if (str === undefined) return key;
+    if (!params) return str;
+    return str.replace(/\{(\w+)\}/g, (_, k) => (params[k] !== undefined ? params[k] : `{${k}}`));
+  };
+  // Resident nav labels are translated via item.id → translation key
+  const RESIDENT_NAV_KEYS = {
+    dashboard: "nav_dashboard",
+    maintenance: "nav_maintenance",
+    rent: "nav_rent",
+    messages: "nav_messages",
+    recert: "nav_recert",
+    unit: "nav_unit",
+    inspections: "nav_inspections",
+    profile: "nav_profile",
+  };
+  const labelFor = (item) => {
+    if (role !== "resident") return item.label;
+    const key = RESIDENT_NAV_KEYS[item.id];
+    return key ? tApp(key) : item.label;
+  };
+
   const navBadges = {};
   if (role === "admin") {
     navBadges.maintenance = maintenance.filter(m => MAINT_AWAITING(m)).length;
@@ -10445,7 +10475,7 @@ export default function App() {
             minHeight: mobile ? 48 : undefined,
           }}>
             <span style={{ fontSize: mobile ? 18 : 15, width: 22, textAlign: "center" }}>{item.icon}</span>
-            <span style={{ flex: 1 }}>{item.label}</span>
+            <span style={{ flex: 1 }}>{labelFor(item)}</span>
             {navBadges[item.id] > 0 && <span style={{ minWidth: 20, height: 20, borderRadius: 10, background: T.danger, color: T.white, fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{navBadges[item.id]}</span>}
           </button>
         ))}
@@ -10474,7 +10504,12 @@ export default function App() {
   if (authLoading) return <div style={{ ...s.page, ...themeVars, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}><div style={{ color: T.muted, fontSize: 14 }}>Loading...</div></div>;
   if (!authUser || !profile) return <div style={themeVars}><LoginPage /></div>;
 
+  // Resident-only Spanish. Admin/maint always see English regardless
+  // of any residents.preferred_language stored on the resident record.
+  const i18nLang = role === "resident" ? (commPrefs.language || "en") : "en";
+
   return (
+    <I18nProvider initialLang={i18nLang}>
     <div style={{ ...s.page, ...themeVars, display: "flex", flexDirection: mobile ? "column" : "row" }}>
       {/* MOBILE TOP BAR */}
       {mobile && (
@@ -10539,5 +10574,6 @@ export default function App() {
       {/* MOBILE BOTTOM TAB BAR */}
       {mobile && <MobileTabBar role={role} activePage={page} onNavigate={handleNav} navBadges={navBadges} onMoreClick={() => setSidebarOpen(true)} />}
     </div>
+    </I18nProvider>
   );
 }
