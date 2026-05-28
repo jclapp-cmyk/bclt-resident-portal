@@ -209,14 +209,18 @@ const StatCard = ({ label, value, accent = T.accent, mobile, onClick }) => (
 
 const TabBar = ({ tabs, active, onChange, mobile }) => (
   <div style={{ display: "flex", gap: mobile ? 0 : 4, marginBottom: 24, borderBottom: `1px solid ${T.border}`, paddingBottom: 0, overflowX: mobile ? "auto" : "visible", WebkitOverflowScrolling: "touch" }}>
-    {tabs.map(t => (
-      <button key={t} onClick={() => onChange(t)} style={{
-        padding: mobile ? "12px 14px" : "10px 18px", background: "none", border: "none", color: active === t ? T.accent : T.muted,
-        fontWeight: active === t ? 700 : 500, fontSize: mobile ? 13 : 14, cursor: "pointer", whiteSpace: "nowrap",
-        borderBottom: active === t ? `2px solid ${T.accent}` : "2px solid transparent", marginBottom: -1,
+    {tabs.map(tab => {
+      // Tab item can be a string (used as both id and label) or { id, label }
+      const tid = typeof tab === "string" ? tab : tab.id;
+      const tlabel = typeof tab === "string" ? tab : tab.label;
+      return (
+      <button key={tid} onClick={() => onChange(tid)} style={{
+        padding: mobile ? "12px 14px" : "10px 18px", background: "none", border: "none", color: active === tid ? T.accent : T.muted,
+        fontWeight: active === tid ? 700 : 500, fontSize: mobile ? 13 : 14, cursor: "pointer", whiteSpace: "nowrap",
+        borderBottom: active === tid ? `2px solid ${T.accent}` : "2px solid transparent", marginBottom: -1,
         minHeight: mobile ? 44 : undefined, flexShrink: 0,
-      }}>{t}</button>
-    ))}
+      }}>{tlabel}</button>);
+    })}
   </div>
 );
 
@@ -3102,7 +3106,8 @@ const LeaseDocumentsPanel = ({ docs, onUpload, onDelete, canUpload = true, canDe
 
 // --- UNIT DETAILS (Resident) ---
 const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
-  if (!rc || !rc.id) return <div><h1 style={s.sectionTitle}>My Unit</h1><EmptyState icon="🏠" text="Unit information not available. Your profile may not be linked to a unit yet." /></div>;
+  const { t } = useI18n();
+  if (!rc || !rc.id) return <div><h1 style={s.sectionTitle}>{t("unit_title")}</h1><EmptyState icon="🏠" text={t("unit_no_info")} /></div>;
   const ext = LIVE_RESIDENTS_EXTENDED[rc.id] || {};
   const u = { number: rc.unit || "—", bedrooms: ext.bedrooms || 0, bathrooms: 1, sqft: 0, floorPlan: `${ext.bedrooms || 0}BR`, leaseStart: ext.leaseStart || "—", leaseEnd: ext.leaseEnd || "—", rentAmount: ext.rentAmount || 0, tenantPortion: ext.tenantPortion || 0, hapPayment: ext.hapPayment || 0, utilityResponsibility: {}, appliances: [], lastInspection: null };
   const rid = rc?.id || "";
@@ -3114,26 +3119,26 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
 
   return (
     <div>
-      <h1 style={s.sectionTitle}>My Unit — {u.number}</h1>
+      <h1 style={s.sectionTitle}>{t("unit_title")} — {u.number}</h1>
       <p style={s.sectionSub}>{u.bedrooms}BR / {u.bathrooms}BA · {u.sqft} sq ft · {u.floorPlan}</p>
       <div style={s.grid("1fr 1fr", mobile)}>
         <div style={s.card}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Lease Details</div>
-          <DetailRow label="Lease Start" value={u.leaseStart} />
-          <DetailRow label="Lease End" value={u.leaseEnd} />
-          <DetailRow label="Monthly Rent" value={`$${u.rentAmount}`} />
-          <DetailRow label="Tenant Portion" value={`$${u.tenantPortion}`} accent={T.accent} />
-          <DetailRow label="HAP (PHA Pays)" value={`$${u.hapPayment}`} accent={T.info} />
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("unit_lease_details")}</div>
+          <DetailRow label={t("unit_lease_start")} value={u.leaseStart} />
+          <DetailRow label={t("unit_lease_end")} value={u.leaseEnd} />
+          <DetailRow label={t("unit_monthly_rent")} value={`$${u.rentAmount}`} />
+          <DetailRow label={t("unit_tenant_portion")} value={`$${u.tenantPortion}`} accent={T.accent} />
+          <DetailRow label={t("unit_hap_paid")} value={`$${u.hapPayment}`} accent={T.info} />
         </div>
         <div style={s.card}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Utility Responsibility</div>
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("unit_utility_resp")}</div>
           {Object.entries(u.utilityResponsibility).map(([k, v]) => (
             <DetailRow key={k} label={k.charAt(0).toUpperCase() + k.slice(1)} value={v} accent={v === "Tenant" ? T.warn : T.success} />
           ))}
         </div>
       </div>
       <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Appliance Inventory</div>
+        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("unit_appliance_inv")}</div>
         <table style={s.table}>
           <thead><tr>{["Appliance", "Make", "Model", "Age", "Warranty"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
           <tbody>
@@ -3144,17 +3149,17 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
         </table>
       </div>
       <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Last Inspection</div>
+        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("unit_last_inspection")}</div>
         <DetailRow label="Date" value={u.lastInspection?.date || "—"} />
         <DetailRow label="Type" value={u.lastInspection?.type || "—"} />
         <DetailRow label="Result" value={u.lastInspection?.result || "—"} accent={u.lastInspection?.result === "Pass" ? T.success : T.danger} />
       </div>
       <div style={s.card}>
-        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Property Management</div>
+        <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("unit_property_mgmt")}</div>
         {(() => { const prop = getProperty(rc?.propertyId); return (<>
           <DetailRow label="Manager" value={prop?.manager || "—"} />
-          <DetailRow label="Phone" value={prop?.managerPhone || "—"} />
-          <DetailRow label="Email" value={prop?.managerEmail || "—"} />
+          <DetailRow label={t("profile_contact_phone")} value={prop?.managerPhone || "—"} />
+          <DetailRow label={t("profile_contact_email")} value={prop?.managerEmail || "—"} />
           <DetailRow label="Office Hours" value={prop?.officeHours || "—"} />
         </>); })()}
       </div>
@@ -3166,7 +3171,17 @@ const UnitDetails = ({ leaseDocs, setLeaseDocs, mobile, rc }) => {
 
 // --- RESIDENT PROFILE ---
 const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, onUpdateEmergencyContacts, rc }) => {
-  const tabs = ["Contact", "Emergency Contacts", "Household", "Lease Summary", "Preferences"];
+  const { t } = useI18n();
+  // Tab keys are stable English values for state; labels render via t()
+  const TAB_KEYS = ["Contact", "Emergency Contacts", "Household", "Lease Summary", "Preferences"];
+  const TAB_LABEL_KEYS = {
+    "Contact": "profile_tab_contact",
+    "Emergency Contacts": "profile_tab_emergency",
+    "Household": "profile_tab_household",
+    "Lease Summary": "profile_tab_lease",
+    "Preferences": "profile_tab_prefs",
+  };
+  const tabs = TAB_KEYS.map(k => ({ id: k, label: t(TAB_LABEL_KEYS[k]) }));
   const [tab, setTab] = useState(tabs[0]);
   const [editingContact, setEditingContact] = useState(false);
   const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || { phone: "", email: "", name: rc?.name || "Resident", preferredChannel: "email" };
@@ -3235,22 +3250,22 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
 
   return (
     <div>
-      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>My Profile</h1>
-      <p style={s.sectionSub}>{rc?.name || "Resident"} — Unit {rc?.unit || "—"}</p>
+      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>{t("profile_title")}</h1>
+      <p style={s.sectionSub}>{rc?.name || "Resident"} — {t("word_unit")} {rc?.unit || "—"}</p>
       <SuccessMessage message={success} />
       <TabBar tabs={tabs} active={tab} onChange={setTab} mobile={mobile} />
 
       {tab === "Contact" && (
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Contact Information</div>
-            <button style={s.btn(editingContact ? "ghost" : "primary")} onClick={() => setEditingContact(!editingContact)}>{editingContact ? "Cancel" : "Edit"}</button>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{t("profile_contact_info")}</div>
+            <button style={s.btn(editingContact ? "ghost" : "primary")} onClick={() => setEditingContact(!editingContact)}>{editingContact ? t("btn_cancel") : t("btn_edit")}</button>
           </div>
           {editingContact ? (
             <div>
               <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-                <div><label style={s.label}>Phone</label><input style={s.mInput(mobile)} value={contactForm.phone} onChange={e => setContactForm(p => ({ ...p, phone: e.target.value }))} /></div>
-                <div><label style={s.label}>Email</label><input style={s.mInput(mobile)} type="email" value={contactForm.email} onChange={e => setContactForm(p => ({ ...p, email: e.target.value }))} /></div>
+                <div><label style={s.label}>{t("profile_contact_phone")}</label><input style={s.mInput(mobile)} value={contactForm.phone} onChange={e => setContactForm(p => ({ ...p, phone: e.target.value }))} /></div>
+                <div><label style={s.label}>{t("profile_contact_email")}</label><input style={s.mInput(mobile)} type="email" value={contactForm.email} onChange={e => setContactForm(p => ({ ...p, email: e.target.value }))} /></div>
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={s.label}>Preferred Contact Method</label>
@@ -3333,21 +3348,21 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
         <div>
           <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>Add Household Member</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{t("household_add")}</div>
               <button onClick={() => setShowAddHh(v => !v)} style={{ ...s.btn(showAddHh ? "ghost" : "primary"), fontSize: 13, padding: "8px 14px" }}>
-                {showAddHh ? "Cancel" : "➕ Add Member"}
+                {showAddHh ? t("btn_cancel") : `➕ ${t("btn_add")}`}
               </button>
             </div>
             <p style={{ fontSize: 12, color: T.muted, marginTop: 0, marginBottom: showAddHh ? 14 : 0 }}>
-              Spouses, children, and other people living in your unit. Updating here keeps your household info current between annual certifications.
+              {t("household_intro")}
             </p>
             {showAddHh && (
               <div style={{ ...s.grid("1fr 1fr", mobile), gap: 12, marginTop: 4 }}>
-                <div><label style={s.label}>Full Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={hhForm.name} onChange={e => setHhForm(f => ({ ...f, name: e.target.value }))} /></div>
-                <div><label style={s.label}>Relationship</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={hhForm.relationship} onChange={e => setHhForm(f => ({ ...f, relationship: e.target.value }))}><option>Spouse</option><option>Partner</option><option>Child</option><option>Parent</option><option>Sibling</option><option>Roommate</option><option>Other</option></select></div>
-                <div><label style={s.label}>Date of Birth</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={hhForm.dob} onChange={e => setHhForm(f => ({ ...f, dob: e.target.value }))} /></div>
-                <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="(415) 555-0000" value={hhForm.phone} onChange={e => setHhForm(f => ({ ...f, phone: e.target.value }))} /></div>
-                <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} placeholder="email@example.com" value={hhForm.email} onChange={e => setHhForm(f => ({ ...f, email: e.target.value }))} /></div>
+                <div><label style={s.label}>{t("household_full_name")} *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={hhForm.name} onChange={e => setHhForm(f => ({ ...f, name: e.target.value }))} /></div>
+                <div><label style={s.label}>{t("household_relationship")}</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={hhForm.relationship} onChange={e => setHhForm(f => ({ ...f, relationship: e.target.value }))}><option value="Spouse">{t("household_rel_spouse")}</option><option value="Partner">{t("household_rel_partner")}</option><option value="Child">{t("household_rel_child")}</option><option value="Parent">{t("household_rel_parent")}</option><option value="Sibling">{t("household_rel_sibling")}</option><option value="Roommate">{t("household_rel_roommate")}</option><option value="Other">{t("household_rel_other")}</option></select></div>
+                <div><label style={s.label}>{t("household_dob")}</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={hhForm.dob} onChange={e => setHhForm(f => ({ ...f, dob: e.target.value }))} /></div>
+                <div><label style={s.label}>{t("profile_contact_phone")}</label><input style={{ ...s.mInput(mobile), width: "100%" }} placeholder="(415) 555-0000" value={hhForm.phone} onChange={e => setHhForm(f => ({ ...f, phone: e.target.value }))} /></div>
+                <div style={{ gridColumn: "1 / -1" }}><label style={s.label}>{t("profile_contact_email")}</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} placeholder="email@example.com" value={hhForm.email} onChange={e => setHhForm(f => ({ ...f, email: e.target.value }))} /></div>
                 <div style={{ gridColumn: "1 / -1" }}>
                   <button disabled={!hhForm.name.trim() || !residentUuid} onClick={async () => {
                     try {
@@ -3357,19 +3372,19 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
                       setShowAddHh(false);
                       showSuccess(`Added ${newMem.name}`);
                     } catch (err) { showSuccess("Error: " + err.message); }
-                  }} style={{ ...s.mBtn("primary", mobile) }}>Save Member</button>
+                  }} style={{ ...s.mBtn("primary", mobile) }}>{t("btn_save")}</button>
                 </div>
               </div>
             )}
           </div>
 
           <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Household Members ({householdMembers.length})</div>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("household_title")} ({householdMembers.length})</div>
             {loadingHousehold ? (
-              <div style={{ textAlign: "center", padding: 24, color: T.muted }}>Loading household members...</div>
+              <div style={{ textAlign: "center", padding: 24, color: T.muted }}>{t("word_loading")}</div>
             ) : householdMembers.length > 0 ? (
               <table style={s.table}>
-                <thead><tr>{["Name", "Relationship", "Date of Birth", "Phone", "Email", "Actions"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{[t("household_full_name"), t("household_relationship"), t("household_dob"), t("profile_contact_phone"), t("profile_contact_email"), ""].map((h, i) => <th key={i} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {householdMembers.map((m) => {
                     const isEditing = editingHh === m.id;
@@ -3439,16 +3454,16 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
         const ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
         return (
         <div style={s.card}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Lease & Unit Details</div>
-          <DetailRow label="Unit" value={rc?.unit || "—"} />
-          <DetailRow label="Bedrooms" value={ext.bedrooms || "—"} />
-          <DetailRow label="Lease Type" value={ext.leaseType === "month-to-month" ? "Month-to-Month" : "Fixed Term"} />
-          <DetailRow label="Lease Start" value={ext.leaseStart || "—"} />
-          {ext.leaseType !== "month-to-month" && <DetailRow label="Lease End" value={ext.leaseEnd || "—"} />}
-          <div style={{ marginTop: 14, fontWeight: 700, marginBottom: 10, fontSize: 14 }}>Rent Breakdown</div>
-          <DetailRow label="Total Rent" value={ext.rentAmount ? `$${ext.rentAmount}` : "—"} />
-          <DetailRow label="Your Portion" value={ext.tenantPortion ? `$${ext.tenantPortion}` : "—"} accent={T.accent} />
-          <DetailRow label="HAP Payment (PHA)" value={ext.hapPayment ? `$${ext.hapPayment}` : "—"} accent={T.success} />
+          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("lease_unit_details")}</div>
+          <DetailRow label={t("word_unit")} value={rc?.unit || "—"} />
+          <DetailRow label={t("lease_bedrooms")} value={ext.bedrooms || "—"} />
+          <DetailRow label={t("lease_type")} value={ext.leaseType === "month-to-month" ? t("tile_unit_mtm") : t("lease_type_fixed")} />
+          <DetailRow label={t("unit_lease_start")} value={ext.leaseStart || "—"} />
+          {ext.leaseType !== "month-to-month" && <DetailRow label={t("unit_lease_end")} value={ext.leaseEnd || "—"} />}
+          <div style={{ marginTop: 14, fontWeight: 700, marginBottom: 10, fontSize: 14 }}>{t("lease_rent_breakdown")}</div>
+          <DetailRow label={t("lease_total_rent")} value={ext.rentAmount ? `$${ext.rentAmount}` : "—"} />
+          <DetailRow label={t("lease_your_portion")} value={ext.tenantPortion ? `$${ext.tenantPortion}` : "—"} accent={T.accent} />
+          <DetailRow label={t("lease_hap")} value={ext.hapPayment ? `$${ext.hapPayment}` : "—"} accent={T.success} />
         </div>
         );
       })()}

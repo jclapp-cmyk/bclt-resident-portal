@@ -87,6 +87,7 @@ export const TRANSLATIONS = {
     word_yes: "Yes",
     word_no: "No",
     word_loading: "Loading...",
+    word_unit: "Unit",
 
     // ── Maintenance page ──
     maint_title: "Maintenance Requests",
@@ -236,6 +237,13 @@ export const TRANSLATIONS = {
     household_empty: "No household members on file. Use the form above to add anyone living in your unit.",
     household_save_note: "Changes are saved immediately. The next time you complete an income certification, your updated household will be reflected automatically.",
     household_remove_confirm: "Remove {name} from your household?",
+    household_rel_spouse: "Spouse",
+    household_rel_partner: "Partner",
+    household_rel_child: "Child",
+    household_rel_parent: "Parent",
+    household_rel_sibling: "Sibling",
+    household_rel_roommate: "Roommate",
+    household_rel_other: "Other",
     ec_title: "Emergency Contacts",
     ec_add: "Add Emergency Contact",
     ec_empty: "No emergency contacts on file.",
@@ -243,6 +251,10 @@ export const TRANSLATIONS = {
     lease_total_rent: "Total Rent",
     lease_your_portion: "Your Portion",
     lease_hap: "HAP Payment (PHA)",
+    lease_bedrooms: "Bedrooms",
+    lease_type: "Lease Type",
+    lease_type_fixed: "Fixed Term",
+    lease_rent_breakdown: "Rent Breakdown",
   },
 
   es: {
@@ -315,6 +327,7 @@ export const TRANSLATIONS = {
     word_yes: "Sí",
     word_no: "No",
     word_loading: "Cargando...",
+    word_unit: "Unidad",
 
     // ── Maintenance page ──
     maint_title: "Solicitudes de Mantenimiento",
@@ -464,6 +477,13 @@ export const TRANSLATIONS = {
     household_empty: "No hay miembros del hogar registrados. Use el formulario arriba para agregar a quien viva en su unidad.",
     household_save_note: "Los cambios se guardan inmediatamente. La próxima vez que complete una certificación de ingresos, su hogar actualizado se reflejará automáticamente.",
     household_remove_confirm: "¿Eliminar a {name} de su hogar?",
+    household_rel_spouse: "Cónyuge",
+    household_rel_partner: "Pareja",
+    household_rel_child: "Hijo/a",
+    household_rel_parent: "Padre/Madre",
+    household_rel_sibling: "Hermano/a",
+    household_rel_roommate: "Compañero/a de cuarto",
+    household_rel_other: "Otro",
     ec_title: "Contactos de Emergencia",
     ec_add: "Agregar Contacto de Emergencia",
     ec_empty: "No hay contactos de emergencia registrados.",
@@ -471,6 +491,10 @@ export const TRANSLATIONS = {
     lease_total_rent: "Renta Total",
     lease_your_portion: "Su Porción",
     lease_hap: "Pago HAP (PHA)",
+    lease_bedrooms: "Recámaras",
+    lease_type: "Tipo de Contrato",
+    lease_type_fixed: "Plazo Fijo",
+    lease_rent_breakdown: "Desglose de Renta",
   },
 };
 
