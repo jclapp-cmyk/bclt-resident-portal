@@ -1174,6 +1174,9 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
   const [photoFiles, setPhotoFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [statusFilter, setStatusFilter] = useState("active");
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ category: "", priority: "", description: "" });
+  const RESIDENT_EDITABLE_STATUSES = ["new", "submitted", "needs-info"];
   const photoInputRef = useRef(null);
   const allMyRequests = maintenance.filter(m => m.unit === (rc?.unit || ""));
   const myRequests = (() => {
@@ -1354,14 +1357,61 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
       {allMyRequests.length > 0 && myRequests.length === 0 && (
         <EmptyState icon="✅" text={statusFilter === "done" ? "No completed requests yet." : "No active requests right now."} />
       )}
-      {myRequests.map(m => (
+      {myRequests.map(m => {
+        const isEditing = editingId === m.id;
+        const isEditable = RESIDENT_EDITABLE_STATUSES.includes(m.status) && onUpdate;
+        if (isEditing) {
+          return (
+            <div key={m.id} style={{ ...s.card, borderLeft: `4px solid ${T.accent}` }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>Edit Request #{m.id}</div>
+              <div style={{ ...s.grid("1fr 1fr", mobile), gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={s.label}>Category</label>
+                  <select style={{ ...s.mSelect(mobile), width: "100%" }} value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}>
+                    {["Plumbing", "Electrical", "HVAC", "Appliance", "Structural", "Pest", "Other"].map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={s.label}>Urgency</label>
+                  <select style={{ ...s.mSelect(mobile), width: "100%" }} value={editForm.priority} onChange={e => setEditForm(f => ({ ...f, priority: e.target.value }))}>
+                    {["routine", "urgent", "critical"].map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={s.label}>Description</label>
+                <textarea style={{ ...s.input, width: "100%", minHeight: 80, resize: "vertical" }} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button disabled={!editForm.description.trim()} style={s.btn("primary")} onClick={async () => {
+                  try {
+                    await onUpdate(m.id, { category: editForm.category, priority: editForm.priority, description: editForm.description.trim() });
+                    setEditingId(null);
+                    showSuccess("Request updated");
+                  } catch (err) { showSuccess("Error: " + err.message); }
+                }}>Save Changes</button>
+                <button style={s.btn("ghost")} onClick={() => setEditingId(null)}>Cancel</button>
+              </div>
+            </div>
+          );
+        }
+        return (
         <div key={m.id} style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10, gap: 10 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 4 }}>{m.description}</div>
               <div style={{ fontSize: 12, color: T.muted }}>{m.category}</div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}><Badge status={m.priority} type="priority" /><Badge status={m.status} /></div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <Badge status={m.priority} type="priority" />
+              <Badge status={m.status} />
+              {isEditable && (
+                <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => {
+                  setEditingId(m.id);
+                  setEditForm({ category: m.category, priority: m.priority, description: m.description });
+                }}>Edit</button>
+              )}
+            </div>
           </div>
           <div style={{ display: "flex", gap: 20, fontSize: 13, color: T.muted, flexWrap: "wrap" }}>
             <span>Submitted: {m.submitted}</span>
@@ -1445,7 +1495,8 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
             );
           })()}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
