@@ -1166,6 +1166,7 @@ const MaintenanceDashboard = ({ mobile, maintenance, notifications, profile, sta
 
 // --- MAINTENANCE PAGE (Resident) ---
 const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) => {
+  const { t } = useI18n();
   const [replyDrafts, setReplyDrafts] = useState({}); // { [requestId]: text }
   const [replyFiles, setReplyFiles] = useState({}); // { [requestId]: File[] }
   const [replySubmitting, setReplySubmitting] = useState({});
@@ -1252,8 +1253,8 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
 
   return (
     <div>
-      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22, marginBottom: 4 }}>Maintenance Requests</h1>
-      <p style={s.sectionSub}>Submit and track maintenance issues for your unit</p>
+      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22, marginBottom: 4 }}>{t("maint_title")}</h1>
+      <p style={s.sectionSub}>{t("maint_subtitle")}</p>
 
       {/* Emergency call-out — always visible at the top */}
       <div style={{
@@ -1269,9 +1270,9 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
       }}>
         <div style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>🚨</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: T.danger, marginBottom: 2 }}>If this is an emergency, call 911.</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: T.danger, marginBottom: 2 }}>{t("maint_emergency_title")}</div>
           <div style={{ fontSize: 13, color: T.text }}>
-            Fire, gas leak, flooding, medical emergency, or anything that needs immediate response — dial <strong><a href="tel:911" style={{ color: T.danger, textDecoration: "none" }}>911</a></strong> first. Use this form for non-emergency repairs.
+            {t("maint_emergency_body")} <strong><a href="tel:911" style={{ color: T.danger, textDecoration: "none" }}>911</a></strong> {t("maint_emergency_body2")}
           </div>
         </div>
       </div>
@@ -1285,7 +1286,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
           boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
         }}>
           <span style={{ fontSize: 22, lineHeight: 1 }}>＋</span>
-          <span>Submit a New Maintenance Request</span>
+          <span>{t("maint_new_btn")}</span>
         </button>
       )}
       {showForm && (
@@ -1294,7 +1295,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
       <div style={{ marginBottom: 12 }}>
         <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 6 }} onClick={() => setShowQr(!showQr)}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><rect x="19" y="14" width="2" height="2"/><rect x="14" y="19" width="2" height="2"/><rect x="19" y="19" width="2" height="2"/></svg>
-          {showQr ? "Hide QR Code" : "Share QR Code"}
+          {showQr ? t("maint_hide_qr") : t("maint_share_qr")}
         </button>
       </div>
       {showQr && rc?.unit && (
@@ -1348,7 +1349,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
       )}
       {allMyRequests.length > 0 && (
         <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-          {[["active", `Active (${counts.active})`], ["done", `Done (${counts.done})`], ["all", `All (${counts.all})`]].map(([k, label]) => {
+          {[["active", `${t("maint_filter_active")} (${counts.active})`], ["done", `${t("maint_filter_done")} (${counts.done})`], ["all", `${t("maint_filter_all")} (${counts.all})`]].map(([k, label]) => {
             const active = statusFilter === k;
             return (
               <button key={k} onClick={() => setStatusFilter(k)} style={{
@@ -1360,7 +1361,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
         </div>
       )}
       {allMyRequests.length > 0 && myRequests.length === 0 && (
-        <EmptyState icon="✅" text={statusFilter === "done" ? "No completed requests yet." : "No active requests right now."} />
+        <EmptyState icon="✅" text={statusFilter === "done" ? t("maint_empty_done") : t("maint_empty_active")} />
       )}
       {myRequests.map(m => {
         const isEditing = editingId === m.id;
