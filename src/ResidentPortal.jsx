@@ -7076,10 +7076,15 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
 };
 
 const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, onAddThread, onAddMessage, onUpdateThread, onDeleteThread, rc }) => {
+  const { t } = useI18n();
   const isAdmin = role === "admin";
   const isMaint = role === "maintenance";
   const isStaff = isAdmin || isMaint;
-  const tabs = isStaff ? ["Inbox", "Compose", "Templates"] : ["Messages", "Compose", "Preferences"];
+  // Resident gets translated tab labels (kept English IDs for state matching).
+  // Staff tabs stay English since admin/maint UI is English-only.
+  const tabs = isStaff
+    ? ["Inbox", "Compose", "Templates"]
+    : [{ id: "Messages", label: t("msg_tab_messages") }, { id: "Compose", label: t("msg_tab_compose") }, { id: "Preferences", label: t("msg_tab_preferences") }];
   const [tab, setTab] = useState(tabs[0]);
   const [selectedThread, setSelectedThread] = useState(null);
   const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "residents", recipients: [], propertyIds: [] });
@@ -7205,10 +7210,10 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <h1 style={s.sectionTitle}>{isStaff ? "Communications" : "Messages"}</h1>
-        {unreadCount > 0 && <span style={s.badge(T.accentDim, T.accent)}>{unreadCount} unread</span>}
+        <h1 style={s.sectionTitle}>{isStaff ? "Communications" : t("msg_title")}</h1>
+        {unreadCount > 0 && <span style={s.badge(T.accentDim, T.accent)}>{unreadCount} {t("msg_unread")}</span>}
       </div>
-      <p style={s.sectionSub}>{isStaff ? "Send, receive, and manage all resident communications" : "View messages and manage your contact preferences"}</p>
+      <p style={s.sectionSub}>{isStaff ? "Send, receive, and manage all resident communications" : t("msg_subtitle")}</p>
       <SuccessMessage message={success} />
 
       <TabBar tabs={tabs} active={tab} onChange={setTab} mobile={mobile} />
@@ -7466,27 +7471,27 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       {/* COMPOSE TAB — Resident */}
       {tab === "Compose" && !isStaff && (
         <div style={s.card}>
-          <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>Send a message. We'll reply as soon as we can.</div>
-          <div style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>If this is a maintenance request, please submit a maintenance request from the <strong>Maintenance</strong> tab instead.</div>
+          <div style={{ fontSize: 14, color: T.text, marginBottom: 6 }}>{t("msg_compose_intro")}</div>
+          <div style={{ fontSize: 13, color: T.muted, marginBottom: 14 }} dangerouslySetInnerHTML={{ __html: t("msg_compose_not_maint").replace("{Maintenance}", `<strong>${t("nav_maintenance")}</strong>`) }} />
           <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
             <div>
-              <label style={s.label}>Send to</label>
+              <label style={s.label}>{t("msg_send_to")}</label>
               <select style={{ ...s.select, width: "100%" }} value={composeData.to || "property_manager"} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))}>
-                <option value="property_manager">Property Manager</option>
-                <option value="rent">Rent / Billing</option>
+                <option value="property_manager">{t("msg_send_to_pm")}</option>
+                <option value="rent">{t("msg_send_to_rent")}</option>
               </select>
             </div>
             <div>
-              <label style={s.label}>Subject</label>
-              <input style={s.input} value={composeData.subject} onChange={e => setComposeData(prev => ({ ...prev, subject: e.target.value }))} placeholder="What's this about?" />
+              <label style={s.label}>{t("msg_subject")}</label>
+              <input style={s.input} value={composeData.subject} onChange={e => setComposeData(prev => ({ ...prev, subject: e.target.value }))} placeholder={t("msg_subject_placeholder")} />
             </div>
           </div>
           <div style={{ marginBottom: 14 }}>
-            <label style={s.label}>Message</label>
-            <textarea style={{ ...s.input, minHeight: 140, resize: "vertical" }} value={composeData.body} onChange={e => setComposeData(prev => ({ ...prev, body: e.target.value }))} placeholder="Type your message..." />
+            <label style={s.label}>{t("msg_message")}</label>
+            <textarea style={{ ...s.input, minHeight: 140, resize: "vertical" }} value={composeData.body} onChange={e => setComposeData(prev => ({ ...prev, body: e.target.value }))} placeholder={t("msg_message_placeholder")} />
           </div>
           <div style={{ marginBottom: 14 }}>
-            <label style={s.label}>Attachments (optional)</label>
+            <label style={s.label}>{t("msg_attachments")}</label>
             <input type="file" multiple onChange={e => setResidentAttachments(Array.from(e.target.files || []))} style={{ display: "block", fontSize: 13, color: T.muted }} />
             {residentAttachments.length > 0 && (
               <div style={{ marginTop: 8, fontSize: 12, color: T.muted }}>
@@ -7552,8 +7557,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               setSending(false);
               setTab("Messages");
               showSuccess(`Message sent — ${emailStatus}`);
-            }}>{sending ? "Sending..." : "Send Message"}</button>
-            <button style={s.btn("ghost")} onClick={() => { setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" }); setResidentAttachments([]); }}>Clear</button>
+            }}>{sending ? t("msg_sending") : t("msg_send")}</button>
+            <button style={s.btn("ghost")} onClick={() => { setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "" }); setResidentAttachments([]); }}>{t("msg_clear")}</button>
           </div>
         </div>
       )}

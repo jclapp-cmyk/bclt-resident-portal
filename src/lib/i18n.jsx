@@ -122,6 +122,7 @@ export const TRANSLATIONS = {
     // ── Messages / Communications ──
     msg_title: "Messages",
     msg_subtitle: "View messages and manage your contact preferences",
+    msg_unread: "unread",
     msg_tab_messages: "Messages",
     msg_tab_compose: "Compose",
     msg_tab_preferences: "Preferences",
@@ -136,6 +137,7 @@ export const TRANSLATIONS = {
     msg_message_placeholder: "Type your message...",
     msg_attachments: "Attachments (optional)",
     msg_send: "Send Message",
+    msg_sending: "Sending...",
     msg_clear: "Clear",
 
     // ── Preferences ──
@@ -392,6 +394,7 @@ export const TRANSLATIONS = {
     // ── Messages / Communications ──
     msg_title: "Mensajes",
     msg_subtitle: "Vea mensajes y administre sus preferencias de contacto",
+    msg_unread: "sin leer",
     msg_tab_messages: "Mensajes",
     msg_tab_compose: "Redactar",
     msg_tab_preferences: "Preferencias",
@@ -406,6 +409,7 @@ export const TRANSLATIONS = {
     msg_message_placeholder: "Escriba su mensaje...",
     msg_attachments: "Adjuntos (opcional)",
     msg_send: "Enviar Mensaje",
+    msg_sending: "Enviando...",
     msg_clear: "Limpiar",
 
     // ── Preferences ──
