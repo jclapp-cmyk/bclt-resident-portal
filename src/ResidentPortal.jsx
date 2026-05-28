@@ -10476,6 +10476,25 @@ export default function App() {
         )}
       </div>
       <div style={{ padding: "16px 12px", flex: 1 }}>
+        {/* Resident-only language toggle */}
+        {role === "resident" && (
+          <div style={{ display: "flex", gap: 4, marginBottom: 14, padding: "0 6px" }}>
+            <button onClick={() => setCommPrefs(prev => ({ ...prev, language: "en" }))} style={{
+              flex: 1, padding: "6px 10px", fontSize: 11, fontWeight: 600,
+              background: (commPrefs.language || "en") === "en" ? T.accent : "transparent",
+              color: (commPrefs.language || "en") === "en" ? T.white : T.muted,
+              border: `1px solid ${(commPrefs.language || "en") === "en" ? T.accent : T.border}`,
+              borderRadius: T.radiusSm, cursor: "pointer",
+            }}>EN</button>
+            <button onClick={() => setCommPrefs(prev => ({ ...prev, language: "es" }))} style={{
+              flex: 1, padding: "6px 10px", fontSize: 11, fontWeight: 600,
+              background: commPrefs.language === "es" ? T.accent : "transparent",
+              color: commPrefs.language === "es" ? T.white : T.muted,
+              border: `1px solid ${commPrefs.language === "es" ? T.accent : T.border}`,
+              borderRadius: T.radiusSm, cursor: "pointer",
+            }}>ES</button>
+          </div>
+        )}
         <div style={{ fontSize: 10, fontWeight: 600, color: T.dim, textTransform: "uppercase", letterSpacing: "1px", padding: "0 6px", marginBottom: 8 }}>Navigation</div>
         {nav.map(item => (
           <button key={item.id} onClick={() => handleNav(item.id)} style={{
