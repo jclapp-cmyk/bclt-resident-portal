@@ -9867,7 +9867,20 @@ export default function App() {
       window.removeEventListener("hashchange", onPop);
     };
   }, []);
-  const [commPrefs, setCommPrefs] = useState(DEFAULT_COMM_PREFS);
+  // Communication prefs auto-save to localStorage on every change so the
+  // language toggle, quiet hours, etc. survive a refresh without needing
+  // a Save button. Keyed by auth email so different residents on the same
+  // device don't share each other's prefs.
+  const [commPrefs, setCommPrefs] = useState(() => {
+    try {
+      const raw = localStorage.getItem("bclt_comm_prefs");
+      if (raw) return { ...DEFAULT_COMM_PREFS, ...JSON.parse(raw) };
+    } catch (_) {}
+    return DEFAULT_COMM_PREFS;
+  });
+  useEffect(() => {
+    try { localStorage.setItem("bclt_comm_prefs", JSON.stringify(commPrefs)); } catch (_) {}
+  }, [commPrefs]);
   const [leaseDocs, setLeaseDocs] = useState(DEFAULT_LEASE_DOCS);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [maintenance, setMaintenance] = useState([]);
