@@ -185,9 +185,14 @@ const s = {
 };
 
 const Badge = ({ status, type = "status" }) => {
+  const { t } = useI18n();
   const map = type === "status" ? STATUS_COLORS : PRIORITY_COLORS;
   const c = map[status] || { bg: T.dimLight, text: T.muted, label: status };
-  return <span style={s.badge(c.bg, c.text)}>{c.label || status}</span>;
+  // Try i18n key first; fall back to whatever the color map provided.
+  const key = type === "status" ? `status_${status}` : `priority_${status}`;
+  const translated = t(key);
+  const display = translated && translated !== key ? translated : (c.label || status);
+  return <span style={s.badge(c.bg, c.text)}>{display}</span>;
 };
 
 const StatCard = ({ label, value, accent = T.accent, mobile, onClick }) => (
@@ -1301,7 +1306,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
       {showQr && rc?.unit && (
         <div style={{ ...s.card, textAlign: "center", marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{rc.property || ""} — Unit {rc.unit}</div>
-          <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>Anyone can scan this to submit a maintenance request for your unit</div>
+          <div style={{ fontSize: 12, color: T.muted, marginBottom: 12 }}>{t("maint_qr_anyone")}</div>
           <QRCodeCanvas
             id="resident-qr"
             value={window.location.origin + window.location.pathname + "?maintenance=" + encodeURIComponent(rc.unit)}
@@ -1313,25 +1318,25 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
             <button style={{ ...s.btn("ghost"), fontSize: 12 }} onClick={() => {
               const canvas = document.getElementById("resident-qr");
               if (canvas) { const a = document.createElement("a"); a.download = `QR-Unit-${rc.unit}.png`; a.href = canvas.toDataURL(); a.click(); }
-            }}>Download PNG</button>
+            }}>{t("maint_qr_download")}</button>
           </div>
         </div>
       )}
       <SuccessMessage message={success} />
       {showForm && (
         <div style={{ ...s.card, borderColor: T.accent, borderWidth: 1 }}>
-          <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>New Maintenance Request</div>
+          <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>{t("maint_form_title")}</div>
           <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-            <div><label style={s.label}>Category</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}><option>Plumbing</option><option>Electrical</option><option>HVAC</option><option>Appliance</option><option>Structural</option><option>Pest</option><option>Other</option></select></div>
-            <div><label style={s.label}>Urgency</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={formData.urgency} onChange={e => setFormData(p => ({ ...p, urgency: e.target.value }))}><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="critical">Critical / Emergency</option></select></div>
+            <div><label style={s.label}>{t("maint_form_category")}</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}><option>Plumbing</option><option>Electrical</option><option>HVAC</option><option>Appliance</option><option>Structural</option><option>Pest</option><option>Other</option></select></div>
+            <div><label style={s.label}>{t("maint_form_urgency")}</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={formData.urgency} onChange={e => setFormData(p => ({ ...p, urgency: e.target.value }))}><option value="routine">{t("maint_form_u_routine")}</option><option value="urgent">{t("maint_form_u_urgent")}</option><option value="critical">{t("maint_form_u_critical")}</option></select></div>
           </div>
-          <div style={{ marginBottom: 14 }}><label style={s.label}>Description</label><textarea style={{ ...s.input, minHeight: 80, resize: "vertical" }} placeholder="Describe the issue..." value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} /></div>
-          <div style={{ marginBottom: 14 }}><label style={s.label}>Permission to Enter</label><select style={{ ...s.select, width: "100%" }} value={formData.permission} onChange={e => setFormData(p => ({ ...p, permission: e.target.value }))}><option>Yes, enter anytime</option><option>Contact me first</option><option>Only when I'm home</option></select></div>
+          <div style={{ marginBottom: 14 }}><label style={s.label}>{t("maint_form_description")}</label><textarea style={{ ...s.input, minHeight: 80, resize: "vertical" }} placeholder={t("maint_form_desc_placeholder")} value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} /></div>
+          <div style={{ marginBottom: 14 }}><label style={s.label}>{t("maint_form_perm_label")}</label><select style={{ ...s.select, width: "100%" }} value={formData.permission} onChange={e => setFormData(p => ({ ...p, permission: e.target.value }))}><option>{t("maint_form_perm_anytime")}</option><option>{t("maint_form_perm_contact")}</option><option>{t("maint_form_perm_home")}</option></select></div>
           <div style={{ marginBottom: 14 }}>
-            <label style={s.label}>Photos (optional, max 5)</label>
+            <label style={s.label}>{t("maint_form_photos_label")}</label>
             <input ref={photoInputRef} type="file" accept="image/*,.heic,.heif" multiple style={{ display: "none" }} onChange={handlePhotoSelect} />
             <div onClick={() => photoInputRef.current?.click()} onDragOver={e => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => { e.preventDefault(); e.stopPropagation(); handlePhotoSelect({ target: { files: e.dataTransfer.files } }); }} style={{ border: `2px dashed ${T.border}`, borderRadius: T.radiusSm, padding: 24, textAlign: "center", color: T.dim, cursor: "pointer" }}>
-              {photoFiles.length === 0 ? "Click or drag to upload photos" : `${photoFiles.length} photo${photoFiles.length > 1 ? "s" : ""} selected — click to add more`}
+              {photoFiles.length === 0 ? t("maint_form_photo_empty") : (photoFiles.length === 1 ? t("maint_form_photo_count", { n: 1 }) : t("maint_form_photo_count_plural", { n: photoFiles.length }))}
             </div>
             {photoFiles.length > 0 && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
@@ -1344,7 +1349,7 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
               </div>
             )}
           </div>
-          <button style={s.btn()} onClick={handleSubmit} disabled={uploading}>{uploading ? "Uploading..." : "Submit Request"}</button>
+          <button style={s.btn()} onClick={handleSubmit} disabled={uploading}>{uploading ? t("maint_form_uploading") : t("maint_form_submit")}</button>
         </div>
       )}
       {allMyRequests.length > 0 && (
@@ -1488,10 +1493,10 @@ const ResidentMaintenance = ({ mobile, maintenance, onSubmit, onUpdate, rc }) =>
             </div>
           </div>
           <div style={{ display: "flex", gap: 20, fontSize: 13, color: T.muted, flexWrap: "wrap" }}>
-            <span>Submitted: {m.submitted}</span>
-            {m.assignedTo && <span>Assigned: {m.assignedTo}</span>}
-            {m.queuePos && MAINT_OPEN(m) && <span style={{ color: T.accent }}>Queue position: #{m.queuePos}</span>}
-            {m.projectedComplete && <span>Est. complete: {m.projectedComplete}</span>}
+            <span>{t("maint_status_submitted", { date: m.submitted })}</span>
+            {m.assignedTo && <span>{t("maint_status_assigned", { name: m.assignedTo })}</span>}
+            {m.queuePos && MAINT_OPEN(m) && <span style={{ color: T.accent }}>{t("maint_status_queue", { n: m.queuePos })}</span>}
+            {m.projectedComplete && <span>{t("maint_status_est", { date: m.projectedComplete })}</span>}
             <span style={{ color: T.dim, fontSize: 11, marginLeft: "auto" }}>#{m.id}</span>
           </div>
           {(Array.isArray(m.notes) ? m.notes : []).length > 0 && (
