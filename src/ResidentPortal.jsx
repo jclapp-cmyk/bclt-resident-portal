@@ -7122,7 +7122,7 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
   );
 };
 
-const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, onAddThread, onAddMessage, onUpdateThread, onDeleteThread, rc }) => {
+const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, staffMembers = [], onAddThread, onAddMessage, onUpdateThread, onDeleteThread, rc }) => {
   const { t } = useI18n();
   const isAdmin = role === "admin";
   const isMaint = role === "maintenance";
@@ -7322,21 +7322,26 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       {tab === "Compose" && isStaff && (() => {
         const audience = composeData.audience || "residents";
         const propertyList = LIVE_PROPERTIES || [];
+        // Active staff with at least one contact method, deduped by name.
+        const activeStaff = (staffMembers || [])
+          .filter(st => st.active !== false && (st.email || st.phone))
+          .filter((st, i, arr) => arr.findIndex(x => x.name === st.name) === i);
         const resolveRecipients = () => {
           if (audience === "all") return LIVE_RESIDENTS;
           if (audience === "buildings") return LIVE_RESIDENTS.filter(r => composeData.propertyIds.includes(r.propertyId));
           if (audience === "residents") return LIVE_RESIDENTS.filter(r => composeData.recipients.includes(r.id));
+          if (audience === "staff") return activeStaff.filter(st => composeData.recipients.includes(st.id));
           return [];
         };
         const recipientCount = resolveRecipients().length;
-        const isBroadcastLike = audience === "all" || audience === "buildings" || (audience === "residents" && composeData.recipients.length > 1);
+        const isBroadcastLike = audience === "all" || audience === "buildings" || ((audience === "residents" || audience === "staff") && composeData.recipients.length > 1);
         return (
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>New Message</div>
           <div style={{ marginBottom: 14 }}>
             <label style={s.label}>Audience</label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {[["residents", "Residents"], ["buildings", "Buildings"], ["all", "Everyone"]].map(([k, label]) => {
+              {[["residents", "Residents"], ["buildings", "Buildings"], ["staff", "Staff"], ["all", "Everyone"]].map(([k, label]) => {
                 const active = audience === k;
                 return (
                   <button key={k} onClick={() => setComposeData(prev => ({ ...prev, audience: k, to: "", recipients: [], propertyIds: [], broadcast: k === "all" }))} style={{
@@ -7368,6 +7373,35 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                         }));
                       }} />
                       <span>{r.name} — Unit {r.unit} <span style={{ color: T.dim }}>({propertyList.find(p => p.id === r.propertyId)?.name || r.propertyId || "—"})</span></span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {audience === "staff" && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={s.label}>Pick one or more staff members ({composeData.recipients.length} selected)</label>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: activeStaff.map(st => st.id) }))}>Select all</button>
+                <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: [] }))}>Clear</button>
+              </div>
+              <div style={{ maxHeight: 260, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 8 }}>
+                {activeStaff.length === 0 && <div style={{ fontSize: 12, color: T.dim, padding: 8 }}>No active staff members with contact info.</div>}
+                {activeStaff.map(st => {
+                  const checked = composeData.recipients.includes(st.id);
+                  const roleLabel = st.role === "property_manager" ? "Property Manager" : st.role === "admin" ? "Admin" : st.role === "maintenance" ? "Maintenance" : (st.role || "Staff");
+                  return (
+                    <label key={st.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
+                      <input type="checkbox" checked={checked} onChange={e => {
+                        setComposeData(prev => ({
+                          ...prev,
+                          recipients: e.target.checked
+                            ? [...prev.recipients, st.id]
+                            : prev.recipients.filter(id => id !== st.id),
+                        }));
+                      }} />
+                      <span>{st.name} <span style={{ color: T.dim }}>({roleLabel}{st.email ? ` · ${st.email}` : ""})</span></span>
                     </label>
                   );
                 })}
@@ -7443,7 +7477,9 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
           <div style={{ padding: 12, background: T.bg, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, color: T.muted }}>
             {recipientCount === 0
               ? "No recipients selected yet."
-              : `Will be sent to ${recipientCount} resident${recipientCount === 1 ? "" : "s"}.`}
+              : audience === "staff"
+                ? `Will be sent to ${recipientCount} staff member${recipientCount === 1 ? "" : "s"}.`
+                : `Will be sent to ${recipientCount} resident${recipientCount === 1 ? "" : "s"}.`}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button disabled={sending || recipientCount === 0 || !composeData.subject.trim() || !composeData.body.trim()} style={s.btn()} onClick={async () => {
@@ -7527,7 +7563,6 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               <select style={{ ...s.select, width: "100%" }} value={composeData.to || "property_manager"} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))}>
                 <option value="property_manager">{t("msg_send_to_pm")}</option>
                 <option value="rent">{t("msg_send_to_rent")}</option>
-                <option value="bclt_staff">{t("msg_send_to_bclt")}</option>
               </select>
             </div>
             <div>
@@ -7555,7 +7590,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               const threadId = `THR-${Date.now()}`;
               const now = new Date().toISOString();
               const recipientKey = composeData.to || "property_manager";
-              const recipientLabels = { property_manager: "Property Manager", rent: "Rent / Billing", bclt_staff: "BCLT Staff" };
+              const recipientLabels = { property_manager: "Property Manager", rent: "Rent / Billing" };
               const recipientLabel = recipientLabels[recipientKey] || "Property Manager";
               const taggedSubject = `[${recipientLabel}] ${composeData.subject.trim()}`;
               // Upload attachments (if any). HEIC images get converted to JPEG first.
@@ -10468,7 +10503,7 @@ export default function App() {
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} onScheduleReg={scheduleRegInspection} onUpdateReg={updateRegInspectionN} onDeleteReg={deleteRegInspectionN} inspectionTemplates={inspectionTemplates} onSaveTemplate={async (tpl) => { const saved = await insertInspectionTemplate(tpl); setInspectionTemplates(prev => [saved, ...prev]); return saved; }} onUpdateTemplate={async (code, changes) => { await updateInspectionTemplate(code, changes); setInspectionTemplates(prev => prev.map(t => t.id === code ? { ...t, ...changes } : t)); }} onDeleteTemplate={async (code) => { await deleteInspectionTemplate(code); setInspectionTemplates(prev => prev.filter(t => t.id !== code)); }} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} unitInspections={fInsp} threads={threads} setPage={setPage} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
-        case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
+        case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} staffMembers={staffMembers} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} threads={threads} />;
@@ -10482,7 +10517,7 @@ export default function App() {
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
-        case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
+        case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} staffMembers={staffMembers} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
         case "profile": return <MaintenanceProfile mobile={mobile} profile={profile} staffMembers={staffMembers} />;
         case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
