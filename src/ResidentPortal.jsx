@@ -7135,7 +7135,9 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   // Tabs may be strings (staff) or {id,label} objects (resident); store the id string either way
   const [tab, setTab] = useState(typeof tabs[0] === "string" ? tabs[0] : tabs[0].id);
   const [selectedThread, setSelectedThread] = useState(null);
-  const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], propertyIds: [] });
+  const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], customEmails: [], propertyIds: [] });
+  // Local-only buffer for the custom-email input
+  const [customEmailDraft, setCustomEmailDraft] = useState("");
   const [residentAttachments, setResidentAttachments] = useState([]);
   const [sending, setSending] = useState(false);
   const [success, showSuccess] = useSuccess();
@@ -7332,13 +7334,24 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
         const selectedResidents = LIVE_RESIDENTS.filter(r => composeData.recipients.includes(r.id));
         const selectedStaff = activeStaff.filter(st => composeData.staffIds.includes(st.id));
         const selectedVendors = activeVendors.filter(v => composeData.vendorIds.includes(v.id));
+        const selectedCustomEmails = (composeData.customEmails || []).filter(e => e && e.includes("@"));
         // Tag each recipient so the send pipeline knows whether to honor SMS choice.
-        // Residents respect the channel picker; staff and vendors are email-only.
+        // Residents respect the channel picker; staff, vendors, and custom emails are email-only.
         const resolveRecipients = () => [
           ...selectedResidents.map(r => ({ ...r, _kind: "resident" })),
           ...selectedStaff.map(r => ({ ...r, _kind: "staff" })),
           ...selectedVendors.map(r => ({ ...r, _kind: "vendor", email: r.email, phone: r.phone, name: r.name || r.company })),
+          ...selectedCustomEmails.map(em => ({ id: `custom-${em}`, name: em, email: em, _kind: "custom" })),
         ];
+        const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((e || "").trim());
+        const addCustomEmail = () => {
+          // Allow comma/space separated entries for quick batch entry.
+          const parts = customEmailDraft.split(/[,\s;]+/).map(p => p.trim().toLowerCase()).filter(Boolean);
+          const fresh = parts.filter(p => isValidEmail(p) && !(composeData.customEmails || []).includes(p));
+          if (fresh.length === 0) { setCustomEmailDraft(""); return; }
+          setComposeData(prev => ({ ...prev, customEmails: [...(prev.customEmails || []), ...fresh] }));
+          setCustomEmailDraft("");
+        };
         const recipientCount = resolveRecipients().length;
         const isBroadcastLike = recipientCount > 1;
         return (
@@ -7466,6 +7479,41 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               })}
             </div>
           </div>
+          {/* Custom typed-email recipients */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={s.label}>Other emails ({(composeData.customEmails || []).length} added)</label>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 6 }}>Type any email address to add a one-off recipient. Separate multiple with commas.</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+              <input
+                type="text"
+                value={customEmailDraft}
+                onChange={e => setCustomEmailDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustomEmail(); } }}
+                placeholder="name@example.com"
+                style={{ ...s.input, flex: 1, minWidth: 220, fontSize: 13 }}
+              />
+              <button
+                style={{ ...s.btn(isValidEmail(customEmailDraft.split(/[,\s;]+/)[0] || "") ? "primary" : "ghost"), fontSize: 12, padding: "8px 14px" }}
+                disabled={!customEmailDraft.trim()}
+                onClick={addCustomEmail}
+              >+ Add</button>
+            </div>
+            {(composeData.customEmails || []).length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 6, border: `1px solid ${T.border}`, borderRadius: T.radiusSm }}>
+                {(composeData.customEmails || []).map(em => (
+                  <span key={em} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 8px 4px 10px", background: T.accentDim, color: T.accent, borderRadius: 999, fontSize: 12, fontWeight: 600 }}>
+                    {em}
+                    <button
+                      type="button"
+                      title="Remove"
+                      onClick={() => setComposeData(prev => ({ ...prev, customEmails: (prev.customEmails || []).filter(x => x !== em) }))}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: T.accent, fontSize: 14, padding: 0, lineHeight: 1 }}
+                    >×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
           <div style={{ ...s.grid("1fr 1fr 1fr", mobile), marginBottom: 14 }}>
             <div>
               <label style={s.label}>Channel</label>
@@ -7474,8 +7522,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 <option value="sms">SMS</option>
                 <option value="email">Email</option>
               </select>
-              {(selectedStaff.length > 0 || selectedVendors.length > 0) && (
-                <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Staff &amp; vendors always receive email.</div>
+              {(selectedStaff.length > 0 || selectedVendors.length > 0 || selectedCustomEmails.length > 0) && (
+                <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Staff, vendors &amp; other emails always receive email.</div>
               )}
             </div>
             <div>
@@ -7508,6 +7556,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               if (selectedResidents.length) parts.push(`${selectedResidents.length} resident${selectedResidents.length === 1 ? "" : "s"}`);
               if (selectedStaff.length) parts.push(`${selectedStaff.length} staff`);
               if (selectedVendors.length) parts.push(`${selectedVendors.length} vendor${selectedVendors.length === 1 ? "" : "s"}`);
+              if (selectedCustomEmails.length) parts.push(`${selectedCustomEmails.length} other email${selectedCustomEmails.length === 1 ? "" : "s"}`);
               return `Will be sent to ${recipientCount} recipient${recipientCount === 1 ? "" : "s"} — ${parts.join(", ")}.`;
             })()}
           </div>
@@ -7564,7 +7613,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 }
               };
               for (const r of recipients) await sendToRecipient(r);
-              setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], propertyIds: [] });
+              setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], customEmails: [], propertyIds: [] });
               setSending(false);
               setTab("Inbox");
               const totalSent = deliveryReport.emailSent + deliveryReport.smsSent;
@@ -7578,7 +7627,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 showSuccess(`Message sent to ${recipients.length} recipient${recipients.length > 1 ? "s" : ""}! ${deliveryReport.emailSent ? `📧 ${deliveryReport.emailSent} email${deliveryReport.emailSent > 1 ? "s" : ""}` : ""}${deliveryReport.emailSent && deliveryReport.smsSent ? " · " : ""}${deliveryReport.smsSent ? `💬 ${deliveryReport.smsSent} SMS` : ""}`);
               }
             }}>{sending ? "Sending..." : `Send to ${recipientCount} recipient${recipientCount === 1 ? "" : "s"}`}</button>
-            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], propertyIds: [] })}>Clear</button>
+            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], customEmails: [], propertyIds: [] })}>Clear</button>
           </div>
         </div>
         );
