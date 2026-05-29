@@ -5783,7 +5783,14 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 { key: "propertyId", label: "Property", render: v => { const p = LIVE_PROPERTIES.find(pr => pr.id === v); return <span style={{ fontWeight: 600 }}>{p?.name || v || "—"}</span>; }, filterOptions: [...new Set(unitData.map(i => i.propertyId).filter(Boolean))], filterValue: row => row.propertyId },
                 { key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
               ]),
-              { key: "category", label: isResident ? t("insp_col_category") : "Category", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span>, filterOptions: catNames, filterValue: row => row.category },
+              { key: "category", label: isResident ? t("insp_col_category") : "Category", render: v => {
+                if (!isResident) return <span style={s.badge(T.infoDim, T.info)}>{v}</span>;
+                // Try translating common category names; fall back to the original
+                const key = `cat_${v}`;
+                const translated = t(key);
+                const display = translated && translated !== key ? translated : v;
+                return <span style={s.badge(T.infoDim, T.info)}>{display}</span>;
+              }, filterOptions: catNames, filterValue: row => row.category },
               { key: "inspector", label: isResident ? t("insp_col_inspector") : "Inspector" },
               { key: "result", label: isResident ? t("insp_col_result") : "Result", render: (v, row) => {
                 const color = v === "Pass" ? T.success : v === "Scheduled" ? T.accent : T.danger;

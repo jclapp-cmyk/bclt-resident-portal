@@ -194,6 +194,16 @@ export const TRANSLATIONS = {
     insp_notify_no: "Notification: No",
     filter_all: "All",
     filter_placeholder: "Filter...",
+    // Inspection categories (translated at render time)
+    "cat_Move-In": "Move-In",
+    "cat_Move-Out": "Move-Out",
+    "cat_Annual / Routine": "Annual / Routine",
+    "cat_Safety / Smoke Detector": "Safety / Smoke Detector",
+    "cat_Pre-HQS / Pre-REAC": "Pre-HQS / Pre-REAC",
+    cat_HQS: "HQS",
+    cat_REAC: "REAC",
+    "cat_Annual RV Inspection Form": "Annual RV Inspection Form",
+    cat_Other: "Other",
 
     // ── Income Cert ──
     cert_title: "Recertification",
@@ -478,6 +488,16 @@ export const TRANSLATIONS = {
     insp_notify_no: "Notificación: No",
     filter_all: "Todos",
     filter_placeholder: "Filtrar...",
+    // Inspection categories (translated at render time)
+    "cat_Move-In": "Mudanza de Entrada",
+    "cat_Move-Out": "Mudanza de Salida",
+    "cat_Annual / Routine": "Anual / Rutinaria",
+    "cat_Safety / Smoke Detector": "Seguridad / Detector de Humo",
+    "cat_Pre-HQS / Pre-REAC": "Pre-HQS / Pre-REAC",
+    cat_HQS: "HQS",
+    cat_REAC: "REAC",
+    "cat_Annual RV Inspection Form": "Formulario Anual de Inspección de RV",
+    cat_Other: "Otro",
 
     // ── Income Cert ──
     cert_title: "Recertificación",
