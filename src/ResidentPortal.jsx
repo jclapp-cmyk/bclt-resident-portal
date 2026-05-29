@@ -7122,7 +7122,7 @@ const ThreadView = ({ thread, onBack, mobile, messages: allMessages, onAddMessag
   );
 };
 
-const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, staffMembers = [], onAddThread, onAddMessage, onUpdateThread, onDeleteThread, rc }) => {
+const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: threadData, messages: messageData, staffMembers = [], vendors = [], onAddThread, onAddMessage, onUpdateThread, onDeleteThread, rc }) => {
   const { t } = useI18n();
   const isAdmin = role === "admin";
   const isMaint = role === "maintenance";
@@ -7135,7 +7135,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   // Tabs may be strings (staff) or {id,label} objects (resident); store the id string either way
   const [tab, setTab] = useState(typeof tabs[0] === "string" ? tabs[0] : tabs[0].id);
   const [selectedThread, setSelectedThread] = useState(null);
-  const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "residents", recipients: [], propertyIds: [] });
+  const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], propertyIds: [] });
   const [residentAttachments, setResidentAttachments] = useState([]);
   const [sending, setSending] = useState(false);
   const [success, showSuccess] = useSuccess();
@@ -7320,93 +7320,131 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
 
       {/* COMPOSE TAB (Staff: admin + maintenance) */}
       {tab === "Compose" && isStaff && (() => {
-        const audience = composeData.audience || "residents";
+        const audience = composeData.audience || "people";
         const propertyList = LIVE_PROPERTIES || [];
         // Active staff with at least one contact method, deduped by name.
         const activeStaff = (staffMembers || [])
           .filter(st => st.active !== false && (st.email || st.phone))
           .filter((st, i, arr) => arr.findIndex(x => x.name === st.name) === i);
+        // Active vendors with at least one contact method.
+        const activeVendors = (vendors || []).filter(v => v.active !== false && (v.email || v.phone));
+        const selectedResidents = LIVE_RESIDENTS.filter(r => composeData.recipients.includes(r.id));
+        const selectedStaff = activeStaff.filter(st => composeData.staffIds.includes(st.id));
+        const selectedVendors = activeVendors.filter(v => composeData.vendorIds.includes(v.id));
         const resolveRecipients = () => {
           if (audience === "all") return LIVE_RESIDENTS;
           if (audience === "buildings") return LIVE_RESIDENTS.filter(r => composeData.propertyIds.includes(r.propertyId));
-          if (audience === "residents") return LIVE_RESIDENTS.filter(r => composeData.recipients.includes(r.id));
-          if (audience === "staff") return activeStaff.filter(st => composeData.recipients.includes(st.id));
-          return [];
+          // "people" mode — combine residents + staff + vendors in any mix
+          return [...selectedResidents, ...selectedStaff, ...selectedVendors];
         };
         const recipientCount = resolveRecipients().length;
-        const isBroadcastLike = audience === "all" || audience === "buildings" || ((audience === "residents" || audience === "staff") && composeData.recipients.length > 1);
+        const isBroadcastLike = audience === "all" || audience === "buildings" || (audience === "people" && recipientCount > 1);
         return (
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>New Message</div>
           <div style={{ marginBottom: 14 }}>
             <label style={s.label}>Audience</label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {[["residents", "Residents"], ["buildings", "Buildings"], ["staff", "Staff"], ["all", "Everyone"]].map(([k, label]) => {
+              {[["people", "People"], ["buildings", "Buildings"], ["all", "Everyone"]].map(([k, label]) => {
                 const active = audience === k;
                 return (
-                  <button key={k} onClick={() => setComposeData(prev => ({ ...prev, audience: k, to: "", recipients: [], propertyIds: [], broadcast: k === "all" }))} style={{
+                  <button key={k} onClick={() => setComposeData(prev => ({ ...prev, audience: k, to: "", recipients: [], staffIds: [], vendorIds: [], propertyIds: [], broadcast: k === "all" }))} style={{
                     padding: "8px 14px", fontSize: 13, fontWeight: 600, borderRadius: T.radiusSm, cursor: "pointer",
                     background: active ? T.accent : T.bg, color: active ? "#fff" : T.text, border: `1px solid ${active ? T.accent : T.border}`,
                   }}>{label}</button>
                 );
               })}
             </div>
+            {audience === "people" && (
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 6 }}>Mix and match — pick any residents, staff, and vendors. They'll all get the same message.</div>
+            )}
           </div>
-          {audience === "residents" && (
-            <div style={{ marginBottom: 14 }}>
-              <label style={s.label}>Pick one or more residents ({composeData.recipients.length} selected)</label>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: LIVE_RESIDENTS.map(r => r.id) }))}>Select all</button>
-                <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: [] }))}>Clear</button>
+          {audience === "people" && (
+            <>
+              {/* Residents picker */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>Residents ({composeData.recipients.length} selected)</label>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: LIVE_RESIDENTS.map(r => r.id) }))}>Select all</button>
+                  <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: [] }))}>Clear</button>
+                </div>
+                <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 8 }}>
+                  {LIVE_RESIDENTS.length === 0 && <div style={{ fontSize: 12, color: T.dim, padding: 8 }}>No residents on file.</div>}
+                  {LIVE_RESIDENTS.map(r => {
+                    const checked = composeData.recipients.includes(r.id);
+                    return (
+                      <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
+                        <input type="checkbox" checked={checked} onChange={e => {
+                          setComposeData(prev => ({
+                            ...prev,
+                            recipients: e.target.checked
+                              ? [...prev.recipients, r.id]
+                              : prev.recipients.filter(id => id !== r.id),
+                          }));
+                        }} />
+                        <span>{r.name} — Unit {r.unit} <span style={{ color: T.dim }}>({propertyList.find(p => p.id === r.propertyId)?.name || r.propertyId || "—"})</span></span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-              <div style={{ maxHeight: 260, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 8 }}>
-                {LIVE_RESIDENTS.map(r => {
-                  const checked = composeData.recipients.includes(r.id);
-                  return (
-                    <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
-                      <input type="checkbox" checked={checked} onChange={e => {
-                        setComposeData(prev => ({
-                          ...prev,
-                          recipients: e.target.checked
-                            ? [...prev.recipients, r.id]
-                            : prev.recipients.filter(id => id !== r.id),
-                        }));
-                      }} />
-                      <span>{r.name} — Unit {r.unit} <span style={{ color: T.dim }}>({propertyList.find(p => p.id === r.propertyId)?.name || r.propertyId || "—"})</span></span>
-                    </label>
-                  );
-                })}
+              {/* Staff picker */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>Staff ({composeData.staffIds.length} selected)</label>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, staffIds: activeStaff.map(st => st.id) }))}>Select all</button>
+                  <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, staffIds: [] }))}>Clear</button>
+                </div>
+                <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 8 }}>
+                  {activeStaff.length === 0 && <div style={{ fontSize: 12, color: T.dim, padding: 8 }}>No active staff with contact info.</div>}
+                  {activeStaff.map(st => {
+                    const checked = composeData.staffIds.includes(st.id);
+                    const roleLabel = st.role === "property_manager" ? "Property Manager" : st.role === "admin" ? "Admin" : st.role === "maintenance" ? "Maintenance" : (st.role || "Staff");
+                    return (
+                      <label key={st.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
+                        <input type="checkbox" checked={checked} onChange={e => {
+                          setComposeData(prev => ({
+                            ...prev,
+                            staffIds: e.target.checked
+                              ? [...prev.staffIds, st.id]
+                              : prev.staffIds.filter(id => id !== st.id),
+                          }));
+                        }} />
+                        <span>{st.name} <span style={{ color: T.dim }}>({roleLabel}{st.email ? ` · ${st.email}` : ""})</span></span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
-          {audience === "staff" && (
-            <div style={{ marginBottom: 14 }}>
-              <label style={s.label}>Pick one or more staff members ({composeData.recipients.length} selected)</label>
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: activeStaff.map(st => st.id) }))}>Select all</button>
-                <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: [] }))}>Clear</button>
+              {/* Vendors picker */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={s.label}>Vendors ({composeData.vendorIds.length} selected)</label>
+                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                  <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, vendorIds: activeVendors.map(v => v.id) }))}>Select all</button>
+                  <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, vendorIds: [] }))}>Clear</button>
+                </div>
+                <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 8 }}>
+                  {activeVendors.length === 0 && <div style={{ fontSize: 12, color: T.dim, padding: 8 }}>No active vendors with contact info.</div>}
+                  {activeVendors.map(v => {
+                    const checked = composeData.vendorIds.includes(v.id);
+                    const subtitle = [v.trade, v.contact].filter(Boolean).join(" · ");
+                    return (
+                      <label key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
+                        <input type="checkbox" checked={checked} onChange={e => {
+                          setComposeData(prev => ({
+                            ...prev,
+                            vendorIds: e.target.checked
+                              ? [...prev.vendorIds, v.id]
+                              : prev.vendorIds.filter(id => id !== v.id),
+                          }));
+                        }} />
+                        <span>{v.company || v.name} <span style={{ color: T.dim }}>({subtitle || v.email || "—"})</span></span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-              <div style={{ maxHeight: 260, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 8 }}>
-                {activeStaff.length === 0 && <div style={{ fontSize: 12, color: T.dim, padding: 8 }}>No active staff members with contact info.</div>}
-                {activeStaff.map(st => {
-                  const checked = composeData.recipients.includes(st.id);
-                  const roleLabel = st.role === "property_manager" ? "Property Manager" : st.role === "admin" ? "Admin" : st.role === "maintenance" ? "Maintenance" : (st.role || "Staff");
-                  return (
-                    <label key={st.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
-                      <input type="checkbox" checked={checked} onChange={e => {
-                        setComposeData(prev => ({
-                          ...prev,
-                          recipients: e.target.checked
-                            ? [...prev.recipients, st.id]
-                            : prev.recipients.filter(id => id !== st.id),
-                        }));
-                      }} />
-                      <span>{st.name} <span style={{ color: T.dim }}>({roleLabel}{st.email ? ` · ${st.email}` : ""})</span></span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+            </>
           )}
           {audience === "buildings" && (
             <div style={{ marginBottom: 14 }}>
@@ -7475,11 +7513,16 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
             <textarea style={{ ...s.input, minHeight: 120, resize: "vertical" }} value={composeData.body} onChange={e => setComposeData(prev => ({ ...prev, body: e.target.value }))} placeholder="Type your message..." />
           </div>
           <div style={{ padding: 12, background: T.bg, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, color: T.muted }}>
-            {recipientCount === 0
-              ? "No recipients selected yet."
-              : audience === "staff"
-                ? `Will be sent to ${recipientCount} staff member${recipientCount === 1 ? "" : "s"}.`
-                : `Will be sent to ${recipientCount} resident${recipientCount === 1 ? "" : "s"}.`}
+            {recipientCount === 0 ? "No recipients selected yet." : (() => {
+              if (audience === "people") {
+                const parts = [];
+                if (selectedResidents.length) parts.push(`${selectedResidents.length} resident${selectedResidents.length === 1 ? "" : "s"}`);
+                if (selectedStaff.length) parts.push(`${selectedStaff.length} staff`);
+                if (selectedVendors.length) parts.push(`${selectedVendors.length} vendor${selectedVendors.length === 1 ? "" : "s"}`);
+                return `Will be sent to ${recipientCount} recipient${recipientCount === 1 ? "" : "s"} — ${parts.join(", ")}.`;
+              }
+              return `Will be sent to ${recipientCount} resident${recipientCount === 1 ? "" : "s"}.`;
+            })()}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button disabled={sending || recipientCount === 0 || !composeData.subject.trim() || !composeData.body.trim()} style={s.btn()} onClick={async () => {
@@ -7532,7 +7575,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 }
               };
               for (const r of recipients) await sendToRecipient(r);
-              setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "residents", recipients: [], propertyIds: [] });
+              setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], propertyIds: [] });
               setSending(false);
               setTab("Inbox");
               const totalSent = deliveryReport.emailSent + deliveryReport.smsSent;
@@ -7546,7 +7589,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 showSuccess(`Message sent to ${recipients.length} recipient${recipients.length > 1 ? "s" : ""}! ${deliveryReport.emailSent ? `📧 ${deliveryReport.emailSent} email${deliveryReport.emailSent > 1 ? "s" : ""}` : ""}${deliveryReport.emailSent && deliveryReport.smsSent ? " · " : ""}${deliveryReport.smsSent ? `💬 ${deliveryReport.smsSent} SMS` : ""}`);
               }
             }}>{sending ? "Sending..." : `Send to ${recipientCount} recipient${recipientCount === 1 ? "" : "s"}`}</button>
-            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "single", recipients: [], propertyId: "" })}>Clear</button>
+            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], propertyIds: [] })}>Clear</button>
           </div>
         </div>
         );
@@ -10503,7 +10546,7 @@ export default function App() {
         case "inspections": return <Inspections role="admin" mobile={mobile} unitInspections={fInsp} onSchedule={addInspectionN} onUpdate={updateInspectionN} selectedProperty={sp} allUnits={allUnits} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} staffMembers={staffMembers} onScheduleReg={scheduleRegInspection} onUpdateReg={updateRegInspectionN} onDeleteReg={deleteRegInspectionN} inspectionTemplates={inspectionTemplates} onSaveTemplate={async (tpl) => { const saved = await insertInspectionTemplate(tpl); setInspectionTemplates(prev => [saved, ...prev]); return saved; }} onUpdateTemplate={async (code, changes) => { await updateInspectionTemplate(code, changes); setInspectionTemplates(prev => prev.map(t => t.id === code ? { ...t, ...changes } : t)); }} onDeleteTemplate={async (code) => { await deleteInspectionTemplate(code); setInspectionTemplates(prev => prev.filter(t => t.id !== code)); }} />;
         case "property": return <PropertyDetails leaseDocs={leaseDocs} setLeaseDocs={setLeaseDocs} mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} onDataRefresh={reloadData} settings={settings} maintenance={fMaint} unitInspections={fInsp} threads={threads} setPage={setPage} onOpenMaintenance={(id) => { setPendingMaintenanceId(id); setPage("maintenance"); }} />;
         case "vendors": return <Vendors role="admin" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
-        case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} staffMembers={staffMembers} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
+        case "communications": return <Communications role="admin" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} staffMembers={staffMembers} vendors={vendors} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "financial": return <FinancialOverview mobile={mobile} selectedProperty={sp} onSelectProperty={selectProperty} />;
         case "reports": return <AdminReports mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} selectedProperty={sp} />;
         case "calendar": return <CalendarView mobile={mobile} maintenance={fMaint} vendors={vendors} unitInspections={fInsp} onNavigate={setPage} threads={threads} />;
@@ -10517,7 +10560,7 @@ export default function App() {
         case "work-orders": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
         case "inspections": return <Inspections role="maintenance" mobile={mobile} unitInspections={unitInspections} onUpdate={updateInspectionN} allUnits={allUnits} staffMembers={staffMembers} onUpdateReg={updateRegInspectionN} inspectionTemplates={inspectionTemplates} savedChecklists={savedChecklists} onSaveChecklist={async (cl) => { const saved = await insertInspectionChecklist(cl); setSavedChecklists(prev => [saved, ...prev]); return saved; }} onUpdateChecklist={async (uuid, changes) => { await updateInspectionChecklist(uuid, changes); setSavedChecklists(prev => prev.map(c => c._uuid === uuid ? { ...c, ...changes } : c)); }} />;
         case "vendors": return <Vendors role="maintenance" mobile={mobile} vendors={vendors} onAddVendor={addVendorN} onUpdateVendor={(id, changes) => { updateVendor(id, changes).then(() => reloadData()).catch(err => console.warn(err)); setVendors(prev => prev.map(v => v.id === id ? { ...v, ...changes } : v)); }} />;
-        case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} staffMembers={staffMembers} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
+        case "messages": return <Communications role="maintenance" commPrefs={commPrefs} setCommPrefs={setCommPrefs} mobile={mobile} threads={threads} messages={messages} staffMembers={staffMembers} vendors={vendors} onAddThread={addThreadN} onAddMessage={addMessageN} onUpdateThread={updateThread} onDeleteThread={(threadId) => { deleteThreadFromDb(threadId).catch(err => console.warn("Delete thread failed:", err)); setThreads(prev => prev.filter(t => t.id !== threadId)); setMessages(prev => prev.filter(m => m.threadId !== threadId)); }} />;
         case "schedule": return <CalendarView mobile={mobile} maintenance={maintenance} vendors={vendors} unitInspections={unitInspections} onNavigate={setPage} threads={threads} />;
         case "profile": return <MaintenanceProfile mobile={mobile} profile={profile} staffMembers={staffMembers} />;
         case "maintenance": return <WorkOrders mobile={mobile} maintenance={maintenance} onUpdate={updateMaintenanceN} onAdd={addMaintenanceN} profile={profile} vendors={vendors} staffMembers={staffMembers} pendingOpenId={pendingMaintenanceId} onClearPendingOpen={() => setPendingMaintenanceId(null)} />;
