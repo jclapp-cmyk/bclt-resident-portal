@@ -2355,31 +2355,33 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
           <div>
             <div style={s.card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>Household Members ({hhMembers.length})</div>
-                <button onClick={() => setShowNewMember(v => !v)} style={{ ...s.btn(showNewMember ? "ghost" : "primary"), padding: "10px 18px", fontSize: 14 }}>{showNewMember ? "Cancel" : "➕ Add Member"}</button>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{t("cert_hh_members", { n: hhMembers.length })}</div>
+                <button onClick={() => setShowNewMember(v => !v)} style={{ ...s.btn(showNewMember ? "ghost" : "primary"), padding: "10px 18px", fontSize: 14 }}>{showNewMember ? t("cert_hh_cancel") : t("cert_hh_add_member")}</button>
               </div>
               {showNewMember && (
                 <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 10, marginBottom: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
-                  <div><label style={s.label}>Name *</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={newMemberForm.name} onChange={e => setNewMemberForm(f => ({ ...f, name: e.target.value }))} /></div>
-                  <div><label style={s.label}>Relationship</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={newMemberForm.relationship} onChange={e => setNewMemberForm(f => ({ ...f, relationship: e.target.value }))}><option>Head of Household</option><option>Spouse</option><option>Co-Head</option><option>Child</option><option>Other Adult</option><option>Foster Child</option><option>Live-in Aide</option></select></div>
-                  <div><label style={s.label}>Date of Birth</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={newMemberForm.dob} onChange={e => setNewMemberForm(f => ({ ...f, dob: e.target.value }))} /></div>
-                  <div><label style={s.label}>SSN Last 4</label><input maxLength={4} style={{ ...s.mInput(mobile), width: "100%" }} placeholder="0000" value={newMemberForm.ssn4} onChange={e => setNewMemberForm(f => ({ ...f, ssn4: e.target.value.replace(/\D/g, "").slice(0, 4) }))} /></div>
-                  <div><label style={s.label}>Full-Time Student</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={newMemberForm.ftStudent ? "yes" : "no"} onChange={e => setNewMemberForm(f => ({ ...f, ftStudent: e.target.value === "yes" }))}><option value="no">No</option><option value="yes">Yes</option></select></div>
+                  <div><label style={s.label}>{t("cert_hh_name")}</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={newMemberForm.name} onChange={e => setNewMemberForm(f => ({ ...f, name: e.target.value }))} /></div>
+                  <div><label style={s.label}>{t("cert_hh_relationship")}</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={newMemberForm.relationship} onChange={e => setNewMemberForm(f => ({ ...f, relationship: e.target.value }))}><option value="Head of Household">{t("cert_rel_head")}</option><option value="Spouse">{t("cert_rel_spouse")}</option><option value="Co-Head">{t("cert_rel_cohead")}</option><option value="Child">{t("cert_rel_child")}</option><option value="Other Adult">{t("cert_rel_other_adult")}</option><option value="Foster Child">{t("cert_rel_foster")}</option><option value="Live-in Aide">{t("cert_rel_aide")}</option></select></div>
+                  <div><label style={s.label}>{t("cert_hh_dob")}</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={newMemberForm.dob} onChange={e => setNewMemberForm(f => ({ ...f, dob: e.target.value }))} /></div>
+                  <div><label style={s.label}>{t("cert_hh_ssn4")}</label><input maxLength={4} style={{ ...s.mInput(mobile), width: "100%" }} placeholder="0000" value={newMemberForm.ssn4} onChange={e => setNewMemberForm(f => ({ ...f, ssn4: e.target.value.replace(/\D/g, "").slice(0, 4) }))} /></div>
+                  <div><label style={s.label}>{t("cert_hh_ftstudent")}</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={newMemberForm.ftStudent ? "yes" : "no"} onChange={e => setNewMemberForm(f => ({ ...f, ftStudent: e.target.value === "yes" }))}><option value="no">{t("cert_hh_no")}</option><option value="yes">{t("cert_hh_yes")}</option></select></div>
                   <div style={{ display: "flex", alignItems: "flex-end" }}><button disabled={!newMemberForm.name.trim()} onClick={async () => {
                     try {
                       const m = await insertTICMember({ certId: activeCert.id, name: newMemberForm.name.trim(), relationship: newMemberForm.relationship, dob: newMemberForm.dob || null, ssn4: newMemberForm.ssn4 || null, ftStudent: newMemberForm.ftStudent, order: hhMembers.length });
                       setHhMembers(prev => [...prev, { id: m.id, name: newMemberForm.name.trim(), relationship: newMemberForm.relationship, dob: newMemberForm.dob, ssn4: newMemberForm.ssn4, ftStudent: newMemberForm.ftStudent, order: hhMembers.length }]);
                       setNewMemberForm({ name: "", relationship: "Spouse", dob: "", ssn4: "", ftStudent: false });
                       setShowNewMember(false);
-                      showSuccess("Member added");
+                      showSuccess(t("cert_hh_added"));
                     } catch (err) { showSuccess("Error: " + err.message); }
-                  }} style={s.mBtn("primary", mobile)}>Add</button></div>
+                  }} style={s.mBtn("primary", mobile)}>{t("cert_hh_add_btn")}</button></div>
                 </div>
               )}
               <table style={s.table}>
-                <thead><tr>{["#", "Name", "Relationship", "DOB", "SSN-4", "Student", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{[t("cert_hh_col_num"), t("cert_hh_col_name"), t("cert_hh_col_relationship"), t("cert_hh_col_dob"), t("cert_hh_col_ssn4"), t("cert_hh_col_student"), ""].map((h, idx) => <th key={idx} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>{hhMembers.map((m, i) => {
                   const isEditing = editingMemberId === m.id;
+                  const relKey = { "Head of Household": "cert_rel_head", "Spouse": "cert_rel_spouse", "Co-Head": "cert_rel_cohead", "Child": "cert_rel_child", "Other Adult": "cert_rel_other_adult", "Foster Child": "cert_rel_foster", "Live-in Aide": "cert_rel_aide" }[m.relationship];
+                  const relDisplay = relKey ? t(relKey) : m.relationship;
                   if (isEditing) {
                     return (
                       <tr key={m.id}>
@@ -2387,14 +2389,14 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                         <td style={s.td}><input style={{ ...s.input, padding: "4px 8px", fontSize: 13 }} value={editMemberForm.name} onChange={e => setEditMemberForm(f => ({ ...f, name: e.target.value }))} /></td>
                         <td style={s.td}>
                           <select style={{ ...s.select, padding: "4px 6px", fontSize: 13 }} value={editMemberForm.relationship} onChange={e => setEditMemberForm(f => ({ ...f, relationship: e.target.value }))}>
-                            <option>Head of Household</option><option>Spouse</option><option>Co-Head</option><option>Child</option><option>Other Adult</option><option>Foster Child</option><option>Live-in Aide</option>
+                            <option value="Head of Household">{t("cert_rel_head")}</option><option value="Spouse">{t("cert_rel_spouse")}</option><option value="Co-Head">{t("cert_rel_cohead")}</option><option value="Child">{t("cert_rel_child")}</option><option value="Other Adult">{t("cert_rel_other_adult")}</option><option value="Foster Child">{t("cert_rel_foster")}</option><option value="Live-in Aide">{t("cert_rel_aide")}</option>
                           </select>
                         </td>
                         <td style={s.td}><input type="date" style={{ ...s.input, padding: "4px 6px", fontSize: 12 }} value={editMemberForm.dob || ""} onChange={e => setEditMemberForm(f => ({ ...f, dob: e.target.value }))} /></td>
                         <td style={s.td}><input maxLength={4} placeholder="0000" style={{ ...s.input, padding: "4px 6px", fontSize: 13, width: 60 }} value={editMemberForm.ssn4 || ""} onChange={e => setEditMemberForm(f => ({ ...f, ssn4: e.target.value.replace(/\D/g, "").slice(0, 4) }))} /></td>
                         <td style={s.td}>
                           <select style={{ ...s.select, padding: "4px 6px", fontSize: 13 }} value={editMemberForm.ftStudent ? "yes" : "no"} onChange={e => setEditMemberForm(f => ({ ...f, ftStudent: e.target.value === "yes" }))}>
-                            <option value="no">No</option><option value="yes">Yes</option>
+                            <option value="no">{t("cert_hh_no")}</option><option value="yes">{t("cert_hh_yes")}</option>
                           </select>
                         </td>
                         <td style={s.td}>
@@ -2404,10 +2406,10 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                                 await updateTICMember(m.id, editMemberForm);
                                 setHhMembers(prev => prev.map(x => x.id === m.id ? { ...x, ...editMemberForm } : x));
                                 setEditingMemberId(null);
-                                showSuccess("Saved");
+                                showSuccess(t("cert_hh_saved"));
                               } catch (err) { showSuccess("Error: " + err.message); }
-                            }}>Save</button>
-                            <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 8px" }} onClick={() => setEditingMemberId(null)}>Cancel</button>
+                            }}>{t("cert_hh_save")}</button>
+                            <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 8px" }} onClick={() => setEditingMemberId(null)}>{t("cert_hh_cancel")}</button>
                           </div>
                         </td>
                       </tr>
@@ -2417,14 +2419,14 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                     <tr key={m.id || i}>
                       <td style={s.td}>{i + 1}</td>
                       <td style={s.td}><span style={{ fontWeight: 600 }}>{m.name}</span></td>
-                      <td style={s.td}>{m.relationship}</td>
+                      <td style={s.td}>{relDisplay}</td>
                       <td style={s.td}>{m.dob || "—"}</td>
                       <td style={s.td}>{m.ssn4 ? `***-**-${m.ssn4}` : "—"}</td>
-                      <td style={s.td}>{m.ftStudent ? "FT" : "N/A"}</td>
+                      <td style={s.td}>{m.ftStudent ? t("cert_hh_ft") : t("cert_hh_na")}</td>
                       <td style={s.td}>
                         <div style={{ display: "flex", gap: 4 }}>
-                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => { setEditingMemberId(m.id); setEditMemberForm({ name: m.name || "", relationship: m.relationship || "Head of Household", dob: m.dob || "", ssn4: m.ssn4 || "", ftStudent: !!m.ftStudent }); }}>Edit</button>
-                          {i > 0 && <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 12, padding: "4px 10px" }} onClick={async () => { if (!confirm(`Remove ${m.name}?`)) return; try { await deleteTICMember(m.id); setHhMembers(prev => prev.filter(x => x.id !== m.id)); } catch {} }}>Remove</button>}
+                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => { setEditingMemberId(m.id); setEditMemberForm({ name: m.name || "", relationship: m.relationship || "Head of Household", dob: m.dob || "", ssn4: m.ssn4 || "", ftStudent: !!m.ftStudent }); }}>{t("cert_hh_edit")}</button>
+                          {i > 0 && <button style={{ ...s.btn("ghost"), color: T.danger, fontSize: 12, padding: "4px 10px" }} onClick={async () => { if (!confirm(t("cert_hh_remove_confirm", { name: m.name }))) return; try { await deleteTICMember(m.id); setHhMembers(prev => prev.filter(x => x.id !== m.id)); } catch {} }}>{t("cert_hh_remove")}</button>}
                         </div>
                       </td>
                     </tr>
@@ -2433,7 +2435,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
               </table>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-              <button onClick={() => { saveCertTotals(); setStep(1); }} style={s.mBtn("primary", mobile)}>Next: Income →</button>
+              <button onClick={() => { saveCertTotals(); setStep(1); }} style={s.mBtn("primary", mobile)}>{t("cert_btn_next_income")}</button>
             </div>
           </div>
         )}
@@ -2442,21 +2444,24 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
         {step === 1 && (
           <div>
             <div style={{ padding: 14, background: T.infoDim, borderLeft: `3px solid ${T.info}`, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, color: T.text }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>📎 Attach documentation for every income source</div>
-              <div style={{ color: T.muted }}>For each income entry, click <strong>"Attach Doc"</strong> to upload supporting documentation: pay stubs, Social Security award letters, public-assistance notices, employer verification — whatever you have. PDF, JPG, or PNG. You can attach more than one entry per category.</div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{t("cert_inc_doc_title")}</div>
+              <div style={{ color: T.muted }}>{t("cert_inc_doc_intro_1")}<strong>{t("cert_inc_doc_intro_attach")}</strong>{t("cert_inc_doc_intro_2")}</div>
             </div>
             {hhMembers.map((m, mi) => {
               const memberIncome = incomeEntries.filter(e => e.memberId === m.id);
               const memberTotal = memberIncome.reduce((s, e) => s + (e.amount || 0), 0);
+              const relKey = { "Head of Household": "cert_rel_head", "Spouse": "cert_rel_spouse", "Co-Head": "cert_rel_cohead", "Child": "cert_rel_child", "Other Adult": "cert_rel_other_adult", "Foster Child": "cert_rel_foster", "Live-in Aide": "cert_rel_aide" }[m.relationship];
+              const relDisplay = relKey ? t(relKey) : m.relationship;
               return (
                 <div key={m.id} style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                    <span style={{ fontWeight: 700 }}>{m.name} <span style={{ color: T.muted, fontWeight: 400 }}>({m.relationship})</span></span>
-                    <span style={{ fontWeight: 600, color: T.accent }}>${memberTotal.toLocaleString()}/yr</span>
+                    <span style={{ fontWeight: 700 }}>{m.name} <span style={{ color: T.muted, fontWeight: 400 }}>({relDisplay})</span></span>
+                    <span style={{ fontWeight: 600, color: T.accent }}>{t("cert_inc_per_year", { amount: memberTotal.toLocaleString() })}</span>
                   </div>
                   {["employment", "social_security", "public_assistance", "other"].map(cat => {
                     const catEntries = memberIncome.filter(e => e.category === cat);
-                    const catLabel = cat === "employment" ? "Employment/Wages" : cat === "social_security" ? "Social Security/Pensions" : cat === "public_assistance" ? "Public Assistance" : "Other Income";
+                    const catKey = cat === "employment" ? "cert_inc_cat_employment" : cat === "social_security" ? "cert_inc_cat_ssi" : cat === "public_assistance" ? "cert_inc_cat_pa" : "cert_inc_cat_other";
+                    const catLabel = t(catKey);
                     return (
                       <div key={cat} style={{ marginBottom: 10, padding: "8px 10px", background: T.bg, borderRadius: T.radiusSm }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: catEntries.length ? 8 : 0 }}>
@@ -2466,13 +2471,13 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                               const e = await insertTICIncome({ certId: activeCert.id, memberId: m.id, category: cat, source: "", amount: 0 });
                               setIncomeEntries(prev => [...prev, { id: e.id, certId: activeCert.id, memberId: m.id, category: cat, source: "", amount: 0 }]);
                             } catch {}
-                          }} style={{ ...s.btn("primary"), fontSize: 13, padding: "6px 14px" }}>＋ Add</button>
+                          }} style={{ ...s.btn("primary"), fontSize: 13, padding: "6px 14px" }}>{t("cert_inc_add")}</button>
                         </div>
                         {catEntries.map(entry => (
                           <div key={entry.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                            <input placeholder="Source" value={entry.source || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, source: e.target.value } : x)); }} onBlur={() => updateTICIncome(entry.id, { source: entry.source }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 2, fontSize: 12, padding: "4px 8px" }} />
-                            <input type="number" placeholder="$/yr" value={entry.amount || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, amount: parseFloat(e.target.value) || 0 } : x)); }} onBlur={() => updateTICIncome(entry.id, { amount: entry.amount }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
-                            <label title={entry.docPath ? "Replace attached document" : "Attach supporting document"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: T.radiusSm, cursor: "pointer", fontSize: 13, fontWeight: 600, background: entry.docPath ? T.successDim : T.accentDim, color: entry.docPath ? T.success : T.accent, border: `1px solid ${entry.docPath ? T.success : T.accent}`, whiteSpace: "nowrap" }}>
+                            <input placeholder={t("cert_inc_source_placeholder")} value={entry.source || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, source: e.target.value } : x)); }} onBlur={() => updateTICIncome(entry.id, { source: entry.source }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 2, fontSize: 12, padding: "4px 8px" }} />
+                            <input type="number" placeholder={t("cert_inc_amount_placeholder")} value={entry.amount || ""} onChange={e => { setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, amount: parseFloat(e.target.value) || 0 } : x)); }} onBlur={() => updateTICIncome(entry.id, { amount: entry.amount }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                            <label title={entry.docPath ? t("cert_inc_attach_title_replace") : t("cert_inc_attach_title_new")} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: T.radiusSm, cursor: "pointer", fontSize: 13, fontWeight: 600, background: entry.docPath ? T.successDim : T.accentDim, color: entry.docPath ? T.success : T.accent, border: `1px solid ${entry.docPath ? T.success : T.accent}`, whiteSpace: "nowrap" }}>
                               <input type="file" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif" style={{ display: "none" }} onChange={async (ev) => {
                                 const original = ev.target.files?.[0]; if (!original) return;
                                 try {
@@ -2480,15 +2485,15 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                                   const path = await uploadTICDocument(file, activeCert.id);
                                   await updateTICIncome(entry.id, { docPath: path });
                                   setIncomeEntries(prev => prev.map(x => x.id === entry.id ? { ...x, docPath: path, verified: true } : x));
-                                  showSuccess("Document attached");
-                                } catch (err) { showSuccess("Upload failed: " + (err.message || "")); }
+                                  showSuccess(t("cert_inc_doc_uploaded"));
+                                } catch (err) { showSuccess(t("cert_inc_upload_failed", { msg: err.message || "" })); }
                               }} />
-                              📎 {entry.docPath ? "Attached ✓" : "Attach Doc"}
+                              📎 {entry.docPath ? t("cert_inc_attached") : t("cert_inc_attach_doc")}
                             </label>
                             <button onClick={async () => { try { await deleteTICIncome(entry.id); setIncomeEntries(prev => prev.filter(x => x.id !== entry.id)); } catch {} }} style={{ ...s.btn("ghost"), color: T.danger, fontSize: 10, padding: "2px 6px" }}>✕</button>
                           </div>
                         ))}
-                        {catEntries.length === 0 && <div style={{ fontSize: 11, color: T.dim, padding: "4px 0" }}>No {catLabel.toLowerCase()} reported</div>}
+                        {catEntries.length === 0 && <div style={{ fontSize: 11, color: T.dim, padding: "4px 0" }}>{t("cert_inc_none", { label: catLabel.toLowerCase() })}</div>}
                       </div>
                     );
                   })}
@@ -2496,11 +2501,11 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
               );
             })}
             <div style={{ ...s.card, background: T.accentDim }}>
-              <DetailRow label="Total Annual Income (E)" value={`$${totalAnnualIncome.toLocaleString()}`} accent={T.accent} />
+              <DetailRow label={t("cert_inc_total_label")} value={`$${totalAnnualIncome.toLocaleString()}`} accent={T.accent} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
-              <button onClick={() => setStep(0)} style={s.btn("ghost")}>← Household</button>
-              <button onClick={() => { saveCertTotals(); setStep(2); }} style={s.mBtn("primary", mobile)}>Next: Assets →</button>
+              <button onClick={() => setStep(0)} style={s.btn("ghost")}>{t("cert_btn_back_household")}</button>
+              <button onClick={() => { saveCertTotals(); setStep(2); }} style={s.mBtn("primary", mobile)}>{t("cert_btn_next_assets")}</button>
             </div>
           </div>
         )}
@@ -2509,17 +2514,17 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
         {step === 2 && (
           <div>
             <div style={{ padding: 14, background: T.infoDim, borderLeft: `3px solid ${T.info}`, borderRadius: T.radiusSm, marginBottom: 14, fontSize: 13, lineHeight: 1.55, color: T.text }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>💰 What counts as an asset?</div>
-              <div style={{ color: T.muted, marginBottom: 8 }}>This is where you report what you own — not just income. Please add anything that applies to your household:</div>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>{t("cert_assets_title")}</div>
+              <div style={{ color: T.muted, marginBottom: 8 }}>{t("cert_assets_intro")}</div>
               <ul style={{ margin: "0 0 8px 18px", padding: 0, color: T.text }}>
-                <li><strong>Cash accounts</strong> — checking, savings, money-market, CDs</li>
-                <li><strong>Investment accounts</strong> — brokerage, mutual funds, individual stocks/bonds</li>
-                <li><strong>Retirement accounts</strong> — 401(k), IRA, Roth IRA, pension cash value</li>
-                <li><strong>Real estate</strong> you own (other than your primary home)</li>
-                <li><strong>Life insurance</strong> with a cash value</li>
-                <li><strong>Trust funds</strong> or other holdings you can access</li>
+                <li><strong>{t("cert_assets_bullet_cash_label")}</strong>{t("cert_assets_bullet_cash_text")}</li>
+                <li><strong>{t("cert_assets_bullet_invest_label")}</strong>{t("cert_assets_bullet_invest_text")}</li>
+                <li><strong>{t("cert_assets_bullet_retire_label")}</strong>{t("cert_assets_bullet_retire_text")}</li>
+                <li><strong>{t("cert_assets_bullet_realestate_label")}</strong>{t("cert_assets_bullet_realestate_text")}</li>
+                <li><strong>{t("cert_assets_bullet_life_label")}</strong>{t("cert_assets_bullet_life_text")}</li>
+                <li><strong>{t("cert_assets_bullet_trust_label")}</strong>{t("cert_assets_bullet_trust_text")}</li>
               </ul>
-              <div style={{ color: T.muted, fontStyle: "italic" }}>If you don't have any of these, just leave the section empty and click Next. Attach a recent statement for each asset you list.</div>
+              <div style={{ color: T.muted, fontStyle: "italic" }}>{t("cert_assets_none_note")}</div>
             </div>
             {hhMembers.map(m => {
               const memberAssets = assetEntries.filter(e => e.memberId === m.id);
@@ -2532,15 +2537,15 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                         const e = await insertTICAsset({ certId: activeCert.id, memberId: m.id, assetType: "savings", cashValue: 0, annualIncome: 0 });
                         setAssetEntries(prev => [...prev, { id: e.id, certId: activeCert.id, memberId: m.id, assetType: "savings", cashValue: 0, annualIncome: 0 }]);
                       } catch {}
-                    }} style={{ ...s.btn("primary"), fontSize: 13, padding: "6px 14px" }}>＋ Add Asset</button>
+                    }} style={{ ...s.btn("primary"), fontSize: 13, padding: "6px 14px" }}>{t("cert_assets_add")}</button>
                   </div>
-                  {memberAssets.length === 0 ? <div style={{ fontSize: 12, color: T.dim }}>No assets reported</div> : memberAssets.map(a => (
+                  {memberAssets.length === 0 ? <div style={{ fontSize: 12, color: T.dim }}>{t("cert_assets_none_reported")}</div> : memberAssets.map(a => (
                     <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
                       <select value={a.assetType} onChange={e => { setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, assetType: e.target.value } : x)); updateTICAsset(a.id, { assetType: e.target.value }).catch((err) => { showSuccess('Error saving: ' + err.message); }); }} style={{ ...s.select, flex: 1, fontSize: 12, padding: "4px 6px" }}>
-                        <option value="savings">Savings</option><option value="checking">Checking</option><option value="cd">CD</option><option value="stocks">Stocks/Bonds</option><option value="real_estate">Real Estate</option><option value="retirement">Retirement</option><option value="life_insurance">Life Insurance</option><option value="other">Other</option>
+                        <option value="savings">{t("cert_assets_type_savings")}</option><option value="checking">{t("cert_assets_type_checking")}</option><option value="cd">{t("cert_assets_type_cd")}</option><option value="stocks">{t("cert_assets_type_stocks")}</option><option value="real_estate">{t("cert_assets_type_realestate")}</option><option value="retirement">{t("cert_assets_type_retirement")}</option><option value="life_insurance">{t("cert_assets_type_life")}</option><option value="other">{t("cert_assets_type_other")}</option>
                       </select>
-                      <input type="number" placeholder="Cash Value" value={a.cashValue || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, cashValue: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { cashValue: a.cashValue }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
-                      <input type="number" placeholder="Annual Income" value={a.annualIncome || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, annualIncome: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { annualIncome: a.annualIncome }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                      <input type="number" placeholder={t("cert_assets_cashval_placeholder")} value={a.cashValue || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, cashValue: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { cashValue: a.cashValue }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
+                      <input type="number" placeholder={t("cert_assets_annualinc_placeholder")} value={a.annualIncome || ""} onChange={e => setAssetEntries(prev => prev.map(x => x.id === a.id ? { ...x, annualIncome: parseFloat(e.target.value) || 0 } : x))} onBlur={() => updateTICAsset(a.id, { annualIncome: a.annualIncome }).catch((err) => { showSuccess('Error saving: ' + err.message); })} style={{ ...s.input, flex: 1, fontSize: 12, padding: "4px 8px" }} />
                       <button onClick={async () => { try { await deleteTICAsset(a.id); setAssetEntries(prev => prev.filter(x => x.id !== a.id)); } catch {} }} style={{ ...s.btn("ghost"), color: T.danger, fontSize: 10, padding: "2px 6px" }}>✕</button>
                     </div>
                   ))}
@@ -2548,15 +2553,15 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
               );
             })}
             <div style={s.card}>
-              <DetailRow label="Total Cash Value of Assets (H)" value={`$${totalAssetValue.toLocaleString()}`} />
-              <DetailRow label="Total Annual Income from Assets (I)" value={`$${totalAssetIncome.toLocaleString()}`} />
-              {totalAssetValue > 5000 && <DetailRow label={`Imputed Income (J) — $${totalAssetValue.toLocaleString()} × 6%`} value={`$${imputedIncome.toLocaleString()}`} accent={T.warn} />}
-              <DetailRow label="Total Income from Assets (K)" value={`$${applicableAssetIncome.toLocaleString()}`} accent={T.info} />
+              <DetailRow label={t("cert_assets_total_val")} value={`$${totalAssetValue.toLocaleString()}`} />
+              <DetailRow label={t("cert_assets_total_inc")} value={`$${totalAssetIncome.toLocaleString()}`} />
+              {totalAssetValue > 5000 && <DetailRow label={t("cert_assets_imputed", { val: totalAssetValue.toLocaleString() })} value={`$${imputedIncome.toLocaleString()}`} accent={T.warn} />}
+              <DetailRow label={t("cert_assets_total_from")} value={`$${applicableAssetIncome.toLocaleString()}`} accent={T.info} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
-              <button onClick={() => setStep(1)} style={s.btn("ghost")}>← Income</button>
+              <button onClick={() => setStep(1)} style={s.btn("ghost")}>{t("cert_btn_back_income")}</button>
               <button onClick={() => { saveCertTotals(); goNext(); }} style={s.mBtn("primary", mobile)}>
-                {isAdmin ? "Next: Eligibility →" : "Next: Review & Sign →"}
+                {isAdmin ? "Next: Eligibility →" : t("cert_btn_next_review")}
               </button>
             </div>
           </div>
@@ -2668,9 +2673,9 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
         {step === 5 && (
           <div>
             <div style={s.card}>
-              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Certification Summary</div>
-              <DetailRow label="Household Size" value={hhMembers.length} />
-              <DetailRow label="Total Annual Income" value={`$${incomeForDetermination.toLocaleString()}`} accent={T.accent} />
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("cert_rev_title")}</div>
+              <DetailRow label={t("cert_rev_hh_size")} value={hhMembers.length} />
+              <DetailRow label={t("cert_rev_total_inc")} value={`$${incomeForDetermination.toLocaleString()}`} accent={T.accent} />
               {isAdmin && <DetailRow label="AMI Category" value={eligibility.category} accent={eligibility.eligible ? T.success : T.danger} />}
               {isAdmin && <DetailRow label="Income Eligible" value={eligibility.eligible ? "Yes" : "No"} accent={eligibility.eligible ? T.success : T.danger} />}
               {isAdmin && <DetailRow label="Program" value={activeCert.programType || "—"} />}
@@ -2678,8 +2683,8 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
 
             {/* Supporting Documents */}
             <div style={s.card}>
-              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Supporting Documents</div>
-              <p style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>Upload pay stubs, tax returns, Social Security award letters, bank statements, or other documents verifying income and assets.</p>
+              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>{t("cert_rev_docs_title")}</div>
+              <p style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>{t("cert_rev_docs_intro")}</p>
 
               {(activeCert.supportingDocs || []).map(d => (
                 <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: T.bg, borderRadius: T.radiusSm, marginBottom: 6, border: `1px solid ${T.border}` }}>
@@ -2693,7 +2698,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
               ))}
 
               <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: mobile ? "16px 20px" : "14px 20px", background: T.bg, border: `2px dashed ${T.border}`, borderRadius: T.radiusSm, cursor: "pointer", fontSize: 13, fontWeight: 600, color: T.accent, marginTop: 8, minHeight: mobile ? 52 : undefined }}>
-                📎 Upload Documents
+                {t("cert_rev_upload_btn")}
                 <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={async (e) => {
                   const files = Array.from(e.target.files || []);
                   const newDocs = [];
@@ -2707,18 +2712,18 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                   }
                   setActiveCert(c => ({ ...c, supportingDocs: [...(c.supportingDocs || []), ...newDocs] }));
                   e.target.value = "";
-                  if (newDocs.length) showSuccess(`${newDocs.length} document${newDocs.length > 1 ? "s" : ""} uploaded`);
+                  if (newDocs.length) showSuccess(t(newDocs.length > 1 ? "cert_rev_docs_uploaded_plural" : "cert_rev_docs_uploaded", { n: newDocs.length }));
                 }} style={{ display: "none" }} />
               </label>
-              <p style={{ fontSize: 11, color: T.dim, marginTop: 6, textAlign: "center" }}>PDF, JPG, PNG, DOC accepted</p>
+              <p style={{ fontSize: 11, color: T.dim, marginTop: 6, textAlign: "center" }}>{t("cert_rev_accept")}</p>
             </div>
 
             <div style={s.card}>
-              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Household Certification & Signatures</div>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("cert_rev_sign_title")}</div>
               <div style={{ fontSize: 12, color: T.muted, marginBottom: 16, lineHeight: 1.5 }}>
-                Under penalties of perjury, I/we certify that the information presented in this Certification is true and accurate to the best of my/our knowledge and belief.
+                {t("cert_rev_sign_intro")}
               </div>
-              <SignaturePad label="Resident Signature" value={activeCert.residentSignature} onChange={v => setActiveCert(c => ({ ...c, residentSignature: v }))} mobile={mobile} />
+              <SignaturePad label={t("cert_rev_resident_sig")} value={activeCert.residentSignature} onChange={v => setActiveCert(c => ({ ...c, residentSignature: v }))} mobile={mobile} />
               {isAdmin && (
                 <div style={{ marginTop: 16 }}>
                   <SignaturePad label="Owner/Representative Signature" value={activeCert.adminSignature} onChange={v => setActiveCert(c => ({ ...c, adminSignature: v }))} mobile={mobile} />
@@ -2728,15 +2733,15 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, flexWrap: "wrap", gap: 8 }}>
-              <button onClick={goPrev} style={s.btn("ghost")}>← {isAdmin ? "Rent & Program" : "Assets"}</button>
+              <button onClick={goPrev} style={s.btn("ghost")}>{isAdmin ? "← Rent & Program" : t("cert_btn_back_assets")}</button>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={async () => {
                   try {
                     await saveCertTotals();
                     await updateIncomeCertification(activeCert.id, { status: "draft", stepsCompleted: { household: true, income: true, assets: true, rent: true, eligibility: true, signature: false } });
-                    showSuccess("Saved as draft");
+                    showSuccess(t("cert_rev_saved_draft"));
                   } catch (err) { showSuccess("Error: " + err.message); }
-                }} style={s.btn("ghost")}>💾 Save Draft</button>
+                }} style={s.btn("ghost")}>{t("cert_rev_save_draft")}</button>
                 <button onClick={async () => {
                   try {
                     await saveCertTotals();
@@ -2752,7 +2757,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                       adminSignature: activeCert.adminSignature, adminSignedAt: activeCert.adminSignature ? new Date().toISOString() : null,
                       adminSignerName: activeCert.adminSignerName,
                     });
-                    showSuccess(isAdmin ? "Certification approved!" : "Submitted for review!");
+                    showSuccess(isAdmin ? "Certification approved!" : t("cert_rev_submitted"));
                     // Notify admin when resident submits + send resident a confirmation
                     if (!isAdmin) {
                       if (pushNotif) {
@@ -2789,7 +2794,7 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                     setCerts(refreshed || []);
                     setActiveCert(null);
                   } catch (err) { showSuccess("Error: " + err.message); }
-                }} style={s.mBtn("primary", mobile)}>{isAdmin ? "✓ Approve & Complete" : "Submit for Review"}</button>
+                }} style={s.mBtn("primary", mobile)}>{isAdmin ? "✓ Approve & Complete" : t("cert_rev_submit")}</button>
               </div>
             </div>
           </div>
