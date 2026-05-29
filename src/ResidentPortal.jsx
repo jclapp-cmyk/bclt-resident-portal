@@ -5515,6 +5515,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
 
 // --- INSPECTIONS (All Roles — Unified) ---
 const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, selectedProperty, allUnits = [], savedChecklists = [], onSaveChecklist, onUpdateChecklist, staffMembers = [], onScheduleReg, onUpdateReg, onDeleteReg, inspectionTemplates = [], onSaveTemplate, onUpdateTemplate, onDeleteTemplate }) => {
+  const { t } = useI18n();
   const inspectorOptions = useMemo(() => {
     const list = (staffMembers || [])
       .filter(s => s && s.active !== false && (s.role === "admin" || s.role === "maintenance" || s.role === "property_manager"))
@@ -5594,9 +5595,9 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
 
   return (
     <div>
-      <h1 style={s.sectionTitle}>{isResident ? "My Inspections" : "Inspections"}</h1>
+      <h1 style={s.sectionTitle}>{isResident ? t("insp_title") : "Inspections"}</h1>
       <p style={s.sectionSub}>
-        {isResident ? "Inspection history for your unit" : isAdmin ? "Schedule and manage unit inspections" : "View assigned inspections and complete checklists"}
+        {isResident ? t("insp_subtitle") : isAdmin ? "Schedule and manage unit inspections" : "View assigned inspections and complete checklists"}
       </p>
 
       {isAdmin && (
@@ -5767,7 +5768,7 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
       {(tab === "Unit History" || isResident) && (
         <div style={s.card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>{isResident ? `Inspection History — Unit ${rc?.unit || ""}` : "Unit Inspection History"}</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{isResident ? t("insp_history_for", { unit: rc?.unit || "" }) : "Unit Inspection History"}</div>
             <ExportButton mobile={mobile} onClick={() => generateCSV(
               [{ label: "Date", key: "date" }, { label: "Unit", key: "unit" }, { label: "Category", key: "category" }, { label: "Inspector", key: "inspector" }, { label: "Result", key: "result" }, { label: "Score", key: "score" }, { label: "Failed Items", key: "failedItems", exportValue: r => (r.failedItems || []).join("; ") }],
               unitData, "unit_inspections"
@@ -5776,19 +5777,20 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
           <SortableTable
             mobile={mobile}
             columns={[
-              { key: "date", label: "Date", render: (v, row) => v ? <span>{v}{row.timeWindow ? <span style={{ color: T.dim, fontSize: 11 }}> · {row.timeWindow}</span> : ""}</span> : "—" },
+              { key: "date", label: isResident ? t("insp_col_date") : "Date", render: (v, row) => v ? <span>{v}{row.timeWindow ? <span style={{ color: T.dim, fontSize: 11 }}> · {row.timeWindow}</span> : ""}</span> : "—" },
               ...(isResident ? [] : [
                 { key: "propertyId", label: "Property", render: v => { const p = LIVE_PROPERTIES.find(pr => pr.id === v); return <span style={{ fontWeight: 600 }}>{p?.name || v || "—"}</span>; }, filterOptions: [...new Set(unitData.map(i => i.propertyId).filter(Boolean))], filterValue: row => row.propertyId },
                 { key: "unit", label: "Unit", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
               ]),
-              { key: "category", label: "Category", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span>, filterOptions: catNames, filterValue: row => row.category },
-              { key: "inspector", label: "Inspector" },
-              { key: "result", label: "Result", render: (v, row) => {
+              { key: "category", label: isResident ? t("insp_col_category") : "Category", render: v => <span style={s.badge(T.infoDim, T.info)}>{v}</span>, filterOptions: catNames, filterValue: row => row.category },
+              { key: "inspector", label: isResident ? t("insp_col_inspector") : "Inspector" },
+              { key: "result", label: isResident ? t("insp_col_result") : "Result", render: (v, row) => {
                 const color = v === "Pass" ? T.success : v === "Scheduled" ? T.accent : T.danger;
                 const bg = v === "Pass" ? T.successDim : v === "Scheduled" ? (T.accentDim || "rgba(99,102,241,0.12)") : T.dangerDim;
-                return <span style={s.badge(bg, color)}>{v}{row.score ? ` (${row.score})` : ""}</span>;
+                const label = isResident ? (v === "Pass" ? t("insp_result_pass") : v === "Fail" ? t("insp_result_fail") : v === "Scheduled" ? t("insp_result_scheduled") : v) : v;
+                return <span style={s.badge(bg, color)}>{label}{row.score ? ` (${row.score})` : ""}</span>;
               }, filterOptions: ["Pass", "Fail", "Scheduled"], filterValue: row => row.result },
-              { key: "failedItems", label: isResident ? "Notes" : "Failed Items", render: (v, row) => { const items = Array.isArray(v) ? v : []; return <span style={{ fontSize: 13, color: items.length ? T.danger : T.dim }}>{items.length ? items.join("; ") : (isResident ? row.notes : "None")}</span>; }, filterable: false, sortable: false },
+              { key: "failedItems", label: isResident ? t("insp_col_notes") : "Failed Items", render: (v, row) => { const items = Array.isArray(v) ? v : []; return <span style={{ fontSize: 13, color: items.length ? T.danger : T.dim }}>{items.length ? items.join("; ") : (isResident ? row.notes : "None")}</span>; }, filterable: false, sortable: false },
             ]}
             data={unitData}
             onRowClick={row => {

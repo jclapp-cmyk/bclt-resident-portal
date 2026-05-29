@@ -182,6 +182,14 @@ export const TRANSLATIONS = {
     insp_title: "My Inspections",
     insp_subtitle: "Inspection history for your unit",
     insp_history_for: "Inspection History — Unit {unit}",
+    insp_col_date: "Date",
+    insp_col_category: "Category",
+    insp_col_inspector: "Inspector",
+    insp_col_result: "Result",
+    insp_col_notes: "Notes",
+    insp_result_pass: "Pass",
+    insp_result_fail: "Fail",
+    insp_result_scheduled: "Scheduled",
 
     // ── Income Cert ──
     cert_title: "Recertification",
@@ -454,6 +462,14 @@ export const TRANSLATIONS = {
     insp_title: "Mis Inspecciones",
     insp_subtitle: "Historial de inspecciones de su unidad",
     insp_history_for: "Historial de Inspecciones — Unidad {unit}",
+    insp_col_date: "Fecha",
+    insp_col_category: "Categoría",
+    insp_col_inspector: "Inspector",
+    insp_col_result: "Resultado",
+    insp_col_notes: "Notas",
+    insp_result_pass: "Aprobada",
+    insp_result_fail: "Falló",
+    insp_result_scheduled: "Programada",
 
     // ── Income Cert ──
     cert_title: "Recertificación",
