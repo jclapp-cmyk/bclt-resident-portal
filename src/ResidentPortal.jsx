@@ -7527,6 +7527,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               <select style={{ ...s.select, width: "100%" }} value={composeData.to || "property_manager"} onChange={e => setComposeData(prev => ({ ...prev, to: e.target.value }))}>
                 <option value="property_manager">{t("msg_send_to_pm")}</option>
                 <option value="rent">{t("msg_send_to_rent")}</option>
+                <option value="bclt_staff">{t("msg_send_to_bclt")}</option>
               </select>
             </div>
             <div>
@@ -7554,7 +7555,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               const threadId = `THR-${Date.now()}`;
               const now = new Date().toISOString();
               const recipientKey = composeData.to || "property_manager";
-              const recipientLabels = { property_manager: "Property Manager", rent: "Rent / Billing" };
+              const recipientLabels = { property_manager: "Property Manager", rent: "Rent / Billing", bclt_staff: "BCLT Staff" };
               const recipientLabel = recipientLabels[recipientKey] || "Property Manager";
               const taggedSubject = `[${recipientLabel}] ${composeData.subject.trim()}`;
               // Upload attachments (if any). HEIC images get converted to JPEG first.
