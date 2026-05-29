@@ -3286,11 +3286,14 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
                 <div><label style={s.label}>{t("profile_contact_email")}</label><input style={s.mInput(mobile)} type="email" value={contactForm.email} onChange={e => setContactForm(p => ({ ...p, email: e.target.value }))} /></div>
               </div>
               <div style={{ marginBottom: 14 }}>
-                <label style={s.label}>Preferred Contact Method</label>
+                <label style={s.label}>{t("profile_contact_pref_method")}</label>
                 <div style={{ display: "flex", gap: 8 }}>
-                  {["email", "sms", "both", "phone"].map(ch => (
-                    <button key={ch} onClick={() => setCommPrefs(prev => ({ ...prev, preferredChannel: ch }))} style={{ ...s.btn(commPrefs.preferredChannel === ch ? "primary" : "ghost"), flex: 1, fontSize: 12, textTransform: "uppercase" }}>{ch === "both" ? "Email+SMS" : ch}</button>
-                  ))}
+                  {["email", "sms", "both", "phone"].map(ch => {
+                    const key = ch === "email" ? "profile_ch_short_email" : ch === "sms" ? "profile_ch_short_sms" : ch === "both" ? "profile_ch_short_both" : "profile_ch_short_phone";
+                    return (
+                      <button key={ch} onClick={() => setCommPrefs(prev => ({ ...prev, preferredChannel: ch }))} style={{ ...s.btn(commPrefs.preferredChannel === ch ? "primary" : "ghost"), flex: 1, fontSize: 12, textTransform: ch === "both" ? "none" : "uppercase" }}>{t(key)}</button>
+                    );
+                  })}
                 </div>
               </div>
               {(commPrefs.preferredChannel === "sms" || commPrefs.preferredChannel === "both") && (
@@ -3301,23 +3304,27 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
                       try {
                         await updateResident(myRes._uuid, { smsConsent: consent });
                         myRes.smsConsent = consent;
-                        showSuccess(consent ? "SMS consent recorded." : "SMS consent removed.");
+                        showSuccess(consent ? t("prefs_sms_consent_recorded_short") : t("prefs_sms_consent_removed_short"));
                       } catch (err) { showSuccess("Error: " + err.message); }
                     }} style={{ marginTop: 3, width: 18, height: 18 }} />
-                    <span style={{ fontSize: 13, lineHeight: 1.5 }}>I agree to receive text messages from Bolinas Community Land Trust. Msg & data rates may apply. Reply STOP to cancel.</span>
+                    <span style={{ fontSize: 13, lineHeight: 1.5 }}>{t("profile_contact_sms_short")}</span>
                   </label>
                 </div>
               )}
-              <button style={s.btn()} onClick={saveContact}>Save Changes</button>
+              <button style={s.btn()} onClick={saveContact}>{t("profile_contact_save")}</button>
             </div>
           ) : (
             <div>
-              <DetailRow label="Name" value={rc?.name || "—"} />
-              <DetailRow label="Unit" value={rc?.unit || "—"} />
-              <DetailRow label="Phone" value={contactForm.phone} />
-              <DetailRow label="Email" value={contactForm.email} />
-              <DetailRow label="Preferred Channel" value={(commPrefs.preferredChannel || "email").toUpperCase()} accent={T.accent} />
-              <DetailRow label="SMS Consent" value={myRes.smsConsent ? "✓ Opted In" : "Not opted in"} accent={myRes.smsConsent ? T.success : T.warn} />
+              <DetailRow label={t("profile_contact_name")} value={rc?.name || "—"} />
+              <DetailRow label={t("profile_contact_unit")} value={rc?.unit || "—"} />
+              <DetailRow label={t("profile_contact_phone")} value={contactForm.phone} />
+              <DetailRow label={t("profile_contact_email")} value={contactForm.email} />
+              <DetailRow label={t("profile_contact_preferred")} value={(() => {
+                const ch = commPrefs.preferredChannel || "email";
+                const key = ch === "email" ? "profile_ch_short_email" : ch === "sms" ? "profile_ch_short_sms" : ch === "both" ? "profile_ch_short_both" : "profile_ch_short_phone";
+                return t(key);
+              })()} accent={T.accent} />
+              <DetailRow label={t("profile_contact_sms_consent")} value={myRes.smsConsent ? t("profile_contact_sms_opted_in") : t("profile_contact_sms_not_opted")} accent={myRes.smsConsent ? T.success : T.warn} />
             </div>
           )}
         </div>
