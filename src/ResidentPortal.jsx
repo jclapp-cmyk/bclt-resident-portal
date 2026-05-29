@@ -1796,6 +1796,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
 
 // --- RENT & PAYMENTS ---
 const RentPayments = ({ mobile, rc }) => {
+  const { t } = useI18n();
   const _ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
   const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id) || {};
   const balance = ledgerEntry.balance || 0;
@@ -1814,7 +1815,11 @@ const RentPayments = ({ mobile, rc }) => {
     }).catch(() => setLoadingHistory(false));
   }, [rc?.id]);
 
-  const FEE_INFO = { ach: { label: "ACH / Bank Transfer", fee: 0, feeLabel: "Free" }, debit: { label: "Debit Card", fee: 1.50, feeLabel: "$1.50 fee" }, credit: { label: "Credit Card", fee: 0.0275, feeLabel: "2.75% fee", pct: true } };
+  const FEE_INFO = {
+    ach: { labelKey: "rent_method_ach", fee: 0, feeLabelKey: "rent_method_free" },
+    debit: { labelKey: "rent_method_debit", fee: 1.50, feeLabelKey: "rent_method_fee_flat", feeLabelParams: { amount: "$1.50" } },
+    credit: { labelKey: "rent_method_credit", fee: 0.0275, feeLabelKey: "rent_method_fee_pct", feeLabelParams: { pct: "2.75" }, pct: true },
+  };
   const calcFee = () => {
     const amt = parseFloat(payForm.amount) || 0;
     const info = FEE_INFO[payForm.method] || FEE_INFO.ach;
@@ -1823,24 +1828,26 @@ const RentPayments = ({ mobile, rc }) => {
   const calcTotal = () => (parseFloat(payForm.amount) || 0) + (payForm.method === "ach" ? 0 : calcFee());
 
   const PAY_TYPES = [
-    { value: "rent", label: "Rent" },
-    { value: "late_fee", label: "Late Fee" },
-    { value: "deposit", label: "Security Deposit" },
-    { value: "utility", label: "Utility" },
-    { value: "other", label: "Other" },
+    { value: "rent", labelKey: "rent_paytype_rent" },
+    { value: "late_fee", labelKey: "rent_paytype_late_fee" },
+    { value: "deposit", labelKey: "rent_paytype_deposit" },
+    { value: "utility", labelKey: "rent_paytype_utility" },
+    { value: "other", labelKey: "rent_paytype_other" },
   ];
 
   const handleSubmit = async () => {
     if (!payForm.amount || submitting) return;
     setSubmitting(true);
     try {
+      const ptype = PAY_TYPES.find(p => p.value === payForm.payType);
+      const ptypeLabel = ptype ? t(ptype.labelKey) : "Rent";
       await recordPayment({
         residentSlug: rc?.id,
         amount: parseFloat(payForm.amount),
         method: payForm.method,
         paymentDate: new Date().toISOString().slice(0, 10),
         month: new Date().toISOString().slice(0, 7),
-        note: `${PAY_TYPES.find(t => t.value === payForm.payType)?.label || "Rent"} — online payment`,
+        note: `${ptypeLabel} — online payment`,
       });
       const fresh = await fetchRentLedger();
       if (fresh?.length) LIVE_RENT_LEDGER.splice(0, LIVE_RENT_LEDGER.length, ...fresh);
@@ -1858,53 +1865,53 @@ const RentPayments = ({ mobile, rc }) => {
 
   return (
     <div>
-      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Rent & Payments</h1>
-      <p style={s.sectionSub}>View your balance and make payments</p>
+      <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>{t("rent_title")}</h1>
+      <p style={s.sectionSub}>{t("rent_subtitle")}</p>
       <SuccessMessage message={success} />
 
       <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 24 }}>
-        <StatCard label="Current Balance" value={balance > 0 ? `$${balance.toLocaleString()}` : "$0.00"} accent={balance > 0 ? T.danger : T.success} mobile={mobile} />
-        <StatCard label="Monthly Rent" value={`$${(_ext.rentAmount || 0).toLocaleString()}`} accent={T.accent} mobile={mobile} />
-        <StatCard label="Your Portion" value={`$${(_ext.tenantPortion || 0).toLocaleString()}`} accent={T.accent} mobile={mobile} />
-        <StatCard label="HAP Payment" value={`$${(_ext.hapPayment || 0).toLocaleString()}`} accent={T.info} mobile={mobile} />
+        <StatCard label={t("rent_current_balance")} value={balance > 0 ? `$${balance.toLocaleString()}` : "$0.00"} accent={balance > 0 ? T.danger : T.success} mobile={mobile} />
+        <StatCard label={t("rent_monthly_rent")} value={`$${(_ext.rentAmount || 0).toLocaleString()}`} accent={T.accent} mobile={mobile} />
+        <StatCard label={t("rent_your_portion")} value={`$${(_ext.tenantPortion || 0).toLocaleString()}`} accent={T.accent} mobile={mobile} />
+        <StatCard label={t("rent_hap_payment")} value={`$${(_ext.hapPayment || 0).toLocaleString()}`} accent={T.info} mobile={mobile} />
       </div>
 
       {/* Make Payment */}
       <button style={{ ...s.btn(), marginBottom: 20 }} onClick={() => { setShowPay(!showPay); if (!showPay) setPayForm(f => ({ ...f, amount: String(_ext.tenantPortion || "") })); }}>
-        {showPay ? "Cancel" : "Make a Payment"}
+        {showPay ? t("btn_cancel") : t("rent_make_payment")}
       </button>
       {showPay && (
         <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 20 }}>
-          <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>Make a Payment</div>
+          <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 15 }}>{t("rent_make_payment")}</div>
           <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
             <div>
-              <label style={s.label}>Payment Type</label>
+              <label style={s.label}>{t("rent_payment_type")}</label>
               <select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.payType} onChange={e => setPayForm(p => ({ ...p, payType: e.target.value }))}>
-                {PAY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                {PAY_TYPES.map(pt => <option key={pt.value} value={pt.value}>{t(pt.labelKey)}</option>)}
               </select>
             </div>
             <div>
-              <label style={s.label}>Amount ($)</label>
+              <label style={s.label}>{t("rent_amount")}</label>
               <input style={{ ...s.mInput(mobile), width: "100%" }} type="number" min="0" step="0.01" placeholder="0.00" value={payForm.amount} onChange={e => setPayForm(p => ({ ...p, amount: e.target.value }))} />
             </div>
             <div>
-              <label style={s.label}>Payment Method</label>
+              <label style={s.label}>{t("rent_payment_method")}</label>
               <select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.method} onChange={e => setPayForm(p => ({ ...p, method: e.target.value }))}>
-                {Object.entries(FEE_INFO).map(([k, v]) => <option key={k} value={k}>{v.label} ({v.feeLabel})</option>)}
+                {Object.entries(FEE_INFO).map(([k, v]) => <option key={k} value={k}>{t(v.labelKey)} ({t(v.feeLabelKey, v.feeLabelParams)})</option>)}
               </select>
             </div>
           </div>
           {payForm.amount && payForm.method !== "ach" && (
             <div style={{ padding: "10px 14px", background: T.warnDim, borderRadius: 8, fontSize: 13, marginBottom: 14 }}>
-              <span style={{ fontWeight: 600 }}>Processing fee:</span> ${calcFee().toFixed(2)} · <span style={{ fontWeight: 600 }}>Total:</span> ${calcTotal().toFixed(2)}
+              <span style={{ fontWeight: 600 }}>{t("rent_processing_fee")}</span> ${calcFee().toFixed(2)} · <span style={{ fontWeight: 600 }}>{t("rent_total")}</span> ${calcTotal().toFixed(2)}
             </div>
           )}
           <div style={{ padding: "10px 14px", background: T.infoDim, borderRadius: 8, fontSize: 12, color: T.info, marginBottom: 14 }}>
-            Online payments require a payment processor (Stripe). Contact your property manager to enable online payments. Manual payments (check, money order) can be recorded by your admin.
+            {t("rent_online_disabled")}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button disabled={!payForm.amount || submitting} style={s.btn()} onClick={handleSubmit}>{submitting ? "Processing..." : `Pay $${calcTotal().toFixed(2)}`}</button>
-            <button style={s.btn("ghost")} onClick={() => setShowPay(false)}>Cancel</button>
+            <button disabled={!payForm.amount || submitting} style={s.btn()} onClick={handleSubmit}>{submitting ? t("rent_processing") : t("rent_pay_amount", { amount: `$${calcTotal().toFixed(2)}` })}</button>
+            <button style={s.btn("ghost")} onClick={() => setShowPay(false)}>{t("btn_cancel")}</button>
           </div>
         </div>
       )}
@@ -1912,7 +1919,7 @@ const RentPayments = ({ mobile, rc }) => {
       {/* Payment History */}
       <div style={s.card}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Payment History</div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{t("rent_history_title")}</div>
           <ExportButton onClick={() => generateCSV([
             { label: "Date", key: "paymentDate" },
             { label: "Method", key: "method" },
@@ -1921,12 +1928,12 @@ const RentPayments = ({ mobile, rc }) => {
           ], payHistory, "payment_history")} />
         </div>
         {loadingHistory ? (
-          <div style={{ padding: 20, textAlign: "center", color: T.muted }}>Loading...</div>
+          <div style={{ padding: 20, textAlign: "center", color: T.muted }}>{t("word_loading")}</div>
         ) : payHistory.length === 0 ? (
-          <EmptyState icon="💳" text="No payment history yet." />
+          <EmptyState icon="💳" text={t("rent_history_empty")} />
         ) : (
           <table style={s.table}>
-            <thead><tr>{["Date", "Type", "Method", "Amount", "Note"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+            <thead><tr>{[t("rent_col_date"), t("rent_col_type"), t("rent_col_method"), t("rent_col_amount"), t("rent_col_note")].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
             <tbody>
               {payHistory.map((p, i) => (
                 <tr key={p.id || i}>
