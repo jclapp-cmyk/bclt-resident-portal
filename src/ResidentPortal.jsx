@@ -406,6 +406,7 @@ const ProgressRing = ({ value, max = 100, color = T.accent, size = 90, strokeWid
 // ── SORTABLE TABLE ────────────────────────────────────────
 
 const SortableTable = ({ columns, data, keyField = "id", rowStyle, mobile, onRowClick }) => {
+  const { t } = useI18n();
   const [sortKey, setSortKey] = useState(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [filters, setFilters] = useState({});
@@ -457,11 +458,11 @@ const SortableTable = ({ columns, data, keyField = "id", rowStyle, mobile, onRow
                 {col.filterable !== false ? (
                   col.filterOptions ? (
                     <select style={{ ...s.select, padding: "3px 4px", fontSize: 11, width: "100%" }} value={filters[col.key] || ""} onChange={e => updateFilter(col.key, e.target.value)}>
-                      <option value="">All</option>
+                      <option value="">{t("filter_all")}</option>
                       {col.filterOptions.map(o => <option key={o} value={o}>{o}</option>)}
                     </select>
                   ) : (
-                    <input style={{ ...s.input, padding: "3px 6px", fontSize: 11 }} placeholder="Filter..." value={filters[col.key] || ""} onChange={e => updateFilter(col.key, e.target.value)} />
+                    <input style={{ ...s.input, padding: "3px 6px", fontSize: 11 }} placeholder={t("filter_placeholder")} value={filters[col.key] || ""} onChange={e => updateFilter(col.key, e.target.value)} />
                   )
                 ) : null}
               </td>
@@ -5790,7 +5791,17 @@ const Inspections = ({ role, mobile, unitInspections, onSchedule, onUpdate, rc, 
                 const label = isResident ? (v === "Pass" ? t("insp_result_pass") : v === "Fail" ? t("insp_result_fail") : v === "Scheduled" ? t("insp_result_scheduled") : v) : v;
                 return <span style={s.badge(bg, color)}>{label}{row.score ? ` (${row.score})` : ""}</span>;
               }, filterOptions: ["Pass", "Fail", "Scheduled"], filterValue: row => row.result },
-              { key: "failedItems", label: isResident ? t("insp_col_notes") : "Failed Items", render: (v, row) => { const items = Array.isArray(v) ? v : []; return <span style={{ fontSize: 13, color: items.length ? T.danger : T.dim }}>{items.length ? items.join("; ") : (isResident ? row.notes : "None")}</span>; }, filterable: false, sortable: false },
+              { key: "failedItems", label: isResident ? t("insp_col_notes") : "Failed Items", render: (v, row) => {
+                const items = Array.isArray(v) ? v : [];
+                if (items.length) return <span style={{ fontSize: 13, color: T.danger }}>{items.join("; ")}</span>;
+                if (!isResident) return <span style={{ fontSize: 13, color: T.dim }}>None</span>;
+                // Resident-side: translate well-known notes patterns
+                const notesRaw = row.notes || "";
+                let displayNotes = notesRaw;
+                if (/^Notification:\s*Yes/i.test(notesRaw)) displayNotes = t("insp_notify_yes");
+                else if (/^Notification:\s*No/i.test(notesRaw)) displayNotes = t("insp_notify_no");
+                return <span style={{ fontSize: 13, color: T.dim }}>{displayNotes}</span>;
+              }, filterable: false, sortable: false },
             ]}
             data={unitData}
             onRowClick={row => {

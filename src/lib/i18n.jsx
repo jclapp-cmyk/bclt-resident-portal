@@ -190,6 +190,10 @@ export const TRANSLATIONS = {
     insp_result_pass: "Pass",
     insp_result_fail: "Fail",
     insp_result_scheduled: "Scheduled",
+    insp_notify_yes: "Notification: Yes — 24 hour notice",
+    insp_notify_no: "Notification: No",
+    filter_all: "All",
+    filter_placeholder: "Filter...",
 
     // ── Income Cert ──
     cert_title: "Recertification",
@@ -470,6 +474,10 @@ export const TRANSLATIONS = {
     insp_result_pass: "Aprobada",
     insp_result_fail: "Falló",
     insp_result_scheduled: "Programada",
+    insp_notify_yes: "Notificación: Sí — Aviso de 24 horas",
+    insp_notify_no: "Notificación: No",
+    filter_all: "Todos",
+    filter_placeholder: "Filtrar...",
 
     // ── Income Cert ──
     cert_title: "Recertificación",
