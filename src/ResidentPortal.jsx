@@ -3259,11 +3259,11 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
     }
     onUpdateEmergencyContacts(rc?.id || "", updated);
     setEditingEC(null);
-    showSuccess(editingEC === "new" ? "Emergency contact added!" : "Emergency contact updated!");
+    showSuccess(editingEC === "new" ? t("ec_added") : t("ec_updated"));
   };
   const deleteEC = (id) => {
     onUpdateEmergencyContacts(rc?.id || "", myContacts.filter(ec => ec.id !== id));
-    showSuccess("Emergency contact removed.");
+    showSuccess(t("ec_removed"));
   };
 
   return (
@@ -3333,39 +3333,43 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
       {tab === "Emergency Contacts" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div style={{ fontSize: 13, color: T.muted }}>People to contact in case of emergency</div>
-            <button style={s.btn()} onClick={startAddEC}>+ Add Contact</button>
+            <div style={{ fontSize: 13, color: T.muted }}>{t("ec_subtitle")}</div>
+            <button style={s.btn()} onClick={startAddEC}>{t("ec_add_btn")}</button>
           </div>
           {editingEC && (
             <div style={{ ...s.card, borderColor: T.accent }}>
-              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{editingEC === "new" ? "Add Emergency Contact" : "Edit Emergency Contact"}</div>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{editingEC === "new" ? t("ec_form_add_title") : t("ec_form_edit_title")}</div>
               <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-                <div><label style={s.label}>Name</label><input style={s.mInput(mobile)} value={ecForm.name} onChange={e => setEcForm(p => ({ ...p, name: e.target.value }))} placeholder="Full name" /></div>
-                <div><label style={s.label}>Relationship</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={ecForm.relationship} onChange={e => setEcForm(p => ({ ...p, relationship: e.target.value }))}><option value="">Select...</option><option>Spouse</option><option>Parent</option><option>Mother</option><option>Father</option><option>Sibling</option><option>Sister</option><option>Brother</option><option>Child</option><option>Friend</option><option>Other</option></select></div>
-                <div><label style={s.label}>Phone</label><input style={s.mInput(mobile)} value={ecForm.phone} onChange={e => setEcForm(p => ({ ...p, phone: e.target.value }))} placeholder="(415) 555-0000" /></div>
-                <div><label style={s.label}>Email (optional)</label><input style={s.mInput(mobile)} type="email" value={ecForm.email} onChange={e => setEcForm(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" /></div>
+                <div><label style={s.label}>{t("ec_form_name")}</label><input style={s.mInput(mobile)} value={ecForm.name} onChange={e => setEcForm(p => ({ ...p, name: e.target.value }))} placeholder={t("ec_form_name_placeholder")} /></div>
+                <div><label style={s.label}>{t("ec_form_relationship")}</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={ecForm.relationship} onChange={e => setEcForm(p => ({ ...p, relationship: e.target.value }))}><option value="">{t("ec_form_relationship_select")}</option><option value="Spouse">{t("ec_rel_spouse")}</option><option value="Parent">{t("ec_rel_parent")}</option><option value="Mother">{t("ec_rel_mother")}</option><option value="Father">{t("ec_rel_father")}</option><option value="Sibling">{t("ec_rel_sibling")}</option><option value="Sister">{t("ec_rel_sister")}</option><option value="Brother">{t("ec_rel_brother")}</option><option value="Child">{t("ec_rel_child")}</option><option value="Friend">{t("ec_rel_friend")}</option><option value="Other">{t("ec_rel_other")}</option></select></div>
+                <div><label style={s.label}>{t("ec_form_phone")}</label><input style={s.mInput(mobile)} value={ecForm.phone} onChange={e => setEcForm(p => ({ ...p, phone: e.target.value }))} placeholder={t("ec_form_phone_placeholder")} /></div>
+                <div><label style={s.label}>{t("ec_form_email_optional")}</label><input style={s.mInput(mobile)} type="email" value={ecForm.email} onChange={e => setEcForm(p => ({ ...p, email: e.target.value }))} placeholder={t("ec_form_email_placeholder")} /></div>
               </div>
               <div style={{ display: "flex", gap: 10 }}>
-                <button style={s.btn()} onClick={saveEC}>Save</button>
-                <button style={s.btn("ghost")} onClick={() => setEditingEC(null)}>Cancel</button>
+                <button style={s.btn()} onClick={saveEC}>{t("ec_form_save")}</button>
+                <button style={s.btn("ghost")} onClick={() => setEditingEC(null)}>{t("ec_form_cancel")}</button>
               </div>
             </div>
           )}
-          {myContacts.map(ec => (
+          {myContacts.map(ec => {
+            const relKey = { "Spouse": "ec_rel_spouse", "Parent": "ec_rel_parent", "Mother": "ec_rel_mother", "Father": "ec_rel_father", "Sibling": "ec_rel_sibling", "Sister": "ec_rel_sister", "Brother": "ec_rel_brother", "Child": "ec_rel_child", "Friend": "ec_rel_friend", "Other": "ec_rel_other" }[ec.relationship];
+            const relDisplay = relKey ? t(relKey) : ec.relationship;
+            return (
             <div key={ec.id} style={s.card}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span style={{ fontWeight: 700 }}>{ec.name}</span>
-                <span style={s.badge(T.accentDim, T.accent)}>{ec.relationship}</span>
+                <span style={s.badge(T.accentDim, T.accent)}>{relDisplay}</span>
               </div>
-              <DetailRow label="Phone" value={ec.phone} />
-              {ec.email && <DetailRow label="Email" value={ec.email} />}
+              <DetailRow label={t("ec_form_phone")} value={ec.phone} />
+              {ec.email && <DetailRow label={t("profile_contact_email")} value={ec.email} />}
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button style={s.btn("ghost")} onClick={() => startEditEC(ec)}>Edit</button>
-                <button style={s.btn("ghost")} onClick={() => deleteEC(ec.id)}>Remove</button>
+                <button style={s.btn("ghost")} onClick={() => startEditEC(ec)}>{t("ec_btn_edit")}</button>
+                <button style={s.btn("ghost")} onClick={() => deleteEC(ec.id)}>{t("ec_btn_remove")}</button>
               </div>
             </div>
-          ))}
-          {myContacts.length === 0 && !editingEC && <EmptyState icon="📋" text="No emergency contacts yet. Add one above." />}
+            );
+          })}
+          {myContacts.length === 0 && !editingEC && <EmptyState icon="📋" text={t("ec_empty_state")} />}
         </div>
       )}
 
