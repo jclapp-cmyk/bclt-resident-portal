@@ -3200,7 +3200,7 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
     "Preferences": "profile_tab_prefs",
   };
   const tabs = TAB_KEYS.map(k => ({ id: k, label: t(TAB_LABEL_KEYS[k]) }));
-  const [tab, setTab] = useState(tabs[0]);
+  const [tab, setTab] = useState(TAB_KEYS[0]);
   const [editingContact, setEditingContact] = useState(false);
   const myRes = LIVE_RESIDENTS.find(r => r.id === rc?.id) || { phone: "", email: "", name: rc?.name || "Resident", preferredChannel: "email" };
   const [contactForm, setContactForm] = useState({ phone: myRes.phone || "", email: myRes.email || "" });
@@ -7128,7 +7128,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   const tabs = isStaff
     ? ["Inbox", "Compose", "Templates"]
     : [{ id: "Messages", label: t("msg_tab_messages") }, { id: "Compose", label: t("msg_tab_compose") }, { id: "Preferences", label: t("msg_tab_preferences") }];
-  const [tab, setTab] = useState(tabs[0]);
+  // Tabs may be strings (staff) or {id,label} objects (resident); store the id string either way
+  const [tab, setTab] = useState(typeof tabs[0] === "string" ? tabs[0] : tabs[0].id);
   const [selectedThread, setSelectedThread] = useState(null);
   const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "residents", recipients: [], propertyIds: [] });
   const [residentAttachments, setResidentAttachments] = useState([]);
