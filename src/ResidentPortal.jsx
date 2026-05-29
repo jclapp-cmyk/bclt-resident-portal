@@ -2021,7 +2021,9 @@ const getCertStatus = (moveInDate, lastCertDate) => {
 
 // ── INCOME CERTIFICATION ──
 const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) => {
+  const { t } = useI18n();
   const isAdmin = role === "admin";
+  const isResident = role === "resident";
   const [certs, setCerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCert, setActiveCert] = useState(null); // full cert being edited
@@ -2045,7 +2047,9 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
   // All possible steps (0–5). Residents skip Eligibility (3) and Rent & Program (4) —
   // admins handle those when they review/approve. The submit on step 5 still
   // computes eligibility automatically from the math.
-  const ALL_STEP_LABELS = ["Household", "Income", "Assets", "Eligibility", "Rent & Program", "Review & Sign"];
+  const ALL_STEP_LABELS = isResident
+    ? [t("cert_step_household"), t("cert_step_income"), t("cert_step_assets"), "Eligibility", "Rent & Program", t("cert_step_review")]
+    : ["Household", "Income", "Assets", "Eligibility", "Rent & Program", "Review & Sign"];
   const visibleStepIndices = isAdmin ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 5];
   const stepLabels = visibleStepIndices.map(i => ALL_STEP_LABELS[i]);
   // helpers to move forward/back through only the visible steps
@@ -2321,11 +2325,11 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
     return (
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <button onClick={() => { saveCertTotals(); setActiveCert(null); }} style={s.btn("ghost")}>&larr; Back to Certifications</button>
-          <button onClick={printCertification} style={{ ...s.btn("ghost"), fontSize: 13 }}>🖨️ Print</button>
+          <button onClick={() => { saveCertTotals(); setActiveCert(null); }} style={s.btn("ghost")}>{isResident ? t("cert_back") : "← Back to Certifications"}</button>
+          <button onClick={printCertification} style={{ ...s.btn("ghost"), fontSize: 13 }}>{isResident ? t("cert_print") : "🖨️ Print"}</button>
         </div>
-        <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Income Certification — {activeCert.residentName}</h1>
-        <p style={s.sectionSub}>Unit {activeCert.unit} · {activeCert.certType === "annual" ? "Annual Recertification" : activeCert.certType} · {activeCert.status}</p>
+        <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>{isResident ? t("cert_page_title_with_name", { name: activeCert.residentName }) : `Income Certification — ${activeCert.residentName}`}</h1>
+        <p style={s.sectionSub}>{isResident ? `${t("word_unit")} ${activeCert.unit} · ${activeCert.certType === "annual" ? t("cert_recert_annual") : activeCert.certType} · ${activeCert.status}` : `Unit ${activeCert.unit} · ${activeCert.certType === "annual" ? "Annual Recertification" : activeCert.certType} · ${activeCert.status}`}</p>
 
         {/* Step indicator — only shows the steps relevant to the current role */}
         <div style={{ display: "flex", gap: 4, marginBottom: 20, flexWrap: "wrap" }}>
@@ -2800,8 +2804,8 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
         <div>
-          <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>Income Certification</h1>
-          <p style={s.sectionSub}>LIHTC / Section 8 tenant income certifications</p>
+          <h1 style={{ ...s.sectionTitle, fontSize: mobile ? 18 : 22 }}>{isResident ? t("cert_page_title") : "Income Certification"}</h1>
+          <p style={s.sectionSub}>{isResident ? t("cert_subtitle") : "LIHTC / Section 8 tenant income certifications"}</p>
         </div>
       </div>
       <SuccessMessage message={success} />
@@ -2830,8 +2834,8 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
         <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}`, marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>Annual Income Certification</div>
-              <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Complete your income recertification for housing compliance.</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{t("cert_annual_title")}</div>
+              <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>{t("cert_annual_intro")}</div>
             </div>
             <button onClick={async () => {
               const me = rc ? LIVE_RESIDENTS.find(r => r.id === rc.id || r.name === rc.name) : LIVE_RESIDENTS[0];
@@ -2850,33 +2854,33 @@ const IncomeCertification = ({ role, mobile, selectedProperty, rc, pushNotif }) 
                 setIncomeEntries([]); setAssetEntries([]);
                 setActiveCert({ ...cert, residentName: me.name, unit: me.unit, status: "draft" });
                 setStep(0);
-                showSuccess("Certification started!");
+                showSuccess(t("cert_started"));
               } catch (err) { showSuccess("Error: " + err.message); }
-            }} style={s.mBtn("primary", mobile)}>📋 Start My Certification</button>
+            }} style={s.mBtn("primary", mobile)}>{t("cert_start_btn")}</button>
           </div>
           <div style={{ marginTop: 14, padding: 14, background: T.bg, borderRadius: T.radiusSm, fontSize: 13, lineHeight: 1.55 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8, color: T.text }}>📑 What you'll need before you start</div>
-            <div style={{ color: T.text, marginBottom: 8 }}>Have these documents ready to upload — you can attach them inside the form:</div>
+            <div style={{ fontWeight: 700, marginBottom: 8, color: T.text }}>{t("cert_docs_title")}</div>
+            <div style={{ color: T.text, marginBottom: 8 }}>{t("cert_docs_intro")}</div>
             <ul style={{ margin: "0 0 10px 18px", padding: 0, color: T.text }}>
-              <li>Copy of your most recent <strong>Tax Return</strong> (2024 or 2025)</li>
-              <li>Your <strong>2 most recent bank statements</strong></li>
+              <li dangerouslySetInnerHTML={{ __html: t("cert_docs_tax") }} />
+              <li dangerouslySetInnerHTML={{ __html: t("cert_docs_bank") }} />
             </ul>
-            <div style={{ color: T.text, marginTop: 10, marginBottom: 4, fontWeight: 600 }}>If you are employed:</div>
+            <div style={{ color: T.text, marginTop: 10, marginBottom: 4, fontWeight: 600 }}>{t("cert_docs_employed")}</div>
             <ul style={{ margin: "0 0 10px 18px", padding: 0, color: T.text }}>
-              <li>Your <strong>2 most recent pay stubs</strong></li>
+              <li dangerouslySetInnerHTML={{ __html: t("cert_docs_paystubs") }} />
             </ul>
-            <div style={{ color: T.text, marginBottom: 4, fontWeight: 600 }}>If you are self-employed:</div>
+            <div style={{ color: T.text, marginBottom: 4, fontWeight: 600 }}>{t("cert_docs_selfemployed")}</div>
             <ul style={{ margin: "0 0 10px 18px", padding: 0, color: T.text }}>
-              <li>Any documentation of monthly income</li>
+              <li>{t("cert_docs_self_inc")}</li>
             </ul>
-            <div style={{ color: T.text, marginTop: 10, marginBottom: 4, fontWeight: 600 }}>Other income documents (only if they apply to you — it's fine if you don't have any):</div>
+            <div style={{ color: T.text, marginTop: 10, marginBottom: 4, fontWeight: 600 }}>{t("cert_docs_other")}</div>
             <ul style={{ margin: "0 0 0 18px", padding: 0, color: T.muted }}>
-              <li>Social Security / Disability statement</li>
-              <li>Investment account statements</li>
-              <li>Pension income statement</li>
-              <li>Child Support / Alimony document</li>
+              <li>{t("cert_docs_ssi")}</li>
+              <li>{t("cert_docs_invest")}</li>
+              <li>{t("cert_docs_pension")}</li>
+              <li>{t("cert_docs_alimony")}</li>
             </ul>
-            <div style={{ marginTop: 10, fontSize: 12, color: T.muted, fontStyle: "italic" }}>Tip: snap photos with your phone if you don't have PDFs — JPG, PNG, HEIC, and PDF are all fine.</div>
+            <div style={{ marginTop: 10, fontSize: 12, color: T.muted, fontStyle: "italic" }}>{t("cert_docs_tip")}</div>
           </div>
         </div>
       )}
