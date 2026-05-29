@@ -7357,7 +7357,11 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
         return (
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 15 }}>New Message</div>
-          <div style={{ fontSize: 12, color: T.muted, marginBottom: 16 }}>Pick any combination of residents (by building), staff, and vendors — they'll all receive the same message.</div>
+          <div style={{ fontSize: 12, color: T.muted, marginBottom: 16, lineHeight: 1.5 }}>
+            Pick any combination of residents (by building), staff, vendors, and other emails — they'll all receive the same message.
+            <br />
+            Residents are sent messages via their delivery preference. All others are on email.
+          </div>
           {/* Buildings → Residents tree */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 10, flexWrap: "wrap" }}>
