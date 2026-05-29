@@ -7336,7 +7336,13 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
         const selectedResidents = LIVE_RESIDENTS.filter(r => composeData.recipients.includes(r.id));
         const selectedStaff = activeStaff.filter(st => composeData.staffIds.includes(st.id));
         const selectedVendors = activeVendors.filter(v => composeData.vendorIds.includes(v.id));
-        const resolveRecipients = () => [...selectedResidents, ...selectedStaff, ...selectedVendors];
+        // Tag each recipient so the send pipeline knows whether to honor SMS choice.
+        // Residents respect the channel picker; staff and vendors are email-only.
+        const resolveRecipients = () => [
+          ...selectedResidents.map(r => ({ ...r, _kind: "resident" })),
+          ...selectedStaff.map(r => ({ ...r, _kind: "staff" })),
+          ...selectedVendors.map(r => ({ ...r, _kind: "vendor", email: r.email, phone: r.phone, name: r.name || r.company })),
+        ];
         const recipientCount = resolveRecipients().length;
         const isBroadcastLike = recipientCount > 1;
         const filteredPropertyName = residentPropertyFilter === "all"
@@ -7448,6 +7454,9 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 <option value="sms">SMS</option>
                 <option value="email">Email</option>
               </select>
+              {(selectedStaff.length > 0 || selectedVendors.length > 0) && (
+                <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Staff &amp; vendors always receive email.</div>
+              )}
             </div>
             <div>
               <label style={s.label}>Priority</label>
@@ -7519,8 +7528,10 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
               const emailData = { subject: composeData.subject.trim(), body: composeData.body.trim(), threadCode: threadId };
               const sendToRecipient = async (r) => {
                 if (!r) return;
-                const wantsEmail = ch === "email" || ch === "auto";
-                const wantsSms = ch === "sms" || ch === "auto";
+                // Staff & vendors have no preference field — always email-only.
+                const externalContact = r._kind === "staff" || r._kind === "vendor";
+                const wantsEmail = externalContact || ch === "email" || ch === "auto";
+                const wantsSms = !externalContact && (ch === "sms" || ch === "auto");
                 if (wantsEmail) {
                   if (!r.email) { deliveryReport.emailFailed++; deliveryReport.errors.push(`${r.name || r.id}: no email on file`); }
                   else (await trySend(`email to ${r.email}`, () => sendNotification("custom", { ...emailData, to: r.email }))) ? deliveryReport.emailSent++ : deliveryReport.emailFailed++;
