@@ -3489,20 +3489,20 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
       {tab === "Preferences" && (
         <div>
           <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Contact Preferences</div>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("prefs_contact")}</div>
             <div style={{ marginBottom: 14 }}>
-              <label style={s.label}>Preferred Channel</label>
+              <label style={s.label}>{t("prefs_preferred_channel")}</label>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 {["email", "sms", "both", "phone"].map(ch => (
                   <button key={ch} onClick={() => setCommPrefs(prev => ({ ...prev, preferredChannel: ch }))}
                     style={{ ...s.btn(commPrefs.preferredChannel === ch ? "primary" : "ghost"), flex: 1, minWidth: 90, textTransform: ch === "both" ? "none" : "uppercase", fontSize: 12 }}>
-                    {ch === "sms" ? "SMS" : ch === "email" ? "Email" : ch === "both" ? "Email + SMS" : "Phone"}
+                    {ch === "sms" ? t("prefs_ch_sms") : ch === "email" ? t("prefs_ch_email") : ch === "both" ? t("prefs_ch_both") : t("prefs_ch_phone")}
                   </button>
                 ))}
               </div>
             </div>
             <div style={{ marginBottom: 14, padding: "12px 14px", background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
-              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>SMS Text Message Consent</div>
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>{t("prefs_sms_consent")}</div>
               <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
                 <input type="checkbox" checked={smsConsent} onChange={async (e) => {
                   const consent = e.target.checked;
@@ -3511,26 +3511,26 @@ const ResidentProfile = ({ mobile, commPrefs, setCommPrefs, emergencyContacts, o
                   try {
                     await updateResident(myRes._uuid, { smsConsent: consent });
                     myRes.smsConsent = consent;
-                    showSuccess(consent ? "SMS consent recorded. You will receive text messages from BCLT." : "SMS consent removed. You will no longer receive text messages.");
+                    showSuccess(consent ? t("prefs_sms_consent_recorded_long") : t("prefs_sms_consent_removed_long"));
                   } catch (err) {
                     setSmsConsent(prev); // roll back on failure
                     showSuccess("Error: " + err.message);
                   }
                 }} style={{ marginTop: 3, width: 18, height: 18 }} />
                 <span style={{ fontSize: 13, lineHeight: 1.5, color: T.text }}>
-                  I agree to receive text messages from Bolinas Community Land Trust at the phone number on file. Message frequency varies. Message and data rates may apply. Reply STOP to cancel at any time. Reply HELP for help.
+                  {t("prefs_sms_consent_body")}
                 </span>
               </label>
             </div>
             <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-              <div><label style={s.label}>Quiet Hours Start</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursStart} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursStart: e.target.value }))} /></div>
-              <div><label style={s.label}>Quiet Hours End</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursEnd} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursEnd: e.target.value }))} /></div>
+              <div><label style={s.label}>{t("prefs_quiet_start")}</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursStart} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursStart: e.target.value }))} /></div>
+              <div><label style={s.label}>{t("prefs_quiet_end")}</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursEnd} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursEnd: e.target.value }))} /></div>
             </div>
             <div>
-              <label style={s.label}>Language</label>
+              <label style={s.label}>{t("prefs_language")}</label>
               <select style={{ ...s.select, width: "100%" }} value={commPrefs.language} onChange={e => setCommPrefs(prev => ({ ...prev, language: e.target.value }))}>
-                <option value="en">English</option>
-                <option value="es">Espanol</option>
+                <option value="en">{t("prefs_language_en")}</option>
+                <option value="es">{t("prefs_language_es")}</option>
               </select>
             </div>
           </div>
@@ -7632,41 +7632,41 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
         return (
         <div>
           <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Contact Preferences</div>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("prefs_contact")}</div>
             <div style={{ marginBottom: 14 }}>
-              <label style={s.label}>Preferred Channel</label>
+              <label style={s.label}>{t("prefs_preferred_channel")}</label>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 {["email", "sms", "both", "phone"].map(ch => (
                   <button key={ch} onClick={() => setCommPrefs(prev => ({ ...prev, preferredChannel: ch }))}
                     style={{ ...s.btn(commPrefs.preferredChannel === ch ? "primary" : "ghost"), flex: 1, minWidth: 100, textTransform: ch === "both" ? "none" : "uppercase", fontSize: 12 }}>
-                    {ch === "sms" ? "📱 SMS" : ch === "email" ? "📧 Email" : ch === "both" ? "📧 + 📱 Email + SMS" : "📞 Phone"}
+                    {ch === "sms" ? t("prefs_ch_sms_emoji") : ch === "email" ? t("prefs_ch_email_emoji") : ch === "both" ? t("prefs_ch_both_emoji") : t("prefs_ch_phone_emoji")}
                   </button>
                 ))}
               </div>
               <div style={{ fontSize: 12, color: T.muted, marginTop: 6 }}>
-                {commPrefs.preferredChannel === "sms" && "You'll receive messages via text. Standard rates may apply."}
-                {commPrefs.preferredChannel === "email" && "You'll receive messages at your email address."}
-                {commPrefs.preferredChannel === "both" && "Important messages go to both your email and phone (SMS)."}
-                {commPrefs.preferredChannel === "phone" && "Management will call you for important communications."}
+                {commPrefs.preferredChannel === "sms" && t("prefs_ch_hint_sms")}
+                {commPrefs.preferredChannel === "email" && t("prefs_ch_hint_email")}
+                {commPrefs.preferredChannel === "both" && t("prefs_ch_hint_both")}
+                {commPrefs.preferredChannel === "phone" && t("prefs_ch_hint_phone")}
               </div>
             </div>
             {/* Read-only display of contact info pulled from My Profile → Contact */}
             <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 6, padding: 12, background: T.bg, borderRadius: T.radiusSm }}>
               <div>
-                <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Phone on file</div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.phone || "Not set"}</div>
+                <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{t("prefs_phone_on_file")}</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.phone || t("prefs_not_set")}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>Email on file</div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.email || "Not set"}</div>
+                <div style={{ fontSize: 11, color: T.dim, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{t("prefs_email_on_file")}</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{myRes.email || t("prefs_not_set")}</div>
               </div>
             </div>
             <div style={{ fontSize: 11, color: T.muted, marginBottom: 14 }}>
-              Update these from <strong>My Profile → Contact</strong>.
+              {t("prefs_update_from_profile_1")}<strong>{t("prefs_update_from_profile_strong")}</strong>{t("prefs_update_from_profile_2")}
             </div>
             {/* SMS Consent — same as My Profile */}
             <div style={{ padding: "12px 14px", background: T.bg, borderRadius: T.radiusSm, border: `1px solid ${T.border}` }}>
-              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>SMS Text Message Consent</div>
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>{t("prefs_sms_consent")}</div>
               <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: myRes._uuid ? "pointer" : "not-allowed" }}>
                 <input type="checkbox" checked={smsConsent} disabled={!myRes._uuid} onChange={async (e) => {
                   const consent = e.target.checked;
@@ -7675,33 +7675,33 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                   try {
                     await updateResident(myRes._uuid, { smsConsent: consent });
                     myRes.smsConsent = consent;
-                    showSuccess(consent ? "SMS consent recorded." : "SMS consent removed.");
+                    showSuccess(consent ? t("prefs_sms_consent_recorded_short") : t("prefs_sms_consent_removed_short"));
                   } catch (err) {
                     setSmsConsent(prev); // roll back
                     showSuccess("Error: " + err.message);
                   }
                 }} style={{ marginTop: 3, width: 18, height: 18 }} />
                 <span style={{ fontSize: 13, lineHeight: 1.5, color: T.text }}>
-                  I agree to receive text messages from Bolinas Community Land Trust at the phone number on file. Message frequency varies. Message and data rates may apply. Reply STOP to cancel at any time. Reply HELP for help.
+                  {t("prefs_sms_consent_body")}
                 </span>
               </label>
             </div>
           </div>
           <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Delivery Settings</div>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>{t("prefs_delivery")}</div>
             <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-              <div><label style={s.label}>Quiet Hours Start</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursStart} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursStart: e.target.value }))} /></div>
-              <div><label style={s.label}>Quiet Hours End</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursEnd} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursEnd: e.target.value }))} /></div>
+              <div><label style={s.label}>{t("prefs_quiet_start")}</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursStart} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursStart: e.target.value }))} /></div>
+              <div><label style={s.label}>{t("prefs_quiet_end")}</label><input style={s.mInput(mobile)} type="time" value={commPrefs.quietHoursEnd} onChange={e => setCommPrefs(prev => ({ ...prev, quietHoursEnd: e.target.value }))} /></div>
             </div>
             <div>
-              <label style={s.label}>Language</label>
+              <label style={s.label}>{t("prefs_language")}</label>
               <select style={{ ...s.select, width: "100%" }} value={commPrefs.language} onChange={e => setCommPrefs(prev => ({ ...prev, language: e.target.value }))}>
-                <option value="en">English</option>
-                <option value="es">Español</option>
+                <option value="en">{t("prefs_language_en")}</option>
+                <option value="es">{t("prefs_language_es")}</option>
               </select>
             </div>
             <div style={{ marginTop: 14, padding: 12, background: T.bg, borderRadius: T.radiusSm, fontSize: 12, color: T.muted }}>
-              Reply STOP to any SMS to unsubscribe. Msg & data rates may apply.
+              {t("prefs_reply_stop_note")}
             </div>
           </div>
         </div>
