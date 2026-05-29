@@ -7142,8 +7142,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   // Inbox sort + filter (admin only — but keep in shared state for simplicity)
   const [inboxSort, setInboxSort] = useState("recent"); // recent | resident | building
   const [inboxPropertyFilter, setInboxPropertyFilter] = useState("");
-  // Residents-picker property filter (admin Compose tab)
-  const [residentPropertyFilter, setResidentPropertyFilter] = useState("all");
+  // Collapsed-by-default state for the Buildings → Residents tree (admin Compose tab)
+  const [collapsedBuildings, setCollapsedBuildings] = useState([]);
   // SMS consent local state (for resident view's Preferences tab) — checkbox needs
   // to react immediately on toggle, not wait for a re-render of LIVE_RESIDENTS.
   const myResForPrefs = !isStaff ? (LIVE_RESIDENTS.find(r => r.id === rc?.id) || {}) : {};
@@ -7329,10 +7329,6 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
           .filter((st, i, arr) => arr.findIndex(x => x.name === st.name) === i);
         // Active vendors with at least one contact method.
         const activeVendors = (vendors || []).filter(v => v.active !== false && (v.email || v.phone));
-        // Residents filtered by the picker's property dropdown
-        const visibleResidents = residentPropertyFilter === "all"
-          ? LIVE_RESIDENTS
-          : LIVE_RESIDENTS.filter(r => r.propertyId === residentPropertyFilter);
         const selectedResidents = LIVE_RESIDENTS.filter(r => composeData.recipients.includes(r.id));
         const selectedStaff = activeStaff.filter(st => composeData.staffIds.includes(st.id));
         const selectedVendors = activeVendors.filter(v => composeData.vendorIds.includes(v.id));
@@ -7345,47 +7341,71 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
         ];
         const recipientCount = resolveRecipients().length;
         const isBroadcastLike = recipientCount > 1;
-        const filteredPropertyName = residentPropertyFilter === "all"
-          ? null
-          : (propertyList.find(p => p.id === residentPropertyFilter)?.name || residentPropertyFilter);
         return (
         <div style={s.card}>
           <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 15 }}>New Message</div>
-          <div style={{ fontSize: 12, color: T.muted, marginBottom: 16 }}>Pick any combination of residents, staff, and vendors — they'll all receive the same message.</div>
-          {/* Residents picker (with property filter) */}
+          <div style={{ fontSize: 12, color: T.muted, marginBottom: 16 }}>Pick any combination of residents (by building), staff, and vendors — they'll all receive the same message.</div>
+          {/* Buildings → Residents tree */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 10, flexWrap: "wrap" }}>
               <label style={{ ...s.label, marginBottom: 0 }}>Residents ({composeData.recipients.length} selected)</label>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 11, color: T.muted }}>Filter:</span>
-                <select value={residentPropertyFilter} onChange={e => setResidentPropertyFilter(e.target.value)} style={{ ...s.select, fontSize: 12, padding: "4px 8px" }}>
-                  <option value="all">All properties</option>
-                  {propertyList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              </div>
+              <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: [] }))}>Clear all</button>
             </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: Array.from(new Set([...prev.recipients, ...visibleResidents.map(r => r.id)])) }))}>
-                {filteredPropertyName ? `Select all in ${filteredPropertyName}` : "Select all"}
-              </button>
-              <button style={{ ...s.btn("ghost"), fontSize: 11, padding: "4px 10px" }} onClick={() => setComposeData(prev => ({ ...prev, recipients: [] }))}>Clear</button>
-            </div>
-            <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 8 }}>
-              {visibleResidents.length === 0 && <div style={{ fontSize: 12, color: T.dim, padding: 8 }}>{LIVE_RESIDENTS.length === 0 ? "No residents on file." : `No residents in ${filteredPropertyName || "this property"}.`}</div>}
-              {visibleResidents.map(r => {
-                const checked = composeData.recipients.includes(r.id);
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 6 }}>Check a building to send to everyone in it, or expand and pick individual residents.</div>
+            <div style={{ maxHeight: 320, overflowY: "auto", border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 6 }}>
+              {propertyList.length === 0 && <div style={{ fontSize: 12, color: T.dim, padding: 8 }}>No properties on file.</div>}
+              {propertyList.map(p => {
+                const propResidents = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
+                const propResidentIds = propResidents.map(r => r.id);
+                const selectedCount = propResidentIds.filter(id => composeData.recipients.includes(id)).length;
+                const allSelected = propResidents.length > 0 && selectedCount === propResidents.length;
+                const partial = selectedCount > 0 && selectedCount < propResidents.length;
+                const expanded = !collapsedBuildings.includes(p.id);
                 return (
-                  <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 6px", cursor: "pointer", fontSize: 13 }}>
-                    <input type="checkbox" checked={checked} onChange={e => {
-                      setComposeData(prev => ({
-                        ...prev,
-                        recipients: e.target.checked
-                          ? [...prev.recipients, r.id]
-                          : prev.recipients.filter(id => id !== r.id),
-                      }));
-                    }} />
-                    <span>{r.name} — Unit {r.unit} <span style={{ color: T.dim }}>({propertyList.find(p => p.id === r.propertyId)?.name || r.propertyId || "—"})</span></span>
-                  </label>
+                  <div key={p.id} style={{ marginBottom: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 6px", background: T.bg, borderRadius: T.radiusSm }}>
+                      <button
+                        type="button"
+                        onClick={() => setCollapsedBuildings(prev => expanded ? [...prev, p.id] : prev.filter(id => id !== p.id))}
+                        disabled={propResidents.length === 0}
+                        title={expanded ? "Collapse" : "Expand"}
+                        style={{ background: "none", border: "none", cursor: propResidents.length === 0 ? "default" : "pointer", padding: 0, width: 16, color: T.muted, fontSize: 11, fontFamily: "monospace" }}
+                      >
+                        {propResidents.length === 0 ? "•" : (expanded ? "▾" : "▸")}
+                      </button>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, cursor: propResidents.length === 0 ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600, opacity: propResidents.length === 0 ? 0.5 : 1 }}>
+                        <input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = partial; }} disabled={propResidents.length === 0} onChange={e => {
+                          setComposeData(prev => ({
+                            ...prev,
+                            recipients: e.target.checked
+                              ? Array.from(new Set([...prev.recipients, ...propResidentIds]))
+                              : prev.recipients.filter(id => !propResidentIds.includes(id)),
+                          }));
+                        }} />
+                        <span>{p.name} <span style={{ color: T.dim, fontWeight: 400 }}>({propResidents.length} resident{propResidents.length === 1 ? "" : "s"}{partial ? ` · ${selectedCount} picked` : ""})</span></span>
+                      </label>
+                    </div>
+                    {expanded && propResidents.length > 0 && (
+                      <div style={{ paddingLeft: 28 }}>
+                        {propResidents.map(r => {
+                          const checked = composeData.recipients.includes(r.id);
+                          return (
+                            <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 6px", cursor: "pointer", fontSize: 13 }}>
+                              <input type="checkbox" checked={checked} onChange={e => {
+                                setComposeData(prev => ({
+                                  ...prev,
+                                  recipients: e.target.checked
+                                    ? [...prev.recipients, r.id]
+                                    : prev.recipients.filter(id => id !== r.id),
+                                }));
+                              }} />
+                              <span>{r.name} <span style={{ color: T.dim }}>— Unit {r.unit}</span></span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
