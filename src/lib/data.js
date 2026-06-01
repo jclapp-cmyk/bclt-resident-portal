@@ -1407,18 +1407,69 @@ export async function fetchRentLimits(year, county) {
   return lookup;
 }
 
-// Upload TIC verification document
+// Read a File as a base64 string (browser side).
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result || "";
+      // Strip the "data:...;base64," prefix
+      const idx = typeof result === "string" ? result.indexOf("base64,") : -1;
+      if (idx === -1) return reject(new Error("Could not read file as base64"));
+      resolve(result.slice(idx + 7));
+    };
+    reader.onerror = () => reject(reader.error || new Error("FileReader failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Upload TIC verification document — encrypted at rest via /api/cert-upload-doc.
+// File is sent base64-encoded over HTTPS to a Vercel function which encrypts
+// with AES-256-GCM using a key in Vercel env (Supabase never sees plaintext).
 export async function uploadTICDocument(file, certId) {
-  const path = `tic-documents/${certId}/${Date.now()}-${file.name}`;
-  const { error } = await supabase.storage.from('tic-documents').upload(path, file);
-  if (error) throw error;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Not signed in');
+  const fileBase64 = await fileToBase64(file);
+  const resp = await fetch('/api/cert-upload-doc', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      certId,
+      fileName: file.name,
+      contentType: file.type || 'application/octet-stream',
+      fileBase64,
+    }),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `Upload failed (${resp.status})`);
+  }
+  const { path } = await resp.json();
   return path;
 }
 
-export async function getTICDocumentUrl(path) {
+// Build a URL that streams the decrypted document through /api/cert-download-doc.
+// The browser must attach the user's bearer token, so this returns a function
+// that performs the authenticated fetch and produces an object-URL for viewing.
+export async function getTICDocumentUrl(path, opts = {}) {
   if (!path) return null;
-  const { data } = await supabase.storage.from('tic-documents').createSignedUrl(path, 3600); // 1hr
-  return data?.signedUrl || null;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Not signed in');
+  const params = new URLSearchParams({ path });
+  if (opts.contentType) params.set('ct', opts.contentType);
+  if (opts.fileName) params.set('name', opts.fileName);
+  const resp = await fetch(`/api/cert-download-doc?${params.toString()}`, {
+    headers: { 'Authorization': `Bearer ${session.access_token}` },
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `Download failed (${resp.status})`);
+  }
+  const blob = await resp.blob();
+  return URL.createObjectURL(blob);
 }
 
 // ── ADMIN NOTES ──
