@@ -676,6 +676,11 @@ export async function updateUnitInspection(code, changes) {
   if (error) throw error;
 }
 
+export async function deleteUnitInspection(code) {
+  const { error } = await supabase.from('unit_inspections').delete().eq('code', code);
+  if (error) throw error;
+}
+
 // ── REGULATORY INSPECTIONS ──
 
 export async function fetchRegInspections() {
