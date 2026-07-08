@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchTenantDeposits, insertTenantDeposit, updateTenantDeposit, deleteTenantDeposit, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAllDeposits, fetchTenantDeposits, insertTenantDeposit, updateTenantDeposit, deleteTenantDeposit, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -79,6 +79,7 @@ let LIVE_RESIDENTS = [];
 let LIVE_RESIDENTS_EXTENDED = {};
 let LIVE_RENT_LEDGER = [];
 let LIVE_REG_INSPECTIONS = [];
+let LIVE_DEPOSITS = [];
 let LIVE_COMPLIANCE_DOCS = [];
 
 // ── DESIGN TOKENS (Light Theme) ──────────────────────────────
@@ -4163,7 +4164,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   await insertTenantDeposit({ residentId: selectedResident._uuid, propertyId: propUuid, depositType: depositForm.depositType, amount: amt, dateCollected: depositForm.date, method: depositForm.method, note: depositForm.note });
                   showSuccess(`Recorded $${amt.toFixed(2)} ${depositForm.depositType} deposit`);
                   setDepositForm({ depositType: "security", amount: "", method: "check", date: new Date().toISOString().slice(0, 10), note: "" });
-                  fetchTenantDeposits(selectedResident._uuid).then(setResidentDeposits).catch(() => {});
+                  fetchTenantDeposits(selectedResident._uuid).then(setResidentDeposits).catch(() => {}); fetchAllDeposits().then(d => { LIVE_DEPOSITS = d; }).catch(() => {});
                 } catch (err) { showSuccess("Error: " + err.message); }
               }} style={{ ...s.mBtn("primary", mobile) }}>Record Deposit</button>
             </div>
@@ -4186,7 +4187,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                         </div>
                         <div style={{ display: "flex", gap: 8 }}>
                           {dep.status === "held" && <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => { setSelectedDeposit(dep); setRefundForm({ refundAmount: String(dep.amount), deductions: deductions, newDeduction: "", newDeductionAmt: "" }); }}>Process Return</button>}
-                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", color: T.danger }} onClick={async () => { if (confirm("Delete this deposit record?")) { try { await deleteTenantDeposit(dep.id); setResidentDeposits(prev => prev.filter(d => d.id !== dep.id)); showSuccess("Deposit deleted"); } catch (err) { showSuccess("Error: " + err.message); } } }}>Delete</button>
+                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", color: T.danger }} onClick={async () => { if (confirm("Delete this deposit record?")) { try { await deleteTenantDeposit(dep.id); setResidentDeposits(prev => prev.filter(d => d.id !== dep.id)); LIVE_DEPOSITS = LIVE_DEPOSITS.filter(d => d.id !== dep.id); showSuccess("Deposit deleted"); } catch (err) { showSuccess("Error: " + err.message); } } }}>Delete</button>
                         </div>
                       </div>
                       <div style={{ fontSize: 13, color: T.muted }}>
@@ -4277,7 +4278,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                         });
                         showSuccess(`Deposit ${status.replace("_", " ")} — $${refundAmt.toFixed(2)} refunded`);
                         setSelectedDeposit(null);
-                        fetchTenantDeposits(selectedResident._uuid).then(setResidentDeposits).catch(() => {});
+                        fetchTenantDeposits(selectedResident._uuid).then(setResidentDeposits).catch(() => {}); fetchAllDeposits().then(d => { LIVE_DEPOSITS = d; }).catch(() => {});
                       } catch (err) { showSuccess("Error: " + err.message); }
                     }}>Process Return</button>
                     <button style={s.btn("ghost")} onClick={() => setSelectedDeposit(null)}>Cancel</button>
@@ -4473,6 +4474,14 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
           { key: "unit", label: "Unit" },
           { key: "bedrooms", label: "BR", render: v => v ? `${v}BR` : "—" },
           { key: "rentAmount", label: "Rent", render: v => v ? `$${v.toLocaleString()}` : "—" },
+          { key: "_deposit", label: "Deposit", sortable: false, filterable: false, render: (_, row) => {
+            const deps = LIVE_DEPOSITS.filter(d => d.resident_id === row._uuid);
+            if (!deps.length) return <span style={{ color: T.dim }}>—</span>;
+            const held = deps.filter(d => d.status === "held");
+            const total = held.reduce((s, d) => s + parseFloat(d.amount), 0);
+            if (total > 0) return <span style={{ color: T.success, fontWeight: 600 }}>${total.toLocaleString()}</span>;
+            return <span style={s.badge(T.successDim, T.success)}>Returned</span>;
+          }},
           { key: "leaseEnd", label: "Lease End", render: v => {
             if (!v) return "—";
             const exp = new Date(v) < new Date();
@@ -10291,15 +10300,17 @@ export default function App() {
   const reloadData = useCallback(async () => {
     try {
       const safe = (fn) => fn().catch(err => { console.warn('Fetch failed:', err.message); return null; });
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes, aUnits, checklists] = await Promise.all([
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes, aUnits, checklists, deposits] = await Promise.all([
         safe(fetchProperties), safe(fetchResidents), safe(fetchResidentsExtended), safe(fetchLeaseDocsByResident),
         safe(fetchRentLedger), safe(fetchMaintenanceRequests), safe(fetchVendors),
         safe(fetchUnitInspections), safe(fetchRegInspections), safe(fetchThreads), safe(fetchMessages),
         safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers), safe(fetchAdminNotes), safe(fetchAllUnits), safe(fetchInspectionChecklists),
+        safe(fetchAllDeposits),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
       LIVE_REG_INSPECTIONS = rInsp || [];
+      LIVE_DEPOSITS = deposits || [];
       LIVE_COMPLIANCE_DOCS = compDocs || [];
       setSbProperties(props || []); setSbResidents(res || []); setSbResidentsExt(resExt || {});
       setSbRentLedger(ledger || []); setLeaseDocs(docs || {});
@@ -10497,14 +10508,15 @@ export default function App() {
   const resetAllState = async () => {
     // Re-fetch Supabase data for core tables
     try {
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard] = await Promise.all([
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, deps] = await Promise.all([
         fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(), fetchRentLedger(),
         fetchMaintenanceRequests(), fetchVendors(), fetchUnitInspections(), fetchRegInspections(), fetchThreads(), fetchMessages(),
-        fetchComplianceDocs(), fetchOnboardingWorkflows(),
+        fetchComplianceDocs(), fetchOnboardingWorkflows(), fetchAllDeposits(),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
       LIVE_REG_INSPECTIONS = rInsp || [];
+      LIVE_DEPOSITS = deps || [];
       LIVE_COMPLIANCE_DOCS = compDocs || [];
       setSbProperties(props || []); setSbResidents(res || []); setSbResidentsExt(resExt || {}); setSbRentLedger(ledger || []); setLeaseDocs(docs || {});
       setMaintenance(maint || []);

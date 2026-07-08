@@ -1118,6 +1118,15 @@ export async function recordPayment({ residentSlug, amount, method, paymentDate,
 
 // ── TENANT DEPOSITS ──
 
+export async function fetchAllDeposits() {
+  const { data, error } = await supabase
+    .from('tenant_deposits')
+    .select('*')
+    .order('date_collected', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
 export async function fetchTenantDeposits(residentUuid) {
   const { data, error } = await supabase
     .from('tenant_deposits')
