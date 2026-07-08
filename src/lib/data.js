@@ -1116,6 +1116,53 @@ export async function recordPayment({ residentSlug, amount, method, paymentDate,
   return data;
 }
 
+// ── TENANT DEPOSITS ──
+
+export async function fetchTenantDeposits(residentUuid) {
+  const { data, error } = await supabase
+    .from('tenant_deposits')
+    .select('*')
+    .eq('resident_id', residentUuid)
+    .order('date_collected', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function insertTenantDeposit({ residentId, propertyId, depositType, amount, dateCollected, method, note }) {
+  const { data, error } = await supabase.from('tenant_deposits').insert({
+    resident_id: residentId,
+    property_id: propertyId,
+    deposit_type: depositType || 'security',
+    amount,
+    date_collected: dateCollected || new Date().toISOString().slice(0, 10),
+    method: method || 'check',
+    note: note || null,
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTenantDeposit(id, changes) {
+  const mapped = {};
+  if (changes.status !== undefined) mapped.status = changes.status;
+  if (changes.refundAmount !== undefined) mapped.refund_amount = changes.refundAmount;
+  if (changes.refundDate !== undefined) mapped.refund_date = changes.refundDate;
+  if (changes.deductions !== undefined) mapped.deductions = changes.deductions;
+  if (changes.note !== undefined) mapped.note = changes.note;
+  if (changes.amount !== undefined) mapped.amount = changes.amount;
+  if (changes.depositType !== undefined) mapped.deposit_type = changes.depositType;
+  if (changes.method !== undefined) mapped.method = changes.method;
+  if (changes.dateCollected !== undefined) mapped.date_collected = changes.dateCollected;
+  mapped.updated_at = new Date().toISOString();
+  const { error } = await supabase.from('tenant_deposits').update(mapped).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteTenantDeposit(id) {
+  const { error } = await supabase.from('tenant_deposits').delete().eq('id', id);
+  if (error) throw error;
+}
+
 // ── HOUSEHOLD MEMBERS ──
 
 export async function fetchHouseholdMembers(residentUuid) {

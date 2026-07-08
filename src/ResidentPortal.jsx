@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchTenantDeposits, insertTenantDeposit, updateTenantDeposit, deleteTenantDeposit, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -3581,6 +3581,10 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [hhForm, setHhForm] = useState({ name: "", relationship: "Spouse", phone: "", email: "" });
   const [residentDocs, setResidentDocs] = useState([]);
   const [residentPayments, setResidentPayments] = useState([]);
+  const [residentDeposits, setResidentDeposits] = useState([]);
+  const [depositForm, setDepositForm] = useState({ depositType: "security", amount: "", method: "check", date: new Date().toISOString().slice(0, 10), note: "" });
+  const [selectedDeposit, setSelectedDeposit] = useState(null);
+  const [refundForm, setRefundForm] = useState({ refundAmount: "", deductions: [], newDeduction: "", newDeductionAmt: "" });
   const [hideInactive, setHideInactive] = useState(true);
   const [residentUsers, setResidentUsers] = useState([]);
   const [inviteResForm, setInviteResForm] = useState({ firstName: "", lastName: "", email: "", phone: "" });
@@ -3607,7 +3611,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   // Load household members, docs, and payments when resident selected (hooks before conditional returns)
   const selectedResUuid = selectedResident?._uuid || null;
   const loadResidentExtra = useCallback(async () => {
-    if (!selectedResUuid) { setHouseholdMembers([]); setResidentDocs([]); setResidentPayments([]); return; }
+    if (!selectedResUuid) { setHouseholdMembers([]); setResidentDocs([]); setResidentPayments([]); setResidentDeposits([]); return; }
     fetchHouseholdMembers(selectedResUuid).then(setHouseholdMembers).catch(() => setHouseholdMembers([]));
     try {
       const { data: docs } = await supabase.from('lease_documents').select('*').eq('resident_id', selectedResUuid).order('uploaded_at', { ascending: false });
@@ -3617,6 +3621,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
       const { data: pays } = await supabase.from('rent_payments').select('*').eq('resident_id', selectedResUuid).order('payment_date', { ascending: false });
       setResidentPayments(pays || []);
     } catch (e) { setResidentPayments([]); }
+    fetchTenantDeposits(selectedResUuid).then(setResidentDeposits).catch(() => setResidentDeposits([]));
   }, [selectedResUuid]);
   useEffect(() => { loadResidentExtra(); }, [loadResidentExtra]);
 
@@ -4135,6 +4140,149 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   { key: "note", label: "Note", render: v => v || "—", filterable: false },
                   { key: "recorded_by", label: "Recorded By", filterable: false },
                 ]} data={residentPayments} />
+              </div>
+            )}
+
+            {/* ── Tenant Deposits ── */}
+            <div style={{ ...s.card, borderLeft: `3px solid ${T.info}`, marginTop: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Record Deposit</div>
+              <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                <div><label style={s.label}>Type</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={depositForm.depositType} onChange={e => setDepositForm(f => ({ ...f, depositType: e.target.value }))}><option value="security">Security Deposit</option><option value="pet">Pet Deposit</option><option value="key">Key Deposit</option><option value="other">Other</option></select></div>
+                <div><label style={s.label}>Amount ($)</label><input type="number" min="0" step="0.01" placeholder="0.00" value={depositForm.amount} onChange={e => setDepositForm(f => ({ ...f, amount: e.target.value }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+                <div><label style={s.label}>Method</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={depositForm.method} onChange={e => setDepositForm(f => ({ ...f, method: e.target.value }))}><option value="cash">Cash</option><option value="check">Check</option><option value="money_order">Money Order</option><option value="ach">ACH</option></select></div>
+              </div>
+              <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                <div><label style={s.label}>Date Collected</label><input type="date" value={depositForm.date} onChange={e => setDepositForm(f => ({ ...f, date: e.target.value }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+                <div><label style={s.label}>Note</label><input type="text" placeholder="e.g. Check #5678" value={depositForm.note} onChange={e => setDepositForm(f => ({ ...f, note: e.target.value }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+              </div>
+              <button disabled={!depositForm.amount} onClick={async () => {
+                const amt = parseFloat(depositForm.amount);
+                if (!amt || !selectedResident._uuid) return;
+                try {
+                  const propUuid = LIVE_PROPERTIES.find(p => p.id === selectedResident.propertyId)?._uuid;
+                  await insertTenantDeposit({ residentId: selectedResident._uuid, propertyId: propUuid, depositType: depositForm.depositType, amount: amt, dateCollected: depositForm.date, method: depositForm.method, note: depositForm.note });
+                  showSuccess(`Recorded $${amt.toFixed(2)} ${depositForm.depositType} deposit`);
+                  setDepositForm({ depositType: "security", amount: "", method: "check", date: new Date().toISOString().slice(0, 10), note: "" });
+                  fetchTenantDeposits(selectedResident._uuid).then(setResidentDeposits).catch(() => {});
+                } catch (err) { showSuccess("Error: " + err.message); }
+              }} style={{ ...s.mBtn("primary", mobile) }}>Record Deposit</button>
+            </div>
+
+            {residentDeposits.length > 0 && (
+              <div style={s.card}>
+                <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Deposit History ({residentDeposits.length})</div>
+                {residentDeposits.map(dep => {
+                  const typeLabels = { security: "Security", pet: "Pet", key: "Key", other: "Other" };
+                  const statusColors = { held: T.info, partially_refunded: T.warn, refunded: T.success, applied: T.danger };
+                  const deductions = Array.isArray(dep.deductions) ? dep.deductions : [];
+                  const totalDeductions = deductions.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+                  return (
+                    <div key={dep.id} style={{ padding: "12px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                          <span style={{ fontWeight: 600 }}>{typeLabels[dep.deposit_type] || dep.deposit_type} Deposit</span>
+                          <span style={{ fontWeight: 700, color: T.success }}>${parseFloat(dep.amount).toFixed(2)}</span>
+                          <span style={s.badge((statusColors[dep.status] || T.info) + "22", statusColors[dep.status] || T.info)}>{(dep.status || "held").replace("_", " ")}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {dep.status === "held" && <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px" }} onClick={() => { setSelectedDeposit(dep); setRefundForm({ refundAmount: String(dep.amount), deductions: deductions, newDeduction: "", newDeductionAmt: "" }); }}>Process Return</button>}
+                          <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 10px", color: T.danger }} onClick={async () => { if (confirm("Delete this deposit record?")) { try { await deleteTenantDeposit(dep.id); setResidentDeposits(prev => prev.filter(d => d.id !== dep.id)); showSuccess("Deposit deleted"); } catch (err) { showSuccess("Error: " + err.message); } } }}>Delete</button>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 13, color: T.muted }}>
+                        Collected {dep.date_collected} via {dep.method}{dep.note ? ` · ${dep.note}` : ""}
+                        {dep.status !== "held" && dep.refund_amount > 0 && <> · Refunded ${parseFloat(dep.refund_amount).toFixed(2)} on {dep.refund_date}</>}
+                        {totalDeductions > 0 && <> · Deductions: ${totalDeductions.toFixed(2)}</>}
+                      </div>
+                      {deductions.length > 0 && (
+                        <div style={{ marginTop: 6, paddingLeft: 12 }}>
+                          {deductions.map((d, i) => <div key={i} style={{ fontSize: 12, color: T.dim }}>— {d.description}: ${parseFloat(d.amount).toFixed(2)}</div>)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Deposit refund/return modal */}
+            {selectedDeposit && (
+              <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setSelectedDeposit(null)}>
+                <div style={{ ...s.card, maxWidth: 520, width: "100%", maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <h2 style={{ margin: 0, fontSize: 18 }}>Process Deposit Return</h2>
+                    <button style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: T.text }} onClick={() => setSelectedDeposit(null)}>×</button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16, fontSize: 14 }}>
+                    <div><span style={{ color: T.dim }}>Type:</span> <strong>{({ security: "Security", pet: "Pet", key: "Key", other: "Other" })[selectedDeposit.deposit_type] || selectedDeposit.deposit_type}</strong></div>
+                    <div><span style={{ color: T.dim }}>Amount:</span> <strong>${parseFloat(selectedDeposit.amount).toFixed(2)}</strong></div>
+                    <div><span style={{ color: T.dim }}>Collected:</span> <strong>{selectedDeposit.date_collected}</strong></div>
+                  </div>
+
+                  <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 16, marginBottom: 16 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15 }}>Deductions</div>
+                    {refundForm.deductions.map((d, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+                        <span style={{ fontSize: 13 }}>{d.description}</span>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: T.danger }}>${parseFloat(d.amount).toFixed(2)}</span>
+                          <button style={{ background: "none", border: "none", fontSize: 14, cursor: "pointer", color: T.danger }} onClick={() => setRefundForm(f => ({ ...f, deductions: f.deductions.filter((_, j) => j !== i) }))}>×</button>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                      <input type="text" placeholder="Description (e.g. Wall damage)" value={refundForm.newDeduction} onChange={e => setRefundForm(f => ({ ...f, newDeduction: e.target.value }))} style={{ ...s.mInput(mobile), flex: 1 }} />
+                      <input type="number" min="0" step="0.01" placeholder="$" value={refundForm.newDeductionAmt} onChange={e => setRefundForm(f => ({ ...f, newDeductionAmt: e.target.value }))} style={{ ...s.mInput(mobile), width: 80 }} />
+                      <button disabled={!refundForm.newDeduction || !refundForm.newDeductionAmt} style={s.btn("ghost")} onClick={() => {
+                        setRefundForm(f => ({
+                          ...f,
+                          deductions: [...f.deductions, { description: f.newDeduction, amount: parseFloat(f.newDeductionAmt) || 0 }],
+                          newDeduction: "", newDeductionAmt: "",
+                        }));
+                      }}>Add</button>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const totalDeductions = refundForm.deductions.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+                    const depositAmt = parseFloat(selectedDeposit.amount) || 0;
+                    const refundAmt = Math.max(0, depositAmt - totalDeductions);
+                    return (
+                      <div style={{ background: T.cardBg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14, marginBottom: 16 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
+                          <span>Original deposit:</span><strong>${depositAmt.toFixed(2)}</strong>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6, color: T.danger }}>
+                          <span>Total deductions:</span><strong>−${totalDeductions.toFixed(2)}</strong>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700, borderTop: `1px solid ${T.border}`, paddingTop: 8 }}>
+                          <span>Refund amount:</span><span style={{ color: T.success }}>${refundAmt.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button style={s.btn()} onClick={async () => {
+                      const totalDeductions = refundForm.deductions.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+                      const depositAmt = parseFloat(selectedDeposit.amount) || 0;
+                      const refundAmt = Math.max(0, depositAmt - totalDeductions);
+                      const status = refundAmt === 0 ? "applied" : refundAmt < depositAmt ? "partially_refunded" : "refunded";
+                      try {
+                        await updateTenantDeposit(selectedDeposit.id, {
+                          status,
+                          refundAmount: refundAmt,
+                          refundDate: new Date().toISOString().slice(0, 10),
+                          deductions: refundForm.deductions,
+                        });
+                        showSuccess(`Deposit ${status.replace("_", " ")} — $${refundAmt.toFixed(2)} refunded`);
+                        setSelectedDeposit(null);
+                        fetchTenantDeposits(selectedResident._uuid).then(setResidentDeposits).catch(() => {});
+                      } catch (err) { showSuccess("Error: " + err.message); }
+                    }}>Process Return</button>
+                    <button style={s.btn("ghost")} onClick={() => setSelectedDeposit(null)}>Cancel</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
