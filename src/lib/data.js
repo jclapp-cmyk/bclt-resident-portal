@@ -214,7 +214,7 @@ export async function fetchAllUnits() {
 export async function fetchResidents() {
   const { data, error } = await supabase
     .from('residents')
-    .select('*, units(number, ami_set_aside, bedrooms), properties(slug)')
+    .select('*, units(number, ami_set_aside, bedrooms, unit_type), properties(slug)')
     .order('name');
   if (error) throw error;
   return data.map(r => ({
@@ -228,6 +228,7 @@ export async function fetchResidents() {
     unitId: r.unit_id || null,
     unitAmiSetAside: r.units?.ami_set_aside || null,
     unitBedrooms: r.units?.bedrooms || null,
+    unitType: r.units?.unit_type || 'apartment',
     phone: r.phone,
     email: r.email,
     preferredChannel: r.preferred_channel,
@@ -237,6 +238,7 @@ export async function fetchResidents() {
     mailingState: r.mailing_state || '',
     mailingZip: r.mailing_zip || '',
     mailingAddress: [r.mailing_street, r.mailing_city, r.mailing_state, r.mailing_zip].filter(Boolean).join(', '),
+    businessName: r.business_name || '',
   }));
 }
 
@@ -318,6 +320,7 @@ export async function insertResident(resident, propertyUuid, unitUuid) {
       mailing_zip: resident.mailingZip || null,
       status: resident.status || 'active',
       move_in_date: resident.moveInDate || null,
+      business_name: resident.businessName || null,
     }).select().single();
     if (!error) return data;
     if (!error?.message?.includes('slug') || attempt === 2) throw error;
@@ -336,6 +339,7 @@ export async function updateResident(residentUuid, changes) {
   if (changes.mailingState !== undefined) mapped.mailing_state = changes.mailingState;
   if (changes.mailingZip !== undefined) mapped.mailing_zip = changes.mailingZip;
   if (changes.status !== undefined) mapped.status = changes.status;
+  if (changes.businessName !== undefined) mapped.business_name = changes.businessName;
   const { error } = await supabase.from('residents').update(mapped).eq('id', residentUuid);
   if (error) throw error;
 }

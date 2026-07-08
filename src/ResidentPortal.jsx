@@ -3569,7 +3569,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [success, showSuccess] = useSuccess();
   const [showAddForm, setShowAddForm] = useState(false);
   const defaultPropId = selectedProperty === "all" ? (LIVE_PROPERTIES[0]?.id || "") : selectedProperty;
-  const [addForm, setAddForm] = useState({ name: "", unit: "", unitId: "", phone: "", email: "", propertyId: defaultPropId, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "" });
+  const [addForm, setAddForm] = useState({ name: "", unit: "", unitId: "", phone: "", email: "", propertyId: defaultPropId, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "", businessName: "" });
   const [adding, setAdding] = useState(false);
   const [addFormUnits, setAddFormUnits] = useState([]);
   const [editingResident, setEditingResident] = useState(false);
@@ -3675,7 +3675,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 8 }}>
               <button style={s.btn(editing ? "ghost" : "primary")} onClick={() => {
                 if (!editing) {
-                  setEditResForm({ name: selectedResident.name, phone: selectedResident.phone || "", email: selectedResident.email || "", preferredChannel: selectedResident.preferredChannel || "email", smsConsent: selectedResident.smsConsent || false, mailingStreet: selectedResident.mailingStreet || "", mailingCity: selectedResident.mailingCity || "", mailingState: selectedResident.mailingState || "CA", mailingZip: selectedResident.mailingZip || "", rentAmount: String(ext.rentAmount || ""), tenantPortion: String(ext.tenantPortion || ""), hapPayment: String(ext.hapPayment || ""), leaseStart: ext.leaseStart || "", leaseEnd: ext.leaseEnd || "", leaseType: ext.leaseType || "fixed" });
+                  setEditResForm({ name: selectedResident.name, phone: selectedResident.phone || "", email: selectedResident.email || "", preferredChannel: selectedResident.preferredChannel || "email", smsConsent: selectedResident.smsConsent || false, mailingStreet: selectedResident.mailingStreet || "", mailingCity: selectedResident.mailingCity || "", mailingState: selectedResident.mailingState || "CA", mailingZip: selectedResident.mailingZip || "", rentAmount: String(ext.rentAmount || ""), tenantPortion: String(ext.tenantPortion || ""), hapPayment: String(ext.hapPayment || ""), leaseStart: ext.leaseStart || "", leaseEnd: ext.leaseEnd || "", leaseType: ext.leaseType || "fixed", businessName: selectedResident.businessName || "" });
                 }
                 setEditing(!editing);
               }}>{editing ? "Cancel" : "✏️ Edit Resident"}</button>
@@ -3711,6 +3711,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Contact Information</div>
                 {editing ? (<>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Name</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.name || ""} onChange={e => setEditResForm(f => ({ ...f, name: e.target.value }))} /></div>
+                  {selectedResident.unitType === "commercial" && <div style={{ marginBottom: 10 }}><label style={s.label}>Business Name</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.businessName || ""} onChange={e => setEditResForm(f => ({ ...f, businessName: e.target.value }))} placeholder="e.g. Bolinas Bakery" /></div>}
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={ef.phone || ""} onChange={e => setEditResForm(f => ({ ...f, phone: e.target.value }))} /></div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.email || ""} onChange={e => setEditResForm(f => ({ ...f, email: e.target.value }))} /></div>
                   <div style={{ marginBottom: 10 }}><label style={s.label}>Preferred Channel</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={ef.preferredChannel || "email"} onChange={e => setEditResForm(f => ({ ...f, preferredChannel: e.target.value }))}><option value="email">Email</option><option value="sms">SMS</option><option value="both">Email + SMS</option><option value="phone">Phone</option></select></div>
@@ -3742,7 +3743,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   {(ef.leaseType || "fixed") === "fixed" && <div style={{ marginBottom: 10 }}><label style={s.label}>Lease End</label><input type="date" style={{ ...s.mInput(mobile), width: "100%" }} value={ef.leaseEnd || ""} onChange={e => setEditResForm(f => ({ ...f, leaseEnd: e.target.value }))} /></div>}
                   <button style={{ ...s.mBtn("primary", mobile), marginTop: 8 }} onClick={async () => {
                     try {
-                      await updateResident(selectedResident._uuid, { name: ef.name, phone: ef.phone, email: ef.email, preferredChannel: ef.preferredChannel, smsConsent: ef.smsConsent, mailingStreet: ef.mailingStreet, mailingCity: ef.mailingCity, mailingState: ef.mailingState, mailingZip: ef.mailingZip });
+                      await updateResident(selectedResident._uuid, { name: ef.name, phone: ef.phone, email: ef.email, preferredChannel: ef.preferredChannel, smsConsent: ef.smsConsent, mailingStreet: ef.mailingStreet, mailingCity: ef.mailingCity, mailingState: ef.mailingState, mailingZip: ef.mailingZip, businessName: ef.businessName || null });
                       let lease = null;
                       try { lease = await fetchResidentLease(selectedResident._uuid); } catch {}
                       if (lease) {
@@ -3774,7 +3775,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   }}>Save Changes</button>
                 </>) : (<>
                   <DetailRow label="Unit" value={ext.unit || selectedResident.unit} />
-                  <DetailRow label="Bedrooms" value={ext.bedrooms || "—"} />
+                  {selectedResident.businessName && <DetailRow label="Business Name" value={selectedResident.businessName} />}
+                  {selectedResident.unitType !== "commercial" && <DetailRow label="Bedrooms" value={ext.bedrooms || "—"} />}
                   <DetailRow label="Lease Type" value={ext.leaseType === "month-to-month" ? "Month-to-Month" : "Fixed Term"} />
                   <DetailRow label="Lease Start" value={ext.leaseStart || "—"} />
                   {ext.leaseType !== "month-to-month" && <DetailRow label="Lease End" value={ext.leaseEnd || "—"} />}
@@ -4408,14 +4410,15 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               </select>
             </div>
             <div><label style={s.label}>Unit *</label>
-              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.unitId || ""} onChange={e => setAddForm(p => ({ ...p, unitId: e.target.value, unit: addFormUnits.find(u => u.id === e.target.value)?.number || "" }))}>
+              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={addForm.unitId || ""} onChange={e => { const u = addFormUnits.find(x => x.id === e.target.value); setAddForm(p => ({ ...p, unitId: e.target.value, unit: u?.number || "", bedrooms: u?.unit_type === "commercial" ? "0" : String(u?.bedrooms || 1) })); }}>
                 <option value="">Select unit...</option>
-                {addFormUnits.map(u => <option key={u.id} value={u.id}>{u.number} ({u.bedrooms}BR)</option>)}
+                {addFormUnits.map(u => <option key={u.id} value={u.id}>{u.number} {u.unit_type === "commercial" ? "(Commercial)" : `(${u.bedrooms}BR)`}</option>)}
               </select>
             </div>
             <div><label style={s.label}>Phone</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.phone} onChange={e => setAddForm(p => ({ ...p, phone: e.target.value }))} placeholder="(415) 555-0000" /></div>
             <div><label style={s.label}>Email</label><input type="email" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))} placeholder="name@email.com" /></div>
-            <div><label style={s.label}>Bedrooms</label><input type="number" min="0" max="5" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.bedrooms} onChange={e => setAddForm(p => ({ ...p, bedrooms: e.target.value }))} /></div>
+            {(() => { const selUnit = addFormUnits.find(u => u.id === addForm.unitId); return selUnit?.unit_type === "commercial" ? null : <div><label style={s.label}>Bedrooms</label><input type="number" min="0" max="5" style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.bedrooms} onChange={e => setAddForm(p => ({ ...p, bedrooms: e.target.value }))} /></div>; })()}
+            {(() => { const selUnit = addFormUnits.find(u => u.id === addForm.unitId); return selUnit?.unit_type === "commercial" ? <div><label style={s.label}>Business Name</label><input style={{ ...s.mInput(mobile), width: "100%" }} value={addForm.businessName} onChange={e => setAddForm(p => ({ ...p, businessName: e.target.value }))} placeholder="e.g. Bolinas Bakery" /></div> : null; })()}
           </div>
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: T.muted }}>Lease Details</div>
           <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
@@ -4435,6 +4438,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               const resData = await insertResident({
                 name: addForm.name, phone: addForm.phone, email: addForm.email,
                 preferredChannel: "email", status: "active", moveInDate: addForm.leaseStart || null,
+                businessName: addForm.businessName || null,
               }, prop._uuid, addForm.unitId);
               // Create lease
               if (addForm.rentAmount && addForm.leaseStart) {
@@ -4447,7 +4451,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               }
               showSuccess(`Added ${addForm.name}`);
               setShowAddForm(false);
-              setAddForm({ name: "", unit: "", unitId: "", phone: "", email: "", propertyId: defaultPropId, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "" });
+              setAddForm({ name: "", unit: "", unitId: "", phone: "", email: "", propertyId: defaultPropId, bedrooms: "1", rentAmount: "", tenantPortion: "", hapPayment: "", leaseStart: "", leaseEnd: "", businessName: "" });
               if (onResidentAdded) onResidentAdded();
             } catch (err) {
               showSuccess("Error: " + (err.message || "Failed to add resident"));
@@ -4469,10 +4473,10 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
       <SortableTable
         mobile={mobile}
         columns={[
-          { key: "name", label: "Name", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+          { key: "name", label: "Name", render: (v, row) => <div><span style={{ fontWeight: 600 }}>{v}</span>{row.businessName ? <div style={{ fontSize: 12, color: T.muted }}>{row.businessName}</div> : null}</div> },
           ...(selectedProperty === "all" ? [{ key: "propertyId", label: "Property", render: v => getProperty(v)?.name || v, filterOptions: [...new Set(LIVE_RESIDENTS.map(r => getProperty(r.propertyId)?.name).filter(Boolean))], filterValue: row => getProperty(row.propertyId)?.name || "" }] : []),
           { key: "unit", label: "Unit" },
-          { key: "bedrooms", label: "BR", render: v => v ? `${v}BR` : "—" },
+          { key: "bedrooms", label: "BR", render: (v, row) => row.unitType === "commercial" ? "—" : (v ? `${v}BR` : "—") },
           { key: "rentAmount", label: "Rent", render: v => v ? `$${v.toLocaleString()}` : "—" },
           { key: "_deposit", label: "Deposit", sortable: false, filterable: false, render: (_, row) => {
             const deps = LIVE_DEPOSITS.filter(d => d.resident_id === row._uuid);
