@@ -4882,6 +4882,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
               <option value="house">House</option>
               <option value="sro">SRO</option>
               <option value="rv">RV</option>
+              <option value="commercial">Commercial Space</option>
             </select>
           </div>
           {unitForm.unitType === "rv" && (
@@ -5017,7 +5018,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                         {u.bedrooms}BR / {u.bathrooms}BA
                         {u.sqft ? ` · ${u.sqft} sqft` : ""}
                         {u.ami_set_aside ? ` · ${u.ami_set_aside} AMI` : ""}
-                        {(u.unit_type && u.unit_type !== "apartment") ? ` · ${({ rv: "RV", house: "House", sro: "SRO" })[u.unit_type] || u.unit_type}` : (u.is_rv ? " · RV" : "")}
+                        {(u.unit_type && u.unit_type !== "apartment") ? ` · ${({ rv: "RV", house: "House", sro: "SRO", commercial: "Commercial Space" })[u.unit_type] || u.unit_type}` : (u.is_rv ? " · RV" : "")}
                       </div>
                     </div>
                     <button style={s.btn("ghost")} onClick={() => setUnitDetailModal(null)}>✕</button>
@@ -5054,6 +5055,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                               <option value="house">House</option>
                               <option value="sro">SRO</option>
                               <option value="rv">RV</option>
+                              <option value="commercial">Commercial Space</option>
                             </select>
                           </div>
                         </div>
@@ -5104,7 +5106,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
                           <div><span style={{ color: T.muted }}>Bathrooms:</span> <strong>{u.bathrooms || "—"}</strong></div>
                           <div><span style={{ color: T.muted }}>Square Feet:</span> <strong>{u.sqft ? u.sqft.toLocaleString() : "—"}</strong></div>
                           <div><span style={{ color: T.muted }}>AMI Set-Aside:</span> <strong>{u.ami_set_aside || "—"}</strong></div>
-                          <div><span style={{ color: T.muted }}>Type:</span> <strong>{({ apartment: "Apartment", house: "House", sro: "SRO", rv: "RV" })[u.unit_type || (u.is_rv ? "rv" : "apartment")] || u.unit_type || "Apartment"}</strong></div>
+                          <div><span style={{ color: T.muted }}>Type:</span> <strong>{({ apartment: "Apartment", house: "House", sro: "SRO", rv: "RV", commercial: "Commercial Space" })[u.unit_type || (u.is_rv ? "rv" : "apartment")] || u.unit_type || "Apartment"}</strong></div>
                           {(u.unit_type === "rv" || u.is_rv) && u.rv_info && Object.entries(u.rv_info).map(([k, v]) => (
                             v ? <div key={k}><span style={{ color: T.muted }}>{k}:</span> <strong>{v}</strong></div> : null
                           ))}
