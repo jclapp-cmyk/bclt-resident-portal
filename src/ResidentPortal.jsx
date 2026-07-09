@@ -1840,29 +1840,51 @@ const RentPayments = ({ mobile, rc }) => {
     if (!payForm.amount || submitting) return;
     setSubmitting(true);
     try {
+      const amt = parseFloat(payForm.amount) || 0;
+      const fee = calcFee();
       const ptype = PAY_TYPES.find(p => p.value === payForm.payType);
       const ptypeLabel = ptype ? t(ptype.labelKey) : "Rent";
-      await recordPayment({
-        residentSlug: rc?.id,
-        amount: parseFloat(payForm.amount),
-        method: payForm.method,
-        paymentDate: new Date().toISOString().slice(0, 10),
-        month: new Date().toISOString().slice(0, 7),
-        note: `${ptypeLabel} — online payment`,
+      const resp = await fetch("/api/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amt,
+          fee,
+          method: payForm.method,
+          payType: ptypeLabel,
+          residentId: rc?.id,
+          residentName: rc?.name || "",
+          unit: rc?.unit || "",
+        }),
       });
-      const fresh = await fetchRentLedger();
-      if (fresh?.length) LIVE_RENT_LEDGER.splice(0, LIVE_RENT_LEDGER.length, ...fresh);
-      const allPay = await fetchRentPayments();
-      setPayHistory(allPay.filter(p => p.residentId === rc?.id).sort((a, b) => (b.paymentDate || "").localeCompare(a.paymentDate || "")));
-      showSuccess(`Payment of $${parseFloat(payForm.amount).toFixed(2)} submitted successfully`);
-      setPayForm({ amount: "", method: "ach", payType: "rent" });
-      setShowPay(false);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "Failed to create checkout session");
+      window.location.href = data.url;
     } catch (err) {
       showSuccess("Error: " + (err.message || "Payment failed"));
-    } finally {
       setSubmitting(false);
     }
   };
+
+  // Check for payment return from Stripe
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes("payment=success")) {
+      showSuccess("Payment submitted successfully! It may take a moment to appear in your history.");
+      window.history.replaceState(null, "", window.location.pathname + "#/rent");
+      setTimeout(async () => {
+        try {
+          const fresh = await fetchRentLedger();
+          if (fresh?.length) LIVE_RENT_LEDGER.splice(0, LIVE_RENT_LEDGER.length, ...fresh);
+          const allPay = await fetchRentPayments();
+          setPayHistory(allPay.filter(p => p.residentId === rc?.id).sort((a, b) => (b.paymentDate || "").localeCompare(a.paymentDate || "")));
+        } catch {}
+      }, 2000);
+    } else if (hash.includes("payment=cancelled")) {
+      showSuccess("Payment cancelled.");
+      window.history.replaceState(null, "", window.location.pathname + "#/rent");
+    }
+  }, []);
 
   return (
     <div>
@@ -1908,7 +1930,7 @@ const RentPayments = ({ mobile, rc }) => {
             </div>
           )}
           <div style={{ padding: "10px 14px", background: T.infoDim, borderRadius: 8, fontSize: 12, color: T.info, marginBottom: 14 }}>
-            {t("rent_online_disabled")}
+            {t("rent_secure_payment")}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <button disabled={!payForm.amount || submitting} style={s.btn()} onClick={handleSubmit}>{submitting ? t("rent_processing") : t("rent_pay_amount", { amount: `$${calcTotal().toFixed(2)}` })}</button>
@@ -9241,12 +9263,12 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
 
           <div style={{ ...s.card, borderLeft: `3px solid ${T.info}` }}>
             <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Payment Processing</div>
-            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Connect Stripe to accept online rent payments via ACH, debit, and credit card.</div>
-            <div style={{ padding: "14px 18px", background: T.infoDim, borderRadius: 8, marginBottom: 14 }}>
-              <div style={{ fontWeight: 600, fontSize: 13, color: T.info, marginBottom: 4 }}>Stripe Connect — Not Connected</div>
-              <div style={{ fontSize: 12, color: T.muted }}>Each property will have its own Stripe connected account so payments route to the correct bank. ACH transfers have the lowest fees (~0.8%).</div>
+            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Online rent payments are processed securely through Stripe via ACH, debit, and credit card.</div>
+            <div style={{ padding: "14px 18px", background: T.successDim, borderRadius: 8, marginBottom: 14 }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: T.success, marginBottom: 4 }}>Stripe — Active</div>
+              <div style={{ fontSize: 12, color: T.muted }}>Residents can pay online via Stripe Checkout. Payments are automatically recorded in the rent ledger. ACH transfers are free, debit cards have a $1.50 fee, and credit cards have a 2.75% fee.</div>
             </div>
-            <button style={{ ...s.btn(), opacity: 0.6, cursor: "not-allowed" }} disabled>Connect Stripe (Coming Soon)</button>
+            <div style={{ fontSize: 12, color: T.dim }}>Stripe keys are configured in Vercel environment variables (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET).</div>
           </div>
         </div>
       )}
