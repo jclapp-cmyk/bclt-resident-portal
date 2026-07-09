@@ -1136,7 +1136,25 @@ export async function updateEmailTemplate(id, changes) {
   if (changes.subject !== undefined) mapped.subject = changes.subject;
   if (changes.bodyHtml !== undefined) mapped.body_html = changes.bodyHtml;
   if (changes.name !== undefined) mapped.name = changes.name;
+  if (changes.description !== undefined) mapped.description = changes.description;
   const { error } = await supabase.from('email_templates').update(mapped).eq('id', id);
+  if (error) throw error;
+}
+
+export async function insertEmailTemplate({ templateKey, name, subject, bodyHtml, description }) {
+  const { data, error } = await supabase.from('email_templates').insert({
+    template_key: templateKey,
+    name,
+    subject,
+    body_html: bodyHtml,
+    description: description || '',
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteEmailTemplate(id) {
+  const { error } = await supabase.from('email_templates').delete().eq('id', id);
   if (error) throw error;
 }
 

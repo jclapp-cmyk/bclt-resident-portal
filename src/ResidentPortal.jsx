@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchEmailTemplates, updateEmailTemplate, fetchAllDeposits, fetchTenantDeposits, insertTenantDeposit, updateTenantDeposit, deleteTenantDeposit, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchEmailTemplates, updateEmailTemplate, insertEmailTemplate, deleteEmailTemplate, fetchAllDeposits, fetchTenantDeposits, insertTenantDeposit, updateTenantDeposit, deleteTenantDeposit, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -7317,7 +7317,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   useEffect(() => { setSmsConsent(!!myResForPrefs.smsConsent); }, [myResForPrefs._uuid, myResForPrefs.smsConsent]);
   const [emailTemplates, setEmailTemplates] = useState([]);
   const [editingTemplate, setEditingTemplate] = useState(null);
-  const [templateForm, setTemplateForm] = useState({ subject: "", bodyText: "" });
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [templateForm, setTemplateForm] = useState({ name: "", templateKey: "", subject: "", bodyText: "", description: "" });
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   useEffect(() => {
     if (tab === "Templates" && emailTemplates.length === 0) {
@@ -7898,10 +7899,63 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       {tab === "Templates" && isStaff && (
         <div>
           <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Email Templates</div>
-            <p style={{ fontSize: 13, color: T.muted, marginBottom: 16 }}>Edit the emails sent when inviting residents and staff to the portal. Write in plain text — use **bold** for emphasis, blank lines for paragraphs, and "- " for bullet lists.</p>
-            {loadingTemplates ? <div style={{ color: T.muted, fontSize: 13 }}>Loading...</div> : emailTemplates.length === 0 ? (
-              <div style={{ color: T.muted, fontSize: 13 }}>No templates found. Run the email-templates SQL migration first.</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Email Templates</div>
+              {!creatingTemplate && <button style={s.btn()} onClick={() => { setCreatingTemplate(true); setEditingTemplate(null); setTemplateForm({ name: "", templateKey: "", subject: "", bodyText: "", description: "" }); }}>+ New Template</button>}
+            </div>
+            <p style={{ fontSize: 13, color: T.muted, marginBottom: 16 }}>Manage the email templates used for portal invitations and notifications. Write in plain text — use **bold** for emphasis, blank lines for paragraphs, and "- " for bullet lists.</p>
+
+            {/* CREATE NEW TEMPLATE FORM */}
+            {creatingTemplate && (
+              <div style={{ border: `2px solid ${T.accent}`, borderRadius: T.radiusSm, padding: 16, marginBottom: 16, background: T.bg }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12 }}>New Template</div>
+                <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={s.label}>Template Name</label>
+                    <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} placeholder="e.g. Lease Renewal Reminder" value={templateForm.name} onChange={e => setTemplateForm(f => ({ ...f, name: e.target.value, templateKey: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") }))} />
+                  </div>
+                  <div>
+                    <label style={s.label}>Template Key</label>
+                    <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box", color: T.muted }} value={templateForm.templateKey} readOnly />
+                    <div style={{ fontSize: 11, color: T.dim, marginTop: 2 }}>Auto-generated from name — used in code to reference this template</div>
+                  </div>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={s.label}>Description</label>
+                  <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} placeholder="Brief description of when this template is used" value={templateForm.description} onChange={e => setTemplateForm(f => ({ ...f, description: e.target.value }))} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={s.label}>Subject Line</label>
+                  <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} placeholder="e.g. Your lease renewal is coming up, {{firstName}}" value={templateForm.subject} onChange={e => setTemplateForm(f => ({ ...f, subject: e.target.value }))} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={s.label}>Email Body</label>
+                  <textarea style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box", minHeight: 200, fontSize: 13, resize: "vertical", lineHeight: 1.6 }} placeholder={"Write your email here...\n\nBlank lines create new paragraphs.\n- Lines starting with a dash become bullet points\n**Bold text** for emphasis"} value={templateForm.bodyText} onChange={e => setTemplateForm(f => ({ ...f, bodyText: e.target.value }))} />
+                  <div style={{ fontSize: 11, color: T.dim, marginTop: 4 }}>{"{{firstName}}"} = recipient name · {"{{signInButton}}"} = portal link button · {"{{roleLabel}}"} = staff role</div>
+                </div>
+                {templateForm.bodyText.trim() && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Live Preview:</div>
+                    <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: plainTextToHtml(templateForm.bodyText).replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Go to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button disabled={!templateForm.name.trim() || !templateForm.subject.trim() || !templateForm.bodyText.trim()} style={s.btn()} onClick={async () => {
+                    try {
+                      const bodyHtml = plainTextToHtml(templateForm.bodyText);
+                      const row = await insertEmailTemplate({ templateKey: templateForm.templateKey, name: templateForm.name.trim(), subject: templateForm.subject, bodyHtml, description: templateForm.description });
+                      setEmailTemplates(prev => [...prev, row]);
+                      setCreatingTemplate(false);
+                      showSuccess("Template created!");
+                    } catch (err) { showSuccess("Error: " + err.message); }
+                  }}>Create Template</button>
+                  <button style={s.btn("ghost")} onClick={() => setCreatingTemplate(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
+
+            {loadingTemplates ? <div style={{ color: T.muted, fontSize: 13 }}>Loading...</div> : emailTemplates.length === 0 && !creatingTemplate ? (
+              <div style={{ color: T.muted, fontSize: 13 }}>No templates found. Run the email-templates SQL migration or create one above.</div>
             ) : emailTemplates.map(tpl => (
               <div key={tpl.id} style={{ borderBottom: `1px solid ${T.borderLight}`, padding: "16px 0" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -7909,9 +7963,15 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{tpl.name}</div>
                     <div style={{ fontSize: 12, color: T.dim }}>{tpl.description}</div>
                   </div>
-                  <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 12px" }} onClick={() => {
-                    if (editingTemplate === tpl.id) { setEditingTemplate(null); } else { setEditingTemplate(tpl.id); setTemplateForm({ subject: tpl.subject, bodyText: htmlToPlainText(tpl.body_html) }); }
-                  }}>{editingTemplate === tpl.id ? "Cancel" : "Edit"}</button>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 12px" }} onClick={() => {
+                      if (editingTemplate === tpl.id) { setEditingTemplate(null); } else { setCreatingTemplate(false); setEditingTemplate(tpl.id); setTemplateForm({ name: tpl.name, templateKey: tpl.template_key, subject: tpl.subject, bodyText: htmlToPlainText(tpl.body_html), description: tpl.description || "" }); }
+                    }}>{editingTemplate === tpl.id ? "Cancel" : "Edit"}</button>
+                    <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 12px", color: T.danger }} onClick={async () => {
+                      if (!confirm(`Delete the "${tpl.name}" template? This cannot be undone.`)) return;
+                      try { await deleteEmailTemplate(tpl.id); setEmailTemplates(prev => prev.filter(t => t.id !== tpl.id)); showSuccess("Template deleted"); } catch (err) { showSuccess("Error: " + err.message); }
+                    }}>Delete</button>
+                  </div>
                 </div>
                 {editingTemplate !== tpl.id && (
                   <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14 }}>
@@ -7923,6 +7983,16 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 )}
                 {editingTemplate === tpl.id && (
                   <div>
+                    <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                      <div>
+                        <label style={s.label}>Template Name</label>
+                        <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} value={templateForm.name} onChange={e => setTemplateForm(f => ({ ...f, name: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label style={s.label}>Description</label>
+                        <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} value={templateForm.description} onChange={e => setTemplateForm(f => ({ ...f, description: e.target.value }))} />
+                      </div>
+                    </div>
                     <div style={{ marginBottom: 12 }}>
                       <label style={s.label}>Subject Line</label>
                       <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} value={templateForm.subject} onChange={e => setTemplateForm(f => ({ ...f, subject: e.target.value }))} />
@@ -7941,8 +8011,8 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                       <button style={s.btn()} onClick={async () => {
                         try {
                           const bodyHtml = plainTextToHtml(templateForm.bodyText);
-                          await updateEmailTemplate(tpl.id, { subject: templateForm.subject, bodyHtml });
-                          setEmailTemplates(prev => prev.map(t => t.id === tpl.id ? { ...t, subject: templateForm.subject, body_html: bodyHtml, updated_at: new Date().toISOString() } : t));
+                          await updateEmailTemplate(tpl.id, { subject: templateForm.subject, bodyHtml, name: templateForm.name.trim(), description: templateForm.description });
+                          setEmailTemplates(prev => prev.map(t => t.id === tpl.id ? { ...t, name: templateForm.name.trim(), subject: templateForm.subject, body_html: bodyHtml, description: templateForm.description, updated_at: new Date().toISOString() } : t));
                           setEditingTemplate(null);
                           showSuccess("Template saved!");
                         } catch (err) { showSuccess("Error: " + err.message); }
