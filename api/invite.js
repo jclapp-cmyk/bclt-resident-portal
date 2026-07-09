@@ -53,13 +53,22 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'No action_link returned from Supabase' });
     }
 
-    // 2. Build the warm welcome email and send via Resend
+    // 2. Build the welcome email — try database template first, fall back to hardcoded
     const firstName = (displayName || '').split(' ')[0] || 'there';
     const isStaff = role === 'admin' || role === 'maintenance' || role === 'property_manager';
-    const subject = isStaff
-      ? `You're invited to BCLT HomeBase`
-      : `Welcome to BCLT HomeBase, ${firstName}! 🏡`;
-    const body = isStaff ? buildStaffInvite({ firstName, actionLink, role }) : buildResidentInvite({ firstName, actionLink });
+    const templateKey = isStaff ? 'staff_welcome' : 'resident_welcome';
+    const roleLabel = role === 'maintenance' ? 'maintenance' : role === 'property_manager' ? 'property management' : 'administrator';
+    const signInButton = `<p style="text-align:center;margin:28px 0;"><a href="${actionLink}" style="display:inline-block;padding:14px 28px;background:#2E5090;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;font-size:15px;">Sign in to BCLT HomeBase &rarr;</a></p><p style="font-size:13px;color:#666;">If the button doesn't work, paste this link into your browser:<br><a href="${actionLink}" style="color:#2E5090;word-break:break-all;">${actionLink}</a></p>`;
+
+    let subject, body;
+    const dbTemplate = await fetchTemplate(supabaseUrl, serviceKey, templateKey);
+    if (dbTemplate) {
+      subject = dbTemplate.subject.replace(/\{\{firstName\}\}/g, firstName).replace(/\{\{roleLabel\}\}/g, roleLabel);
+      body = dbTemplate.body_html.replace(/\{\{firstName\}\}/g, firstName).replace(/\{\{signInButton\}\}/g, signInButton).replace(/\{\{roleLabel\}\}/g, roleLabel);
+    } else {
+      subject = isStaff ? `You're invited to BCLT HomeBase` : `Welcome to BCLT HomeBase, ${firstName}! 🏡`;
+      body = isStaff ? buildStaffInvite({ firstName, actionLink, role }) : buildResidentInvite({ firstName, actionLink });
+    }
 
     const sendResp = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -145,6 +154,23 @@ function buildStaffInvite({ firstName, actionLink, role }) {
     <p style="margin-top:24px;">Reach out to Keith at <a href="mailto:kciampa@bolinaslandtrust.org" style="color:#2E5090;">kciampa@bolinaslandtrust.org</a> if you need help getting set up.</p>
     <p style="margin-top:20px;">Welcome aboard,<br><strong>The BCLT Team</strong></p>
   `;
+}
+
+// ── Fetch template from Supabase ──
+
+async function fetchTemplate(supabaseUrl, serviceKey, templateKey) {
+  try {
+    const resp = await fetch(
+      `${supabaseUrl}/rest/v1/email_templates?template_key=eq.${templateKey}&select=subject,body_html&limit=1`,
+      { headers: { 'apikey': serviceKey, 'Authorization': `Bearer ${serviceKey}` } }
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data?.[0] || null;
+  } catch (err) {
+    console.warn('Failed to fetch email template from DB, using hardcoded:', err.message);
+    return null;
+  }
 }
 
 // ── HTML Wrapper ──

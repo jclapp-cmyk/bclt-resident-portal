@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchAllDeposits, fetchTenantDeposits, insertTenantDeposit, updateTenantDeposit, deleteTenantDeposit, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchEmailTemplates, updateEmailTemplate, fetchAllDeposits, fetchTenantDeposits, insertTenantDeposit, updateTenantDeposit, deleteTenantDeposit, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -8513,7 +8513,7 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
 
 // --- ADMIN SETTINGS ---
 const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers, allUnits: parentAllUnits, onDataChanged }) => {
-  const tabs = ["Staff", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
+  const tabs = ["Staff", "Property", "Notifications", "Rent & Lease", "Maintenance", "Email Templates", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [newCat, setNewCat] = useState("");
@@ -8527,6 +8527,10 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
   const [staffList, setStaffList] = useState([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
   const [staffForm, setStaffForm] = useState({ firstName: "", lastName: "", role: "maintenance", email: "", phone: "", propertyId: "" });
+  const [emailTemplates, setEmailTemplates] = useState([]);
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [templateForm, setTemplateForm] = useState({ subject: "", bodyHtml: "" });
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [editStaffForm, setEditStaffForm] = useState({});
   const [settingsPropIdx, setSettingsPropIdx] = useState(0);
@@ -8546,6 +8550,13 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
     if (tab === "Audit Log") {
       setLoadingAudit(true);
       fetchAuditLog(100).then(data => { setAuditEntries(data); setLoadingAudit(false); }).catch(() => setLoadingAudit(false));
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === "Email Templates" && emailTemplates.length === 0) {
+      setLoadingTemplates(true);
+      fetchEmailTemplates().then(data => { setEmailTemplates(data || []); setLoadingTemplates(false); }).catch(() => setLoadingTemplates(false));
     }
   }, [tab]);
 
@@ -9174,6 +9185,67 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
             {(settings.maint.notifyPhones || []).length === 0 && (
               <div style={{ fontSize: 12, color: T.dim, marginTop: 10, fontStyle: "italic" }}>No numbers yet — new requests won't trigger SMS until you add one.</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {tab === "Email Templates" && (
+        <div>
+          <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Email Templates</div>
+            <p style={{ fontSize: 13, color: T.muted, marginBottom: 16 }}>Edit the emails sent when inviting residents and staff to the portal. Use {"{{firstName}}"} for the recipient's name and {"{{signInButton}}"} for the magic link button.</p>
+            {loadingTemplates ? <div style={{ color: T.muted, fontSize: 13 }}>Loading...</div> : emailTemplates.length === 0 ? (
+              <div style={{ color: T.muted, fontSize: 13 }}>No templates found. Run the email-templates SQL migration first.</div>
+            ) : emailTemplates.map(tpl => (
+              <div key={tpl.id} style={{ borderBottom: `1px solid ${T.borderLight}`, padding: "16px 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{tpl.name}</div>
+                    <div style={{ fontSize: 12, color: T.dim }}>{tpl.description}</div>
+                  </div>
+                  <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 12px" }} onClick={() => {
+                    if (editingTemplate === tpl.id) { setEditingTemplate(null); } else { setEditingTemplate(tpl.id); setTemplateForm({ subject: tpl.subject, bodyHtml: tpl.body_html }); }
+                  }}>{editingTemplate === tpl.id ? "Cancel" : "✏️ Edit"}</button>
+                </div>
+                {editingTemplate !== tpl.id && (
+                  <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14 }}>
+                    <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Subject:</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{tpl.subject}</div>
+                    <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Preview:</div>
+                    <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: tpl.body_html.replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Sign in to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
+                  </div>
+                )}
+                {editingTemplate === tpl.id && (
+                  <div>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={s.label}>Subject Line</label>
+                      <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} value={templateForm.subject} onChange={e => setTemplateForm(f => ({ ...f, subject: e.target.value }))} />
+                      <div style={{ fontSize: 11, color: T.dim, marginTop: 4 }}>Use {"{{firstName}}"} for the recipient's first name</div>
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={s.label}>Email Body (HTML)</label>
+                      <textarea style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box", minHeight: 250, fontFamily: "monospace", fontSize: 12, resize: "vertical" }} value={templateForm.bodyHtml} onChange={e => setTemplateForm(f => ({ ...f, bodyHtml: e.target.value }))} />
+                      <div style={{ fontSize: 11, color: T.dim, marginTop: 4 }}>{"{{firstName}}"} = recipient name · {"{{signInButton}}"} = magic link button · {"{{roleLabel}}"} = staff role (staff template only)</div>
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Live Preview:</div>
+                      <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: templateForm.bodyHtml.replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Sign in to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button style={s.btn()} onClick={async () => {
+                        try {
+                          await updateEmailTemplate(tpl.id, { subject: templateForm.subject, bodyHtml: templateForm.bodyHtml });
+                          setEmailTemplates(prev => prev.map(t => t.id === tpl.id ? { ...t, subject: templateForm.subject, body_html: templateForm.bodyHtml, updated_at: new Date().toISOString() } : t));
+                          setEditingTemplate(null);
+                          showSuccess("Template saved!");
+                        } catch (err) { showSuccess("Error: " + err.message); }
+                      }}>Save Template</button>
+                      <button style={s.btn("ghost")} onClick={() => setEditingTemplate(null)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       )}

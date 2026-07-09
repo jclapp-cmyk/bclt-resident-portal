@@ -1120,6 +1120,26 @@ export async function recordPayment({ residentSlug, amount, method, paymentDate,
   return data;
 }
 
+// ── EMAIL TEMPLATES ──
+
+export async function fetchEmailTemplates() {
+  const { data, error } = await supabase
+    .from('email_templates')
+    .select('*')
+    .order('name');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateEmailTemplate(id, changes) {
+  const mapped = { updated_at: new Date().toISOString() };
+  if (changes.subject !== undefined) mapped.subject = changes.subject;
+  if (changes.bodyHtml !== undefined) mapped.body_html = changes.bodyHtml;
+  if (changes.name !== undefined) mapped.name = changes.name;
+  const { error } = await supabase.from('email_templates').update(mapped).eq('id', id);
+  if (error) throw error;
+}
+
 // ── TENANT DEPOSITS ──
 
 export async function fetchAllDeposits() {
