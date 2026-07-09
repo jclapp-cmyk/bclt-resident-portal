@@ -97,5 +97,29 @@ export default async function handler(req, res) {
     }
   }
 
+  // Auto-update onboarded status when a connected account changes
+  if (event.type === 'account.updated') {
+    const account = event.data.object;
+    const onboarded = account.charges_enabled && account.payouts_enabled;
+    try {
+      await fetch(
+        `${supabaseUrl}/rest/v1/properties?stripe_account_id=eq.${encodeURIComponent(account.id)}`,
+        {
+          method: 'PATCH',
+          headers: {
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          },
+          body: JSON.stringify({ stripe_onboarded: onboarded }),
+        }
+      );
+      console.log(`Account ${account.id} onboarded: ${onboarded}`);
+    } catch (err) {
+      console.error('Error updating account status:', err);
+    }
+  }
+
   return res.status(200).json({ received: true });
 }

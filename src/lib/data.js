@@ -33,6 +33,8 @@ export async function fetchProperties() {
     documents: p.documents || [],
     appliances: Array.isArray(p.appliances) ? p.appliances : (typeof p.appliances === 'string' ? (() => { try { return JSON.parse(p.appliances); } catch { return []; } })() : []),
     finishes: Array.isArray(p.finishes) ? p.finishes : (typeof p.finishes === 'string' ? (() => { try { return JSON.parse(p.finishes); } catch { return []; } })() : []),
+    stripeAccountId: p.stripe_account_id || null,
+    stripeOnboarded: p.stripe_onboarded || false,
   }));
 }
 
