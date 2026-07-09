@@ -8675,7 +8675,7 @@ const plainTextToHtml = (text) => {
 };
 
 const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers, allUnits: parentAllUnits, onDataChanged }) => {
-  const tabs = ["Staff", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
+  const tabs = ["Staff", "Property", "Notifications", "Payments", "Maintenance", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [newCat, setNewCat] = useState("");
@@ -9204,64 +9204,8 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
         </div>
       )}
 
-      {tab === "Rent & Lease" && (
+      {tab === "Payments" && (
         <div>
-          <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Rent & Lease Defaults</div>
-            <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 14 }}>
-              <div><label style={s.label}>Rent Due Day</label><select style={s.mSelect(mobile)} value={settings.rent.dueDay} onChange={e => upd("rent", "dueDay", e.target.value)}>{["1", "5", "10", "15"].map(d => <option key={d} value={d}>{d === "1" ? "1st" : d === "5" ? "5th" : d === "10" ? "10th" : "15th"}</option>)}</select></div>
-              <div><label style={s.label}>Grace Period</label><select style={s.mSelect(mobile)} value={settings.rent.gracePeriodDays} onChange={e => upd("rent", "gracePeriodDays", e.target.value)}>{["3", "5", "7", "10"].map(d => <option key={d} value={d}>{d} days</option>)}</select></div>
-              <div><label style={s.label}>Late Fee Amount ($)</label><input type="number" style={s.mInput(mobile)} value={settings.rent.lateFeeAmount} onChange={e => upd("rent", "lateFeeAmount", e.target.value)} /></div>
-              <div><label style={s.label}>Default Lease Term</label><select style={s.mSelect(mobile)} value={settings.rent.leaseTermDefault} onChange={e => upd("rent", "leaseTermDefault", e.target.value)}>{["6", "12", "24"].map(d => <option key={d} value={d}>{d} months</option>)}</select></div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <Toggle label="Auto-Renewal Default" description="Automatically renew leases unless tenant opts out" checked={settings.rent.autoRenewal} onChange={v => upd("rent", "autoRenewal", v)} />
-            </div>
-            <button style={s.btn()} onClick={() => showSuccess("Rent & lease settings saved")}>Save Changes</button>
-          </div>
-
-          <div style={{ ...s.card, borderLeft: `3px solid ${T.accent}` }}>
-            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Property Bank Accounts</div>
-            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Map each property to its bank account so payments are routed correctly. When Stripe Connect is enabled, each property will use its own connected account.</div>
-            <table style={s.table}>
-              <thead><tr>{["Property", "Bank Name", "Account (last 4)", "Routing", "Status"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-              <tbody>
-                {LIVE_PROPERTIES.map(p => {
-                  const bankInfo = settings.rent?.bankAccounts?.[p.id] || {};
-                  return (
-                    <tr key={p.id}>
-                      <td style={s.td}><span style={{ fontWeight: 600 }}>{p.name}</span></td>
-                      <td style={s.td}>
-                        <input type="text" placeholder="e.g. Chase" value={bankInfo.bankName || ""} onChange={e => {
-                          const updated = { ...(settings.rent?.bankAccounts || {}), [p.id]: { ...bankInfo, bankName: e.target.value } };
-                          upd("rent", "bankAccounts", updated);
-                        }} style={{ ...s.mInput(mobile), width: "100%", fontSize: 12 }} />
-                      </td>
-                      <td style={s.td}>
-                        <input type="text" placeholder="1234" maxLength={4} value={bankInfo.lastFour || ""} onChange={e => {
-                          const updated = { ...(settings.rent?.bankAccounts || {}), [p.id]: { ...bankInfo, lastFour: e.target.value.replace(/\D/g, "").slice(0, 4) } };
-                          upd("rent", "bankAccounts", updated);
-                        }} style={{ ...s.mInput(mobile), width: 80, fontSize: 12 }} />
-                      </td>
-                      <td style={s.td}>
-                        <input type="text" placeholder="Routing #" value={bankInfo.routing || ""} onChange={e => {
-                          const updated = { ...(settings.rent?.bankAccounts || {}), [p.id]: { ...bankInfo, routing: e.target.value.replace(/\D/g, "").slice(0, 9) } };
-                          upd("rent", "bankAccounts", updated);
-                        }} style={{ ...s.mInput(mobile), width: 110, fontSize: 12 }} />
-                      </td>
-                      <td style={s.td}>
-                        {bankInfo.bankName && bankInfo.lastFour
-                          ? <span style={s.badge(T.successDim, T.success)}>Configured</span>
-                          : <span style={s.badge(T.warnDim, T.warn)}>Not Set</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <button style={{ ...s.btn(), marginTop: 14 }} onClick={() => showSuccess("Bank account settings saved")}>Save Bank Accounts</button>
-          </div>
-
           <div style={{ ...s.card, borderLeft: `3px solid ${T.info}` }}>
             <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Stripe Connect — Per-Property Payments</div>
             <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Each property needs its own Stripe connected account so payments route to the correct bank. ACH transfers are free, debit $1.50, credit 2.75%.</div>
