@@ -8622,7 +8622,8 @@ const htmlToPlainText = (html) => {
   text = text.replace(/<li[^>]*>\s*/gi, "- ");
   text = text.replace(/<\/li>/gi, "\n");
   text = text.replace(/<br\s*\/?>/gi, "\n");
-  text = text.replace(/<\/p>\s*<p[^>]*>/gi, "\n\n");
+  text = text.replace(/<\/p>/gi, "\n\n");
+  text = text.replace(/<p[^>]*>/gi, "");
   text = text.replace(/<\/?(ul|ol)[^>]*>/gi, "\n");
   text = text.replace(/<strong>([^<]*)<\/strong>/gi, "**$1**");
   text = text.replace(/<b>([^<]*)<\/b>/gi, "**$1**");
@@ -8646,7 +8647,7 @@ const plainTextToHtml = (text) => {
     if (listItems.length > 0 && listItems.length === lines.length) {
       return "<ul style=\"line-height:1.7;padding-left:20px;\">" + lines.map(l => "<li>" + l.trim().replace(/^- /, "") + "</li>").join("") + "</ul>";
     }
-    return "<p>" + lines.join("<br>") + "</p>";
+    return "<p style=\"margin-bottom:12px;\">" + lines.join("<br>") + "</p>";
   }).filter(Boolean).join("\n");
 };
 
