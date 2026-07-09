@@ -7299,7 +7299,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   // Tabs may be strings (staff) or {id,label} objects (resident); store the id string either way
   const [tab, setTab] = useState(typeof tabs[0] === "string" ? tabs[0] : tabs[0].id);
   const [selectedThread, setSelectedThread] = useState(null);
-  const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], customEmails: [], propertyIds: [] });
+  const [composeData, setComposeData] = useState({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", audience: "people", recipients: [], staffIds: [], vendorIds: [], customEmails: [], propertyIds: [] });
   // Local-only buffer for the custom-email input
   const [customEmailDraft, setCustomEmailDraft] = useState("");
   const [residentAttachments, setResidentAttachments] = useState([]);
@@ -7315,6 +7315,16 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
   const myResForPrefs = !isStaff ? (LIVE_RESIDENTS.find(r => r.id === rc?.id) || {}) : {};
   const [smsConsent, setSmsConsent] = useState(!!myResForPrefs.smsConsent);
   useEffect(() => { setSmsConsent(!!myResForPrefs.smsConsent); }, [myResForPrefs._uuid, myResForPrefs.smsConsent]);
+  const [emailTemplates, setEmailTemplates] = useState([]);
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [templateForm, setTemplateForm] = useState({ subject: "", bodyText: "" });
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  useEffect(() => {
+    if (tab === "Templates" && emailTemplates.length === 0) {
+      setLoadingTemplates(true);
+      fetchEmailTemplates().then(data => { setEmailTemplates(data || []); setLoadingTemplates(false); }).catch(() => setLoadingTemplates(false));
+    }
+  }, [tab]);
 
   const getInitials = (name) => name.split(" ").map(w => w[0]).join("").slice(0, 2);
   const formatTime = (dateStr) => {
@@ -7370,11 +7380,6 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
       </div>
     );
   }
-
-  const handleTemplateSelect = (tplId) => {
-    const tpl = [].find(t => t.id === tplId);
-    if (tpl) setComposeData(prev => ({ ...prev, body: tpl.body, subject: tpl.subject || prev.subject, channel: tpl.channel === "multi" ? "auto" : tpl.channel, template: tplId }));
-  };
 
   // Thread list item renderer
   const ThreadItem = ({ thread: t }) => {
@@ -7702,13 +7707,6 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 <option value="urgent">Urgent</option>
               </select>
             </div>
-            <div>
-              <label style={s.label}>Use Template</label>
-              <select style={{ ...s.mSelect(mobile), width: "100%" }} value={composeData.template} onChange={e => handleTemplateSelect(e.target.value)}>
-                <option value="">None</option>
-                {[].map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={s.label}>Subject</label>
@@ -7781,7 +7779,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 }
               };
               for (const r of recipients) await sendToRecipient(r);
-              setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], customEmails: [], propertyIds: [] });
+              setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", audience: "people", recipients: [], staffIds: [], vendorIds: [], customEmails: [], propertyIds: [] });
               setSending(false);
               setTab("Inbox");
               const totalSent = deliveryReport.emailSent + deliveryReport.smsSent;
@@ -7795,7 +7793,7 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
                 showSuccess(`Message sent to ${recipients.length} recipient${recipients.length > 1 ? "s" : ""}! ${deliveryReport.emailSent ? `📧 ${deliveryReport.emailSent} email${deliveryReport.emailSent > 1 ? "s" : ""}` : ""}${deliveryReport.emailSent && deliveryReport.smsSent ? " · " : ""}${deliveryReport.smsSent ? `💬 ${deliveryReport.smsSent} SMS` : ""}`);
               }
             }}>{sending ? "Sending..." : `Send to ${recipientCount} recipient${recipientCount === 1 ? "" : "s"}`}</button>
-            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", template: "", audience: "people", recipients: [], staffIds: [], vendorIds: [], customEmails: [], propertyIds: [] })}>Clear</button>
+            <button style={s.btn("ghost")} onClick={() => setComposeData({ to: "", broadcast: false, channel: "auto", subject: "", body: "", priority: "normal", audience: "people", recipients: [], staffIds: [], vendorIds: [], customEmails: [], propertyIds: [] })}>Clear</button>
           </div>
         </div>
         );
@@ -7896,30 +7894,66 @@ const Communications = ({ role, commPrefs, setCommPrefs, mobile, threads: thread
         </div>
       )}
 
-      {/* TEMPLATES TAB (Admin) */}
+      {/* TEMPLATES TAB (Staff) */}
       {tab === "Templates" && isStaff && (
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div />
-            <button style={s.btn()}>+ New Template</button>
-          </div>
-          {[].map(tpl => {
-            const chBadge = CHANNEL_BADGES[tpl.channel] || CHANNEL_BADGES.portal;
-            return (
-              <div key={tpl.id} style={s.card}>
+          <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Email Templates</div>
+            <p style={{ fontSize: 13, color: T.muted, marginBottom: 16 }}>Edit the emails sent when inviting residents and staff to the portal. Write in plain text — use **bold** for emphasis, blank lines for paragraphs, and "- " for bullet lists.</p>
+            {loadingTemplates ? <div style={{ color: T.muted, fontSize: 13 }}>Loading...</div> : emailTemplates.length === 0 ? (
+              <div style={{ color: T.muted, fontSize: 13 }}>No templates found. Run the email-templates SQL migration first.</div>
+            ) : emailTemplates.map(tpl => (
+              <div key={tpl.id} style={{ borderBottom: `1px solid ${T.borderLight}`, padding: "16px 0" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontWeight: 700, fontSize: 15 }}>{tpl.name}</span>
-                  <span style={s.badge(chBadge.bg, chBadge.text)}>{chBadge.label}</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{tpl.name}</div>
+                    <div style={{ fontSize: 12, color: T.dim }}>{tpl.description}</div>
+                  </div>
+                  <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 12px" }} onClick={() => {
+                    if (editingTemplate === tpl.id) { setEditingTemplate(null); } else { setEditingTemplate(tpl.id); setTemplateForm({ subject: tpl.subject, bodyText: htmlToPlainText(tpl.body_html) }); }
+                  }}>{editingTemplate === tpl.id ? "Cancel" : "Edit"}</button>
                 </div>
-                {tpl.subject && <div style={{ fontSize: 13, color: T.muted, marginBottom: 6 }}>Subject: {tpl.subject}</div>}
-                <div style={{ fontSize: 14, color: T.text, lineHeight: 1.5, padding: 12, background: T.bg, borderRadius: T.radiusSm, marginBottom: 10 }}>{tpl.body}</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={s.btn("ghost")}>Edit</button>
-                  <button style={s.btn("ghost")} onClick={() => { setTab("Compose"); handleTemplateSelect(tpl.id); }}>Use</button>
-                </div>
+                {editingTemplate !== tpl.id && (
+                  <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14 }}>
+                    <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Subject:</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{tpl.subject}</div>
+                    <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Preview:</div>
+                    <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: tpl.body_html.replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Go to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
+                  </div>
+                )}
+                {editingTemplate === tpl.id && (
+                  <div>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={s.label}>Subject Line</label>
+                      <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} value={templateForm.subject} onChange={e => setTemplateForm(f => ({ ...f, subject: e.target.value }))} />
+                      <div style={{ fontSize: 11, color: T.dim, marginTop: 4 }}>Use {"{{firstName}}"} for the recipient's first name</div>
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={s.label}>Email Body</label>
+                      <textarea style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box", minHeight: 250, fontSize: 13, resize: "vertical", lineHeight: 1.6 }} value={templateForm.bodyText} onChange={e => setTemplateForm(f => ({ ...f, bodyText: e.target.value }))} />
+                      <div style={{ fontSize: 11, color: T.dim, marginTop: 4 }}>Blank line = new paragraph · **bold** · Lines starting with "- " become bullet lists · {"{{firstName}}"} {"{{signInButton}}"} {"{{roleLabel}}"}</div>
+                    </div>
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Live Preview:</div>
+                      <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: plainTextToHtml(templateForm.bodyText).replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Go to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button style={s.btn()} onClick={async () => {
+                        try {
+                          const bodyHtml = plainTextToHtml(templateForm.bodyText);
+                          await updateEmailTemplate(tpl.id, { subject: templateForm.subject, bodyHtml });
+                          setEmailTemplates(prev => prev.map(t => t.id === tpl.id ? { ...t, subject: templateForm.subject, body_html: bodyHtml, updated_at: new Date().toISOString() } : t));
+                          setEditingTemplate(null);
+                          showSuccess("Template saved!");
+                        } catch (err) { showSuccess("Error: " + err.message); }
+                      }}>Save Template</button>
+                      <button style={s.btn("ghost")} onClick={() => setEditingTemplate(null)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
 
@@ -8512,8 +8546,42 @@ const AdminMaintenance = ({ mobile, maintenance, onUpdate, onAdd, staffMembers =
 };
 
 // --- ADMIN SETTINGS ---
+const htmlToPlainText = (html) => {
+  if (!html) return "";
+  let text = html;
+  text = text.replace(/<li[^>]*>\s*/gi, "- ");
+  text = text.replace(/<\/li>/gi, "\n");
+  text = text.replace(/<br\s*\/?>/gi, "\n");
+  text = text.replace(/<\/p>\s*<p[^>]*>/gi, "\n\n");
+  text = text.replace(/<\/?(ul|ol)[^>]*>/gi, "\n");
+  text = text.replace(/<strong>([^<]*)<\/strong>/gi, "**$1**");
+  text = text.replace(/<b>([^<]*)<\/b>/gi, "**$1**");
+  text = text.replace(/<a\s+href="mailto:([^"]*)"[^>]*>[^<]*<\/a>/gi, "$1");
+  text = text.replace(/<[^>]+>/g, "");
+  text = text.replace(/&rarr;/g, "→").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, " ");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
+};
+
+const plainTextToHtml = (text) => {
+  if (!text) return "";
+  const escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const withBold = escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  const paragraphs = withBold.split(/\n\n+/);
+  return paragraphs.map(para => {
+    const trimmed = para.trim();
+    if (!trimmed) return "";
+    const lines = trimmed.split("\n");
+    const listItems = lines.filter(l => /^- /.test(l.trim()));
+    if (listItems.length > 0 && listItems.length === lines.length) {
+      return "<ul style=\"line-height:1.7;padding-left:20px;\">" + lines.map(l => "<li>" + l.trim().replace(/^- /, "") + "</li>").join("") + "</ul>";
+    }
+    return "<p>" + lines.join("<br>") + "</p>";
+  }).filter(Boolean).join("\n");
+};
+
 const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, maintenance, vendors, unitInspections, onReset, staffMembers: parentStaffMembers, allUnits: parentAllUnits, onDataChanged }) => {
-  const tabs = ["Staff", "Property", "Notifications", "Rent & Lease", "Maintenance", "Email Templates", "Audit Log", "System"];
+  const tabs = ["Staff", "Property", "Notifications", "Rent & Lease", "Maintenance", "Audit Log", "System"];
   const [tab, setTab] = useState(tabs[0]);
   const [success, showSuccess] = useSuccess();
   const [newCat, setNewCat] = useState("");
@@ -8527,10 +8595,6 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
   const [staffList, setStaffList] = useState([]);
   const [loadingStaff, setLoadingStaff] = useState(false);
   const [staffForm, setStaffForm] = useState({ firstName: "", lastName: "", role: "maintenance", email: "", phone: "", propertyId: "" });
-  const [emailTemplates, setEmailTemplates] = useState([]);
-  const [editingTemplate, setEditingTemplate] = useState(null);
-  const [templateForm, setTemplateForm] = useState({ subject: "", bodyHtml: "" });
-  const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
   const [editStaffForm, setEditStaffForm] = useState({});
   const [settingsPropIdx, setSettingsPropIdx] = useState(0);
@@ -8553,12 +8617,6 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
     }
   }, [tab]);
 
-  useEffect(() => {
-    if (tab === "Email Templates" && emailTemplates.length === 0) {
-      setLoadingTemplates(true);
-      fetchEmailTemplates().then(data => { setEmailTemplates(data || []); setLoadingTemplates(false); }).catch(() => setLoadingTemplates(false));
-    }
-  }, [tab]);
 
   useEffect(() => {
     if (tab === "Staff") {
@@ -9185,67 +9243,6 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
             {(settings.maint.notifyPhones || []).length === 0 && (
               <div style={{ fontSize: 12, color: T.dim, marginTop: 10, fontStyle: "italic" }}>No numbers yet — new requests won't trigger SMS until you add one.</div>
             )}
-          </div>
-        </div>
-      )}
-
-      {tab === "Email Templates" && (
-        <div>
-          <div style={s.card}>
-            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Email Templates</div>
-            <p style={{ fontSize: 13, color: T.muted, marginBottom: 16 }}>Edit the emails sent when inviting residents and staff to the portal. Use {"{{firstName}}"} for the recipient's name and {"{{signInButton}}"} for the magic link button.</p>
-            {loadingTemplates ? <div style={{ color: T.muted, fontSize: 13 }}>Loading...</div> : emailTemplates.length === 0 ? (
-              <div style={{ color: T.muted, fontSize: 13 }}>No templates found. Run the email-templates SQL migration first.</div>
-            ) : emailTemplates.map(tpl => (
-              <div key={tpl.id} style={{ borderBottom: `1px solid ${T.borderLight}`, padding: "16px 0" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{tpl.name}</div>
-                    <div style={{ fontSize: 12, color: T.dim }}>{tpl.description}</div>
-                  </div>
-                  <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 12px" }} onClick={() => {
-                    if (editingTemplate === tpl.id) { setEditingTemplate(null); } else { setEditingTemplate(tpl.id); setTemplateForm({ subject: tpl.subject, bodyHtml: tpl.body_html }); }
-                  }}>{editingTemplate === tpl.id ? "Cancel" : "✏️ Edit"}</button>
-                </div>
-                {editingTemplate !== tpl.id && (
-                  <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: T.radiusSm, padding: 14 }}>
-                    <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Subject:</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{tpl.subject}</div>
-                    <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Preview:</div>
-                    <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: tpl.body_html.replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Go to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
-                  </div>
-                )}
-                {editingTemplate === tpl.id && (
-                  <div>
-                    <div style={{ marginBottom: 12 }}>
-                      <label style={s.label}>Subject Line</label>
-                      <input style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box" }} value={templateForm.subject} onChange={e => setTemplateForm(f => ({ ...f, subject: e.target.value }))} />
-                      <div style={{ fontSize: 11, color: T.dim, marginTop: 4 }}>Use {"{{firstName}}"} for the recipient's first name</div>
-                    </div>
-                    <div style={{ marginBottom: 12 }}>
-                      <label style={s.label}>Email Body (HTML)</label>
-                      <textarea style={{ ...s.mInput(mobile), width: "100%", boxSizing: "border-box", minHeight: 250, fontFamily: "monospace", fontSize: 12, resize: "vertical" }} value={templateForm.bodyHtml} onChange={e => setTemplateForm(f => ({ ...f, bodyHtml: e.target.value }))} />
-                      <div style={{ fontSize: 11, color: T.dim, marginTop: 4 }}>{"{{firstName}}"} = recipient name · {"{{signInButton}}"} = magic link button · {"{{roleLabel}}"} = staff role (staff template only)</div>
-                    </div>
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Live Preview:</div>
-                      <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: templateForm.bodyHtml.replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Go to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
-                    </div>
-                    <div style={{ display: "flex", gap: 10 }}>
-                      <button style={s.btn()} onClick={async () => {
-                        try {
-                          await updateEmailTemplate(tpl.id, { subject: templateForm.subject, bodyHtml: templateForm.bodyHtml });
-                          setEmailTemplates(prev => prev.map(t => t.id === tpl.id ? { ...t, subject: templateForm.subject, body_html: templateForm.bodyHtml, updated_at: new Date().toISOString() } : t));
-                          setEditingTemplate(null);
-                          showSuccess("Template saved!");
-                        } catch (err) { showSuccess("Error: " + err.message); }
-                      }}>Save Template</button>
-                      <button style={s.btn("ghost")} onClick={() => setEditingTemplate(null)}>Cancel</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         </div>
       )}
