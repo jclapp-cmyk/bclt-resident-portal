@@ -31,7 +31,7 @@ INSERT INTO email_templates (template_key, name, subject, body_html, description
   <li>💬 <strong>Message us</strong> anytime — by email, text, or in the portal</li>
   <li>📅 <strong>Stay informed</strong> about inspections, deadlines, and community announcements</li>
 </ul>
-<p style="margin-top:24px;">To get started, just click the button below — you''ll be signed in automatically. No password needed.</p>
+<p style="margin-top:24px;">To get started, click the button below and enter your email address. We''ll send you a sign-in link — no password needed.</p>
 {{signInButton}}
 <p style="margin-top:24px;">Have questions or run into trouble? Please contact Keith at <a href="mailto:kciampa@bolinaslandtrust.org" style="color:#2E5090;">kciampa@bolinaslandtrust.org</a></p>
 <p style="margin-top:20px;">Warmly,<br><strong>The BCLT Team</strong></p>',

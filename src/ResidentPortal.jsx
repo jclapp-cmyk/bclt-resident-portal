@@ -9212,7 +9212,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                     <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Subject:</div>
                     <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{tpl.subject}</div>
                     <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Preview:</div>
-                    <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: tpl.body_html.replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Sign in to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
+                    <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: tpl.body_html.replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Go to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
                   </div>
                 )}
                 {editingTemplate === tpl.id && (
@@ -9229,7 +9229,7 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
                     </div>
                     <div style={{ marginBottom: 12 }}>
                       <div style={{ fontSize: 12, color: T.dim, marginBottom: 4 }}>Live Preview:</div>
-                      <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: templateForm.bodyHtml.replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Sign in to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
+                      <div style={{ fontSize: 13, background: "#fff", border: `1px solid ${T.borderLight}`, borderRadius: 6, padding: 16, maxHeight: 300, overflowY: "auto" }} dangerouslySetInnerHTML={{ __html: templateForm.bodyHtml.replace(/\{\{signInButton\}\}/g, '<p style="text-align:center;margin:20px 0;"><span style="display:inline-block;padding:12px 24px;background:#2E5090;color:#fff;border-radius:6px;font-weight:600;font-size:14px;">Go to BCLT HomeBase →</span></p>').replace(/\{\{firstName\}\}/g, 'Jane').replace(/\{\{roleLabel\}\}/g, 'maintenance') }} />
                     </div>
                     <div style={{ display: "flex", gap: 10 }}>
                       <button style={s.btn()} onClick={async () => {
