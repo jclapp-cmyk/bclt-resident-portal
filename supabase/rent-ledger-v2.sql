@@ -31,7 +31,7 @@ JOIN leases l ON l.resident_id = r.id AND l.status = 'active'
 CROSS JOIN LATERAL (
   SELECT TO_CHAR(g, 'YYYY-MM') AS month
   FROM generate_series(
-    DATE_TRUNC('month', l.start_date),
+    GREATEST(DATE_TRUNC('month', l.start_date), DATE_TRUNC('month', CURRENT_DATE)),
     DATE_TRUNC('month', CURRENT_DATE),
     '1 month'::interval
   ) g
