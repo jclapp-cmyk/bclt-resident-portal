@@ -670,7 +670,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
   const curMonth = new Date().toISOString().slice(0, 7);
   const resLedger = getAdjustedLedger().filter(l => l.residentId === rc?.id);
   const ledgerEntry = resLedger.find(l => l.month === curMonth) || resLedger[resLedger.length - 1] || {};
-  const bal = resLedger.reduce((s, l) => s + l.balance, 0) + (rc?.startingBalance || 0);
+  const bal = Math.max(0, (rc?.startingBalance || 0) + resLedger.reduce((s, l) => s + l.rentDue - l.tenantPaid - l.hapReceived, 0));
   const leaseExpired = ext.leaseEnd && new Date(ext.leaseEnd) < new Date();
   const leaseLabel = ext.leaseEnd ? (leaseExpired ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "Month-to-Month" : "Active");
 
@@ -1818,7 +1818,7 @@ const RentPayments = ({ mobile, rc }) => {
   const _ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
   const resLedgerAll = getAdjustedLedger().filter(l => l.residentId === rc?.id);
   const ledgerEntry = resLedgerAll.find(l => l.month === new Date().toISOString().slice(0, 7)) || resLedgerAll[resLedgerAll.length - 1] || {};
-  const balance = resLedgerAll.reduce((s, l) => s + l.balance, 0) + (rc?.startingBalance || 0);
+  const balance = Math.max(0, (rc?.startingBalance || 0) + resLedgerAll.reduce((s, l) => s + l.rentDue - l.tenantPaid - l.hapReceived, 0));
   const [showPay, setShowPay] = useState(false);
   const [payForm, setPayForm] = useState({ amount: "", method: "ach", payType: "rent" });
   const [payHistory, setPayHistory] = useState([]);
@@ -3831,7 +3831,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               const resEntries = getAdjustedLedger().filter(l => l.residentId === selectedResident.id);
               if (!resEntries.length) return null;
               const curEntry = resEntries.find(l => l.month === new Date().toISOString().slice(0, 7)) || resEntries[resEntries.length - 1];
-              const totalBal = resEntries.reduce((s, l) => s + l.balance, 0) + (curEntry.startingBalance || 0);
+              const totalBal = Math.max(0, (selectedResident.startingBalance || 0) + resEntries.reduce((s, l) => s + l.rentDue - l.tenantPaid - l.hapReceived, 0));
               const unpaidMonths = resEntries.filter(l => l.balance > 0).length;
               return (
                 <div style={s.card}>
@@ -4141,7 +4141,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         {tab === "Payments" && (() => {
           const resEntries = getAdjustedLedger().filter(l => l.residentId === selectedResident.id);
           const sb = selectedResident.startingBalance || 0;
-          const totalBalance = resEntries.reduce((s, l) => s + l.balance, 0) + sb;
+          const totalBalance = Math.max(0, sb + resEntries.reduce((s, l) => s + l.rentDue - l.tenantPaid - l.hapReceived, 0));
           const unpaidMonths = resEntries.filter(l => l.balance > 0).length;
           const curEntry = resEntries.find(l => l.month === new Date().toISOString().slice(0, 7)) || resEntries[resEntries.length - 1];
           return (
