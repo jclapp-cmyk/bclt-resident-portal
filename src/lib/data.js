@@ -1063,6 +1063,7 @@ export async function fetchRentLedger() {
     .select('*');
   if (error) throw error;
   return (data || []).map(r => ({
+    _key: `${r.resident_id}-${r.month || 'current'}`,
     propertyId: r.property_id,
     residentId: r.resident_id,
     unit: r.unit,

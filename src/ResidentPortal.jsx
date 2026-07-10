@@ -9639,7 +9639,10 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const [tab, setTab] = useState(tabs[0]);
   const [dateRange, setDateRange] = useState({ preset: "all", from: null, to: null });
   const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const [showBackdate, setShowBackdate] = useState(false);
   const [payForm, setPayForm] = useState({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
+  const [backdateForm, setBackdateForm] = useState({ residentId: "", startMonth: "", endMonth: "" });
+  const [backdating, setBackdating] = useState(false);
   const [paySuccess, showPaySuccess] = useSuccess();
 
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
@@ -9777,9 +9780,14 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
         <div>
           <SuccessMessage message={paySuccess} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-            <button onClick={() => setShowRecordPayment(v => !v)} style={{ ...s.btn(showRecordPayment ? "ghost" : "primary"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
-              {showRecordPayment ? "Cancel" : "💵 Record Payment"}
-            </button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => { setShowRecordPayment(v => !v); setShowBackdate(false); }} style={{ ...s.btn(showRecordPayment ? "ghost" : "primary"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
+                {showRecordPayment ? "Cancel" : "💵 Record Payment"}
+              </button>
+              <button onClick={() => { setShowBackdate(v => !v); setShowRecordPayment(false); }} style={{ ...s.btn(showBackdate ? "ghost" : "outline"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
+                {showBackdate ? "Cancel" : "📅 Backdate Rent Due"}
+              </button>
+            </div>
             <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Resident", key: "name" }, { label: "Unit", key: "unit" }, { label: "Rent Due", key: "rentDue" }, { label: "Tenant Paid", key: "tenantPaid" }, { label: "HAP Received", key: "hapReceived" }, { label: "Balance", key: "balance" }, { label: "Status", key: "status" }], ledger, "payment_status")} />
           </div>
           {showRecordPayment && (
@@ -9871,16 +9879,88 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
               }} style={{ ...s.mBtn("primary", mobile) }}>Record Payment</button>
             </div>
           )}
+          {showBackdate && (
+            <div style={{ ...s.card, borderLeft: `3px solid ${T.warn}`, marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Backdate Rent Due</div>
+              <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Generate outstanding rent entries for past months. Select a resident and the month range. Each month in the range will appear in the ledger as unpaid.</div>
+              <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                <div>
+                  <label style={s.label}>Resident</label>
+                  <select style={{ ...s.mSelect(mobile), width: "100%" }} value={backdateForm.residentId} onChange={e => setBackdateForm(f => ({ ...f, residentId: e.target.value }))}>
+                    <option value="">Select resident...</option>
+                    {filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={s.label}>Start Month</label>
+                  <input type="month" style={{ ...s.mInput(mobile), width: "100%" }} value={backdateForm.startMonth} onChange={e => setBackdateForm(f => ({ ...f, startMonth: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={s.label}>End Month</label>
+                  <input type="month" style={{ ...s.mInput(mobile), width: "100%" }} value={backdateForm.endMonth} onChange={e => setBackdateForm(f => ({ ...f, endMonth: e.target.value }))} />
+                </div>
+              </div>
+              {backdateForm.startMonth && backdateForm.endMonth && (() => {
+                const months = [];
+                let cur = backdateForm.startMonth;
+                while (cur <= backdateForm.endMonth && months.length < 36) {
+                  months.push(cur);
+                  const [y, m] = cur.split("-").map(Number);
+                  cur = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+                }
+                return months.length > 0 ? (
+                  <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>
+                    Will create entries for <strong>{months.length}</strong> month{months.length !== 1 ? "s" : ""}: {months[0]} through {months[months.length - 1]}
+                  </div>
+                ) : null;
+              })()}
+              <button disabled={!backdateForm.residentId || !backdateForm.startMonth || !backdateForm.endMonth || backdating} onClick={async () => {
+                if (!backdateForm.residentId || !backdateForm.startMonth || !backdateForm.endMonth) return;
+                setBackdating(true);
+                try {
+                  const months = [];
+                  let cur = backdateForm.startMonth;
+                  while (cur <= backdateForm.endMonth && months.length < 36) {
+                    months.push(cur);
+                    const [y, m] = cur.split("-").map(Number);
+                    cur = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+                  }
+                  const existing = ledger.filter(l => l.residentId === backdateForm.residentId).map(l => l.month);
+                  const toCreate = months.filter(m => !existing.includes(m));
+                  for (const month of toCreate) {
+                    await recordPayment({
+                      residentSlug: backdateForm.residentId,
+                      amount: 0,
+                      method: "charge",
+                      paymentDate: `${month}-01`,
+                      month,
+                      note: "Rent due — backdated",
+                    });
+                  }
+                  const fresh = await fetchRentLedger();
+                  if (fresh && fresh.length) LIVE_RENT_LEDGER = fresh;
+                  const res = LIVE_RESIDENTS.find(r => r.id === backdateForm.residentId);
+                  showPaySuccess(`Created ${toCreate.length} backdated rent entries for ${res?.name || "resident"}`);
+                  setBackdateForm({ residentId: "", startMonth: "", endMonth: "" });
+                  setShowBackdate(false);
+                } catch (err) {
+                  showPaySuccess("Error: " + err.message);
+                }
+                setBackdating(false);
+              }} style={{ ...s.mBtn("primary", mobile) }}>{backdating ? "Creating..." : "Generate Rent Entries"}</button>
+            </div>
+          )}
           <SortableTable mobile={mobile} columns={[
             { key: "name", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
             { key: "unit", label: "Unit" },
+            { key: "month", label: "Month", render: v => v || "—" },
             ...(selectedProperty === "all" ? [{ key: "propertyId", label: "Property", render: v => getProperty(v)?.name?.split(" ")[0] || v }] : []),
             { key: "rentDue", label: "Rent Due", render: v => `$${v.toLocaleString()}` },
             { key: "tenantPaid", label: "Tenant Paid", render: v => `$${v.toLocaleString()}` },
             { key: "hapReceived", label: "HAP Received", render: v => `$${v.toLocaleString()}` },
             { key: "balance", label: "Balance", render: v => <span style={{ fontWeight: v > 0 ? 700 : 400, color: v > 0 ? T.danger : T.text }}>${v}</span>, sortValue: r => r.balance },
             { key: "status", label: "Status", render: v => { const c = PAYMENT_STATUS[v] || PAYMENT_STATUS.outstanding; return <span style={s.badge(c.bg, c.text)}>{c.label}</span>; }, filterOptions: ["paid", "partial", "outstanding"] },
-          ]} data={ledger} keyField="unit" />
+          ]} data={ledger} keyField="_key" />
         </div>
       )}
     </div>
