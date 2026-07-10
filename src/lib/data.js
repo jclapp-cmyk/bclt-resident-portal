@@ -241,6 +241,7 @@ export async function fetchResidents() {
     mailingZip: r.mailing_zip || '',
     mailingAddress: [r.mailing_street, r.mailing_city, r.mailing_state, r.mailing_zip].filter(Boolean).join(', '),
     businessName: r.business_name || '',
+    startingBalance: Number(r.starting_balance) || 0,
   }));
 }
 
@@ -347,6 +348,7 @@ export async function updateResident(residentUuid, changes) {
   if (changes.mailingZip !== undefined) mapped.mailing_zip = changes.mailingZip;
   if (changes.status !== undefined) mapped.status = changes.status;
   if (changes.businessName !== undefined) mapped.business_name = changes.businessName;
+  if (changes.startingBalance !== undefined) mapped.starting_balance = changes.startingBalance;
   const { error } = await supabase.from('residents').update(mapped).eq('id', residentUuid);
   if (error) throw error;
 }

@@ -4117,6 +4117,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
 
         {tab === "Payments" && (() => {
           const ledgerEntry = (sbRentLedger || LIVE_RENT_LEDGER).find(l => l.residentId === selectedResident.id);
+          const sb = selectedResident.startingBalance || 0;
+          const totalBalance = (ledgerEntry?.balance || 0) + sb;
           return (
           <div>
             {ledgerEntry && (
@@ -4126,7 +4128,8 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   <StatCard label="Rent Due" value={`$${ledgerEntry.rentDue?.toLocaleString() || 0}`} mobile={mobile} />
                   <StatCard label="Tenant Paid" value={`$${ledgerEntry.tenantPaid?.toLocaleString() || 0}`} accent={T.success} mobile={mobile} />
                   <StatCard label="HAP Received" value={`$${ledgerEntry.hapReceived?.toLocaleString() || 0}`} accent={T.info} mobile={mobile} />
-                  <StatCard label="Balance" value={`$${ledgerEntry.balance || 0}`} accent={ledgerEntry.balance > 0 ? T.danger : T.success} mobile={mobile} />
+                  {sb > 0 && <StatCard label="Prior Balance" value={`$${sb.toLocaleString()}`} accent={T.warn} mobile={mobile} />}
+                  <StatCard label="Balance" value={`$${totalBalance}`} accent={totalBalance > 0 ? T.danger : T.success} mobile={mobile} />
                 </div>
               </div>
             )}
@@ -9641,12 +9644,16 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [showBackdate, setShowBackdate] = useState(false);
   const [payForm, setPayForm] = useState({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
-  const [backdateForm, setBackdateForm] = useState({ residentId: "", startMonth: "", endMonth: "" });
-  const [backdating, setBackdating] = useState(false);
+  const [balanceSaving, setBalanceSaving] = useState(false);
   const [paySuccess, showPaySuccess] = useSuccess();
 
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
-  const ledger = filterByProperty(LIVE_RENT_LEDGER, selectedProperty);
+  const rawLedger = filterByProperty(LIVE_RENT_LEDGER, selectedProperty);
+  const ledger = rawLedger.map(entry => {
+    const res = LIVE_RESIDENTS.find(r => r.id === entry.residentId);
+    const sb = res?.startingBalance || 0;
+    return sb ? { ...entry, balance: entry.balance + sb, startingBalance: sb } : entry;
+  });
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
@@ -9785,7 +9792,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                 {showRecordPayment ? "Cancel" : "💵 Record Payment"}
               </button>
               <button onClick={() => { setShowBackdate(v => !v); setShowRecordPayment(false); }} style={{ ...s.btn(showBackdate ? "ghost" : "outline"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
-                {showBackdate ? "Cancel" : "📅 Backdate Rent Due"}
+                {showBackdate ? "Cancel" : "📋 Set Starting Balances"}
               </button>
             </div>
             <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Resident", key: "name" }, { label: "Unit", key: "unit" }, { label: "Rent Due", key: "rentDue" }, { label: "Tenant Paid", key: "tenantPaid" }, { label: "HAP Received", key: "hapReceived" }, { label: "Balance", key: "balance" }, { label: "Status", key: "status" }], ledger, "payment_status")} />
@@ -9881,73 +9888,43 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
           )}
           {showBackdate && (
             <div style={{ ...s.card, borderLeft: `3px solid ${T.warn}`, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Backdate Rent Due</div>
-              <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Generate outstanding rent entries for past months. Select a resident and the month range. Each month in the range will appear in the ledger as unpaid.</div>
-              <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={s.label}>Resident</label>
-                  <select style={{ ...s.mSelect(mobile), width: "100%" }} value={backdateForm.residentId} onChange={e => setBackdateForm(f => ({ ...f, residentId: e.target.value }))}>
-                    <option value="">Select resident...</option>
-                    {filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => <option key={r.id} value={r.id}>{r.name} — {r.unit}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={s.label}>Start Month</label>
-                  <input type="month" style={{ ...s.mInput(mobile), width: "100%" }} value={backdateForm.startMonth} onChange={e => setBackdateForm(f => ({ ...f, startMonth: e.target.value }))} />
-                </div>
-                <div>
-                  <label style={s.label}>End Month</label>
-                  <input type="month" style={{ ...s.mInput(mobile), width: "100%" }} value={backdateForm.endMonth} onChange={e => setBackdateForm(f => ({ ...f, endMonth: e.target.value }))} />
-                </div>
-              </div>
-              {backdateForm.startMonth && backdateForm.endMonth && (() => {
-                const months = [];
-                let cur = backdateForm.startMonth;
-                while (cur <= backdateForm.endMonth && months.length < 36) {
-                  months.push(cur);
-                  const [y, m] = cur.split("-").map(Number);
-                  cur = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
-                }
-                return months.length > 0 ? (
-                  <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>
-                    Will create entries for <strong>{months.length}</strong> month{months.length !== 1 ? "s" : ""}: {months[0]} through {months[months.length - 1]}
-                  </div>
-                ) : null;
-              })()}
-              <button disabled={!backdateForm.residentId || !backdateForm.startMonth || !backdateForm.endMonth || backdating} onClick={async () => {
-                if (!backdateForm.residentId || !backdateForm.startMonth || !backdateForm.endMonth) return;
-                setBackdating(true);
-                try {
-                  const months = [];
-                  let cur = backdateForm.startMonth;
-                  while (cur <= backdateForm.endMonth && months.length < 36) {
-                    months.push(cur);
-                    const [y, m] = cur.split("-").map(Number);
-                    cur = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
-                  }
-                  const existing = ledger.filter(l => l.residentId === backdateForm.residentId).map(l => l.month);
-                  const toCreate = months.filter(m => !existing.includes(m));
-                  for (const month of toCreate) {
-                    await recordPayment({
-                      residentSlug: backdateForm.residentId,
-                      amount: 0,
-                      method: "charge",
-                      paymentDate: `${month}-01`,
-                      month,
-                      note: "Rent due — backdated",
-                    });
-                  }
-                  const fresh = await fetchRentLedger();
-                  if (fresh && fresh.length) LIVE_RENT_LEDGER = fresh;
-                  const res = LIVE_RESIDENTS.find(r => r.id === backdateForm.residentId);
-                  showPaySuccess(`Created ${toCreate.length} backdated rent entries for ${res?.name || "resident"}`);
-                  setBackdateForm({ residentId: "", startMonth: "", endMonth: "" });
-                  setShowBackdate(false);
-                } catch (err) {
-                  showPaySuccess("Error: " + err.message);
-                }
-                setBackdating(false);
-              }} style={{ ...s.mBtn("primary", mobile) }}>{backdating ? "Creating..." : "Generate Rent Entries"}</button>
+              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Set Starting Balances</div>
+              <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Enter the amount each resident currently owes from before you started using HomeBase. Leave at $0 for residents who are current.</div>
+              <table style={s.table}>
+                <thead><tr>{["Resident", "Unit", "Starting Balance", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => {
+                    const ext = LIVE_RESIDENTS_EXTENDED[r.id] || {};
+                    return (
+                      <tr key={r.id}>
+                        <td style={s.td}><span style={{ fontWeight: 600 }}>{r.name}</span></td>
+                        <td style={s.td}>{r.unit}</td>
+                        <td style={s.td}>
+                          <input type="number" min="0" step="0.01" placeholder="0.00"
+                            defaultValue={r.startingBalance || ""}
+                            id={`starting-bal-${r.id}`}
+                            style={{ ...s.mInput(mobile), width: 120, fontSize: 12 }} />
+                        </td>
+                        <td style={s.td}>
+                          <button style={{ ...s.btn("primary"), fontSize: 11, padding: "4px 10px" }} disabled={balanceSaving} onClick={async () => {
+                            const input = document.getElementById(`starting-bal-${r.id}`);
+                            const val = parseFloat(input?.value) || 0;
+                            setBalanceSaving(true);
+                            try {
+                              await updateResident(r._uuid, { startingBalance: val });
+                              r.startingBalance = val;
+                              showPaySuccess(`Starting balance for ${r.name} set to $${val.toFixed(2)}`);
+                            } catch (err) {
+                              showPaySuccess("Error: " + err.message);
+                            }
+                            setBalanceSaving(false);
+                          }}>Save</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
           <SortableTable mobile={mobile} columns={[
