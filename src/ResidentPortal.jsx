@@ -78,6 +78,14 @@ let LIVE_PROPERTIES = [];
 let LIVE_RESIDENTS = [];
 let LIVE_RESIDENTS_EXTENDED = {};
 let LIVE_RENT_LEDGER = [];
+const getAdjustedLedger = () => LIVE_RENT_LEDGER.map(entry => {
+  const res = LIVE_RESIDENTS.find(r => r.id === entry.residentId);
+  const sb = res?.startingBalance || 0;
+  if (!sb) return entry;
+  const bal = Math.max(0, sb + entry.rentDue - entry.tenantPaid - entry.hapReceived);
+  const status = bal === 0 ? "paid" : (entry.tenantPaid + entry.hapReceived > 0) ? "partial" : "outstanding";
+  return { ...entry, balance: bal, startingBalance: sb, status };
+});
 let LIVE_REG_INSPECTIONS = [];
 let LIVE_DEPOSITS = [];
 let LIVE_COMPLIANCE_DOCS = [];
@@ -660,7 +668,7 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
   const openCount = openRequests.length;
   const propName = LIVE_PROPERTIES.find(p => p.id === rc?.propertyId)?.name || "BCLT";
   const curMonth = new Date().toISOString().slice(0, 7);
-  const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id && l.month === curMonth) || LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id) || {};
+  const ledgerEntry = getAdjustedLedger().find(l => l.residentId === rc?.id && l.month === curMonth) || getAdjustedLedger().find(l => l.residentId === rc?.id) || {};
   const bal = ledgerEntry.balance || 0;
   const leaseExpired = ext.leaseEnd && new Date(ext.leaseEnd) < new Date();
   const leaseLabel = ext.leaseEnd ? (leaseExpired ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "Month-to-Month" : "Active");
@@ -851,7 +859,8 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
   const totalUnits = selectedProperty === "all" ? LIVE_PROPERTIES.reduce((s, p) => s + p.totalUnits, 0) : getProperty(selectedProperty).totalUnits;
   // Financials roll-up scoped to selectedProperty (or all)
-  const finLedger = selectedProperty === "all" ? LIVE_RENT_LEDGER : LIVE_RENT_LEDGER.filter(l => l.propertyId === selectedProperty);
+  const adjLedger = getAdjustedLedger();
+  const finLedger = selectedProperty === "all" ? adjLedger : adjLedger.filter(l => l.propertyId === selectedProperty);
   const finCurrentMonth = new Date().toISOString().slice(0, 7);
   const finCurrent = finLedger.filter(l => l.month === finCurrentMonth);
   const finRollupLedger = finCurrent.length > 0
@@ -931,7 +940,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
               const pOpen = pMaint.filter(m => MAINT_OPEN(m)).length;
               const pCrit = pMaint.filter(m => m.priority === "critical" && MAINT_OPEN(m)).length;
               const pRes = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
-              const pLedger = LIVE_RENT_LEDGER.filter(r => r.propertyId === p.id);
+              const pLedger = getAdjustedLedger().filter(r => r.propertyId === p.id);
               const pRent = pLedger.reduce((s, r) => s + r.rentDue, 0);
               const pColl = pLedger.reduce((s, r) => s + r.tenantPaid + r.hapReceived, 0);
               const pRate = pRent ? Math.round((pColl / pRent) * 100) : 0;
@@ -1799,7 +1808,7 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
 const RentPayments = ({ mobile, rc }) => {
   const { t } = useI18n();
   const _ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
-  const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === rc?.id) || {};
+  const ledgerEntry = getAdjustedLedger().find(l => l.residentId === rc?.id) || {};
   const balance = ledgerEntry.balance || 0;
   const [showPay, setShowPay] = useState(false);
   const [payForm, setPayForm] = useState({ amount: "", method: "ach", payType: "rent" });
@@ -3810,22 +3819,27 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               </div>
             </div>
             {(() => {
-              const ledgerEntry = LIVE_RENT_LEDGER.find(l => l.residentId === selectedResident.id);
-              return ledgerEntry ? (
+              const ledgerEntry = getAdjustedLedger().find(l => l.residentId === selectedResident.id);
+              if (!ledgerEntry) return null;
+              const resSb = selectedResident.startingBalance || 0;
+              const adjBalance = Math.max(0, resSb + ledgerEntry.rentDue - ledgerEntry.tenantPaid - ledgerEntry.hapReceived);
+              const adjStatus = adjBalance === 0 ? "paid" : (ledgerEntry.tenantPaid + ledgerEntry.hapReceived > 0) ? "partial" : "outstanding";
+              return (
                 <div style={s.card}>
                   <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Payment Status</div>
                   <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 10 }}>
                     <StatCard label="Rent Due" value={`$${ledgerEntry.rentDue?.toLocaleString() || 0}`} mobile={mobile} />
                     <StatCard label="Tenant Paid" value={`$${ledgerEntry.tenantPaid?.toLocaleString() || 0}`} accent={T.success} mobile={mobile} />
                     <StatCard label="HAP Received" value={`$${ledgerEntry.hapReceived?.toLocaleString() || 0}`} accent={T.info} mobile={mobile} />
-                    <StatCard label="Balance" value={`$${ledgerEntry.balance || 0}`} accent={ledgerEntry.balance > 0 ? T.danger : T.success} mobile={mobile} />
+                    {resSb > 0 && <StatCard label="Prior Balance" value={`$${resSb.toLocaleString()}`} accent={T.warn} mobile={mobile} />}
+                    <StatCard label="Balance" value={`$${adjBalance}`} accent={adjBalance > 0 ? T.danger : T.success} mobile={mobile} />
                   </div>
                   <span style={s.badge(
-                    ledgerEntry.status === "paid" ? T.successDim : ledgerEntry.status === "partial" ? T.warnDim : T.dangerDim,
-                    ledgerEntry.status === "paid" ? T.success : ledgerEntry.status === "partial" ? T.warn : T.danger
-                  )}>{ledgerEntry.status === "paid" ? "Paid" : ledgerEntry.status === "partial" ? "Partial" : "Outstanding"}</span>
+                    adjStatus === "paid" ? T.successDim : adjStatus === "partial" ? T.warnDim : T.dangerDim,
+                    adjStatus === "paid" ? T.success : adjStatus === "partial" ? T.warn : T.danger
+                  )}>{adjStatus === "paid" ? "Paid" : adjStatus === "partial" ? "Partial" : "Outstanding"}</span>
                 </div>
-              ) : null;
+              );
             })()}
             {resEC.length > 0 && (
               <div style={s.card}>
@@ -4116,9 +4130,10 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         )}
 
         {tab === "Payments" && (() => {
-          const ledgerEntry = (sbRentLedger || LIVE_RENT_LEDGER).find(l => l.residentId === selectedResident.id);
-          const sb = selectedResident.startingBalance || 0;
-          const totalBalance = sb + (ledgerEntry?.rentDue || 0) - (ledgerEntry?.tenantPaid || 0) - (ledgerEntry?.hapReceived || 0);
+          const adjL = sbRentLedger ? sbRentLedger : getAdjustedLedger();
+          const ledgerEntry = adjL.find(l => l.residentId === selectedResident.id);
+          const sb = ledgerEntry?.startingBalance || selectedResident.startingBalance || 0;
+          const totalBalance = ledgerEntry?.balance || 0;
           return (
           <div>
             {ledgerEntry && (
@@ -4562,7 +4577,7 @@ const PropertyCard = ({ p, mobile, onSelect, maintenance = [] }) => {
   const residents = LIVE_RESIDENTS.filter(r => r.propertyId === p.id);
   const maint = maintenance.filter(m => m.propertyId === p.id);
   const openMaint = maint.filter(m => MAINT_OPEN(m)).length;
-  const ledger = LIVE_RENT_LEDGER.filter(r => r.propertyId === p.id);
+  const ledger = getAdjustedLedger().filter(r => r.propertyId === p.id);
   const rentRoll = ledger.reduce((s, r) => s + r.rentDue, 0);
   const collected = ledger.reduce((s, r) => s + r.tenantPaid + r.hapReceived, 0);
   const collRate = rentRoll ? Math.round((collected / rentRoll) * 100) : 0;
@@ -4742,7 +4757,7 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const propResidents = LIVE_RESIDENTS.filter(r => r.propertyId === selectedProperty);
 
   // Financials roll-up for this property
-  const propLedger = LIVE_RENT_LEDGER.filter(l => l.propertyId === selectedProperty);
+  const propLedger = getAdjustedLedger().filter(l => l.propertyId === selectedProperty);
   const currentMonth = new Date().toISOString().slice(0, 7);
   const currentMonthLedger = propLedger.filter(l => l.month === currentMonth);
   // Fallback: if no current-month entries exist, use the most recent month per resident
@@ -9671,14 +9686,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const [paySuccess, showPaySuccess] = useSuccess();
 
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
-  const rawLedger = filterByProperty(LIVE_RENT_LEDGER, selectedProperty);
-  const ledger = rawLedger.map(entry => {
-    const res = LIVE_RESIDENTS.find(r => r.id === entry.residentId);
-    const sb = res?.startingBalance || 0;
-    if (!sb) return entry;
-    const unclamped = sb + entry.rentDue - entry.tenantPaid - entry.hapReceived;
-    return { ...entry, balance: Math.max(0, unclamped), startingBalance: sb };
-  });
+  const ledger = filterByProperty(getAdjustedLedger(), selectedProperty);
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
@@ -9717,7 +9725,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                 <tbody>
                   {LIVE_PROPERTIES.map(p => {
                     const pRes = LIVE_RESIDENTS.filter(r => r.propertyId === p.id).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
-                    const pLedger = LIVE_RENT_LEDGER.filter(r => r.propertyId === p.id);
+                    const pLedger = getAdjustedLedger().filter(r => r.propertyId === p.id);
                     const pRent = pRes.reduce((s, r) => s + (r.rentAmount || 0), 0);
                     const pHap = pRes.reduce((s, r) => s + (r.hapPayment || 0), 0);
                     const pTen = pRes.reduce((s, r) => s + (r.tenantPortion || 0), 0);
