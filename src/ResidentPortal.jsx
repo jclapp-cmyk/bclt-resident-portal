@@ -4128,8 +4128,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         )}
 
         {tab === "Payments" && (() => {
-          const adjL = sbRentLedger ? sbRentLedger : getAdjustedLedger();
-          const ledgerEntry = adjL.find(l => l.residentId === selectedResident.id);
+          const ledgerEntry = getAdjustedLedger().find(l => l.residentId === selectedResident.id);
           const sb = ledgerEntry?.startingBalance || selectedResident.startingBalance || 0;
           const totalBalance = ledgerEntry?.balance || 0;
           return (
