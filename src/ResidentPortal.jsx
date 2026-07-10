@@ -3821,9 +3821,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
             {(() => {
               const ledgerEntry = getAdjustedLedger().find(l => l.residentId === selectedResident.id);
               if (!ledgerEntry) return null;
-              const resSb = selectedResident.startingBalance || 0;
-              const adjBalance = Math.max(0, resSb + ledgerEntry.rentDue - ledgerEntry.tenantPaid - ledgerEntry.hapReceived);
-              const adjStatus = adjBalance === 0 ? "paid" : (ledgerEntry.tenantPaid + ledgerEntry.hapReceived > 0) ? "partial" : "outstanding";
+              const sb = ledgerEntry.startingBalance || 0;
               return (
                 <div style={s.card}>
                   <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Payment Status</div>
@@ -3831,13 +3829,13 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                     <StatCard label="Rent Due" value={`$${ledgerEntry.rentDue?.toLocaleString() || 0}`} mobile={mobile} />
                     <StatCard label="Tenant Paid" value={`$${ledgerEntry.tenantPaid?.toLocaleString() || 0}`} accent={T.success} mobile={mobile} />
                     <StatCard label="HAP Received" value={`$${ledgerEntry.hapReceived?.toLocaleString() || 0}`} accent={T.info} mobile={mobile} />
-                    {resSb > 0 && <StatCard label="Prior Balance" value={`$${resSb.toLocaleString()}`} accent={T.warn} mobile={mobile} />}
-                    <StatCard label="Balance" value={`$${adjBalance}`} accent={adjBalance > 0 ? T.danger : T.success} mobile={mobile} />
+                    {sb > 0 && <StatCard label="Prior Balance" value={`$${sb.toLocaleString()}`} accent={T.warn} mobile={mobile} />}
+                    <StatCard label="Balance" value={`$${ledgerEntry.balance}`} accent={ledgerEntry.balance > 0 ? T.danger : T.success} mobile={mobile} />
                   </div>
                   <span style={s.badge(
-                    adjStatus === "paid" ? T.successDim : adjStatus === "partial" ? T.warnDim : T.dangerDim,
-                    adjStatus === "paid" ? T.success : adjStatus === "partial" ? T.warn : T.danger
-                  )}>{adjStatus === "paid" ? "Paid" : adjStatus === "partial" ? "Partial" : "Outstanding"}</span>
+                    ledgerEntry.status === "paid" ? T.successDim : ledgerEntry.status === "partial" ? T.warnDim : T.dangerDim,
+                    ledgerEntry.status === "paid" ? T.success : ledgerEntry.status === "partial" ? T.warn : T.danger
+                  )}>{ledgerEntry.status === "paid" ? "Paid" : ledgerEntry.status === "partial" ? "Partial" : "Outstanding"}</span>
                 </div>
               );
             })()}
