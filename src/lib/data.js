@@ -331,7 +331,12 @@ export async function insertResident(resident, propertyUuid, unitUuid) {
 
 export async function updateResident(residentUuid, changes) {
   const mapped = {};
-  if (changes.name !== undefined) mapped.name = changes.name;
+  if (changes.name !== undefined) {
+    mapped.name = changes.name;
+    const parts = changes.name.trim().split(/\s+/);
+    mapped.first_name = parts[0] || '';
+    mapped.last_name = parts.slice(1).join(' ') || '';
+  }
   if (changes.phone !== undefined) mapped.phone = changes.phone;
   if (changes.email !== undefined) mapped.email = changes.email;
   if (changes.preferredChannel !== undefined) mapped.preferred_channel = changes.preferredChannel;
