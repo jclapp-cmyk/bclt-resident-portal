@@ -4118,7 +4118,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         {tab === "Payments" && (() => {
           const ledgerEntry = (sbRentLedger || LIVE_RENT_LEDGER).find(l => l.residentId === selectedResident.id);
           const sb = selectedResident.startingBalance || 0;
-          const totalBalance = (ledgerEntry?.balance || 0) + sb;
+          const totalBalance = sb + (ledgerEntry?.rentDue || 0) - (ledgerEntry?.tenantPaid || 0) - (ledgerEntry?.hapReceived || 0);
           return (
           <div>
             {ledgerEntry && (
@@ -9675,7 +9675,9 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const ledger = rawLedger.map(entry => {
     const res = LIVE_RESIDENTS.find(r => r.id === entry.residentId);
     const sb = res?.startingBalance || 0;
-    return sb ? { ...entry, balance: entry.balance + sb, startingBalance: sb } : entry;
+    if (!sb) return entry;
+    const unclamped = sb + entry.rentDue - entry.tenantPaid - entry.hapReceived;
+    return { ...entry, balance: Math.max(0, unclamped), startingBalance: sb };
   });
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
