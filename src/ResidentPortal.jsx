@@ -668,8 +668,9 @@ const ResidentDashboard = ({ mobile, maintenance, threads, messages = [], unitIn
   const openCount = openRequests.length;
   const propName = LIVE_PROPERTIES.find(p => p.id === rc?.propertyId)?.name || "BCLT";
   const curMonth = new Date().toISOString().slice(0, 7);
-  const ledgerEntry = getAdjustedLedger().find(l => l.residentId === rc?.id && l.month === curMonth) || getAdjustedLedger().find(l => l.residentId === rc?.id) || {};
-  const bal = ledgerEntry.balance || 0;
+  const resLedger = getAdjustedLedger().filter(l => l.residentId === rc?.id);
+  const ledgerEntry = resLedger.find(l => l.month === curMonth) || resLedger[resLedger.length - 1] || {};
+  const bal = resLedger.reduce((s, l) => s + l.balance, 0) + (rc?.startingBalance || 0);
   const leaseExpired = ext.leaseEnd && new Date(ext.leaseEnd) < new Date();
   const leaseLabel = ext.leaseEnd ? (leaseExpired ? "Expired" : "Active") : (ext.leaseType === "month-to-month" ? "Month-to-Month" : "Active");
 
@@ -873,15 +874,22 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
   const finCollected = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0) + (l.hapReceived || 0), 0);
   const finTenantPaid = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0), 0);
   const finHap = finRollupLedger.reduce((s, l) => s + (l.hapReceived || 0), 0);
-  const finOutstanding = finLedger.reduce((s, l) => s + Math.max(0, l.balance || 0), 0);
+  const finOutstanding = finLedger.reduce((s, l) => s + Math.max(0, l.balance || 0), 0)
+    + filterByProperty(LIVE_RESIDENTS, selectedProperty).reduce((s, r) => s + (r.startingBalance || 0), 0);
   const finRate = finRent > 0 ? Math.round((finCollected / finRent) * 100) : 0;
-  const finDelinquent = finLedger.filter(l => (l.balance || 0) > 0).reduce((acc, l) => {
-    if (!acc[l.residentId] || acc[l.residentId].month < l.month) acc[l.residentId] = l;
-    return acc;
-  }, {});
-  const finTopDelinquent = Object.values(finDelinquent)
-    .sort((a, b) => (b.balance || 0) - (a.balance || 0))
-    .slice(0, 3)
+  const finByResident = {};
+  finLedger.forEach(l => {
+    if (!finByResident[l.residentId]) finByResident[l.residentId] = { ...l, balance: 0, monthsBehind: 0 };
+    finByResident[l.residentId].balance += Math.max(0, l.balance || 0);
+    if (l.balance > 0) finByResident[l.residentId].monthsBehind++;
+  });
+  filterByProperty(LIVE_RESIDENTS, selectedProperty).forEach(r => {
+    if (r.startingBalance > 0 && finByResident[r.id]) finByResident[r.id].balance += r.startingBalance;
+  });
+  const finTopDelinquent = Object.values(finByResident)
+    .filter(l => l.balance > 0)
+    .sort((a, b) => b.balance - a.balance)
+    .slice(0, 5)
     .map(l => ({ ...l, resident: LIVE_RESIDENTS.find(r => r.id === l.residentId) }));
 
   return (
@@ -1808,8 +1816,9 @@ const WorkOrders = ({ mobile, maintenance, onUpdate, onAdd, profile, vendors = [
 const RentPayments = ({ mobile, rc }) => {
   const { t } = useI18n();
   const _ext = LIVE_RESIDENTS_EXTENDED[rc?.id] || {};
-  const ledgerEntry = getAdjustedLedger().find(l => l.residentId === rc?.id) || {};
-  const balance = ledgerEntry.balance || 0;
+  const resLedgerAll = getAdjustedLedger().filter(l => l.residentId === rc?.id);
+  const ledgerEntry = resLedgerAll.find(l => l.month === new Date().toISOString().slice(0, 7)) || resLedgerAll[resLedgerAll.length - 1] || {};
+  const balance = resLedgerAll.reduce((s, l) => s + l.balance, 0) + (rc?.startingBalance || 0);
   const [showPay, setShowPay] = useState(false);
   const [payForm, setPayForm] = useState({ amount: "", method: "ach", payType: "rent" });
   const [payHistory, setPayHistory] = useState([]);
@@ -3819,23 +3828,25 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               </div>
             </div>
             {(() => {
-              const ledgerEntry = getAdjustedLedger().find(l => l.residentId === selectedResident.id);
-              if (!ledgerEntry) return null;
-              const sb = ledgerEntry.startingBalance || 0;
+              const resEntries = getAdjustedLedger().filter(l => l.residentId === selectedResident.id);
+              if (!resEntries.length) return null;
+              const curEntry = resEntries.find(l => l.month === new Date().toISOString().slice(0, 7)) || resEntries[resEntries.length - 1];
+              const totalBal = resEntries.reduce((s, l) => s + l.balance, 0) + (curEntry.startingBalance || 0);
+              const unpaidMonths = resEntries.filter(l => l.balance > 0).length;
               return (
                 <div style={s.card}>
                   <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Payment Status</div>
                   <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap", marginBottom: 10 }}>
-                    <StatCard label="Rent Due" value={`$${ledgerEntry.rentDue?.toLocaleString() || 0}`} mobile={mobile} />
-                    <StatCard label="Tenant Paid" value={`$${ledgerEntry.tenantPaid?.toLocaleString() || 0}`} accent={T.success} mobile={mobile} />
-                    <StatCard label="HAP Received" value={`$${ledgerEntry.hapReceived?.toLocaleString() || 0}`} accent={T.info} mobile={mobile} />
-                    {sb > 0 && <StatCard label="Prior Balance" value={`$${sb.toLocaleString()}`} accent={T.warn} mobile={mobile} />}
-                    <StatCard label="Balance" value={`$${ledgerEntry.balance}`} accent={ledgerEntry.balance > 0 ? T.danger : T.success} mobile={mobile} />
+                    <StatCard label="This Month" value={`$${curEntry.rentDue?.toLocaleString() || 0}`} mobile={mobile} />
+                    <StatCard label="Tenant Paid" value={`$${curEntry.tenantPaid?.toLocaleString() || 0}`} accent={T.success} mobile={mobile} />
+                    <StatCard label="HAP Received" value={`$${curEntry.hapReceived?.toLocaleString() || 0}`} accent={T.info} mobile={mobile} />
+                    <StatCard label="Total Owed" value={`$${totalBal.toLocaleString()}`} accent={totalBal > 0 ? T.danger : T.success} mobile={mobile} />
+                    {unpaidMonths > 0 && <StatCard label="Months Behind" value={unpaidMonths} accent={T.danger} mobile={mobile} />}
                   </div>
                   <span style={s.badge(
-                    ledgerEntry.status === "paid" ? T.successDim : ledgerEntry.status === "partial" ? T.warnDim : T.dangerDim,
-                    ledgerEntry.status === "paid" ? T.success : ledgerEntry.status === "partial" ? T.warn : T.danger
-                  )}>{ledgerEntry.status === "paid" ? "Paid" : ledgerEntry.status === "partial" ? "Partial" : "Outstanding"}</span>
+                    totalBal === 0 ? T.successDim : unpaidMonths > 1 ? T.dangerDim : T.warnDim,
+                    totalBal === 0 ? T.success : unpaidMonths > 1 ? T.danger : T.warn
+                  )}>{totalBal === 0 ? "Current" : unpaidMonths > 1 ? `${unpaidMonths} Months Behind` : "Partial"}</span>
                 </div>
               );
             })()}
@@ -4128,20 +4139,23 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         )}
 
         {tab === "Payments" && (() => {
-          const ledgerEntry = getAdjustedLedger().find(l => l.residentId === selectedResident.id);
-          const sb = ledgerEntry?.startingBalance || selectedResident.startingBalance || 0;
-          const totalBalance = ledgerEntry?.balance || 0;
+          const resEntries = getAdjustedLedger().filter(l => l.residentId === selectedResident.id);
+          const sb = selectedResident.startingBalance || 0;
+          const totalBalance = resEntries.reduce((s, l) => s + l.balance, 0) + sb;
+          const unpaidMonths = resEntries.filter(l => l.balance > 0).length;
+          const curEntry = resEntries.find(l => l.month === new Date().toISOString().slice(0, 7)) || resEntries[resEntries.length - 1];
           return (
           <div>
-            {ledgerEntry && (
+            {curEntry && (
               <div style={{ ...s.card, marginBottom: 16 }}>
                 <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Current Balance</div>
                 <div style={{ display: "flex", gap: mobile ? 10 : 14, flexWrap: "wrap" }}>
-                  <StatCard label="Rent Due" value={`$${ledgerEntry.rentDue?.toLocaleString() || 0}`} mobile={mobile} />
-                  <StatCard label="Tenant Paid" value={`$${ledgerEntry.tenantPaid?.toLocaleString() || 0}`} accent={T.success} mobile={mobile} />
-                  <StatCard label="HAP Received" value={`$${ledgerEntry.hapReceived?.toLocaleString() || 0}`} accent={T.info} mobile={mobile} />
+                  <StatCard label="This Month" value={`$${curEntry.rentDue?.toLocaleString() || 0}`} mobile={mobile} />
+                  <StatCard label="Tenant Paid" value={`$${curEntry.tenantPaid?.toLocaleString() || 0}`} accent={T.success} mobile={mobile} />
+                  <StatCard label="HAP Received" value={`$${curEntry.hapReceived?.toLocaleString() || 0}`} accent={T.info} mobile={mobile} />
                   {sb > 0 && <StatCard label="Prior Balance" value={`$${sb.toLocaleString()}`} accent={T.warn} mobile={mobile} />}
-                  <StatCard label="Balance" value={`$${totalBalance}`} accent={totalBalance > 0 ? T.danger : T.success} mobile={mobile} />
+                  <StatCard label="Total Owed" value={`$${totalBalance.toLocaleString()}`} accent={totalBalance > 0 ? T.danger : T.success} mobile={mobile} />
+                  {unpaidMonths > 0 && <StatCard label="Months Behind" value={unpaidMonths} accent={T.danger} mobile={mobile} />}
                 </div>
               </div>
             )}
@@ -4768,17 +4782,22 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const collected = ledgerForRollup.reduce((s, l) => s + (l.tenantPaid || 0) + (l.hapReceived || 0), 0);
   const tenantCollected = ledgerForRollup.reduce((s, l) => s + (l.tenantPaid || 0), 0);
   const hapCollected = ledgerForRollup.reduce((s, l) => s + (l.hapReceived || 0), 0);
-  const outstanding = propLedger.reduce((s, l) => s + Math.max(0, l.balance || 0), 0);
+  const outstanding = propLedger.reduce((s, l) => s + Math.max(0, l.balance || 0), 0)
+    + propResidents.reduce((s, r) => s + (r.startingBalance || 0), 0);
   const collectionRate = monthlyRent > 0 ? Math.round((collected / monthlyRent) * 100) : 0;
-  const delinquent = propLedger
-    .filter(l => (l.balance || 0) > 0)
-    .reduce((acc, l) => {
-      if (!acc[l.residentId] || acc[l.residentId].month < l.month) acc[l.residentId] = l;
-      return acc;
-    }, {});
-  const topDelinquent = Object.values(delinquent)
-    .sort((a, b) => (b.balance || 0) - (a.balance || 0))
-    .slice(0, 3)
+  const propByResident = {};
+  propLedger.forEach(l => {
+    if (!propByResident[l.residentId]) propByResident[l.residentId] = { ...l, balance: 0, monthsBehind: 0 };
+    propByResident[l.residentId].balance += Math.max(0, l.balance || 0);
+    if (l.balance > 0) propByResident[l.residentId].monthsBehind++;
+  });
+  propResidents.forEach(r => {
+    if (r.startingBalance > 0 && propByResident[r.id]) propByResident[r.id].balance += r.startingBalance;
+  });
+  const topDelinquent = Object.values(propByResident)
+    .filter(l => l.balance > 0)
+    .sort((a, b) => b.balance - a.balance)
+    .slice(0, 5)
     .map(l => ({ ...l, resident: LIVE_RESIDENTS.find(r => r.id === l.residentId) }));
 
   return (
@@ -9679,17 +9698,22 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const [tab, setTab] = useState(tabs[0]);
   const [dateRange, setDateRange] = useState({ preset: "all", from: null, to: null });
   const [showRecordPayment, setShowRecordPayment] = useState(false);
+  const curMonth = new Date().toISOString().slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(curMonth);
   const [payForm, setPayForm] = useState({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
   const [paySuccess, showPaySuccess] = useSuccess();
 
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
-  const ledger = filterByProperty(getAdjustedLedger(), selectedProperty);
+  const allLedger = filterByProperty(getAdjustedLedger(), selectedProperty);
+  const ledger = allLedger.filter(l => l.month === selectedMonth);
+  const availableMonths = [...new Set(allLedger.map(l => l.month))].sort().reverse();
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
   const totalCollected = ledger.reduce((sum, r) => sum + r.tenantPaid + r.hapReceived, 0);
   const collectionRate = monthlyRentRoll ? Math.round((totalCollected / monthlyRentRoll) * 100) : 0;
-  const delinquent = ledger.filter(r => r.balance > 0);
+  const delinquent = allLedger.filter(r => r.balance > 0);
+  const totalOutstanding = allLedger.reduce((sum, r) => sum + r.balance, 0);
   const revenueData = filterByProperty([], selectedProperty);
   const monthLabels = [...new Set(revenueData.map(r => r.month))].sort();
   const trendPoints = monthLabels.map(m => revenueData.filter(r => r.month === m).reduce((s, r) => s + r.collected, 0));
@@ -9711,6 +9735,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
             <StatCard label="HAP Income" value={`$${totalHAP.toLocaleString()}`} accent={T.info} mobile={mobile} />
             <StatCard label="Tenant Portions" value={`$${totalTenant.toLocaleString()}`} accent={T.success} mobile={mobile} />
             <StatCard label="Collection Rate" value={`${collectionRate}%`} accent={collectionRate >= 95 ? T.success : collectionRate >= 80 ? T.warn : T.danger} mobile={mobile} />
+            {totalOutstanding > 0 && <StatCard label="Total Outstanding" value={`$${totalOutstanding.toLocaleString()}`} accent={T.danger} mobile={mobile} />}
           </div>
 
           {/* Per-property revenue breakdown — only when viewing all properties */}
@@ -9817,10 +9842,15 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
         <div>
           <SuccessMessage message={paySuccess} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-            <button onClick={() => setShowRecordPayment(v => !v)} style={{ ...s.btn(showRecordPayment ? "ghost" : "primary"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
-              {showRecordPayment ? "Cancel" : "💵 Record Payment"}
-            </button>
-            <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Resident", key: "name" }, { label: "Unit", key: "unit" }, { label: "Rent Due", key: "rentDue" }, { label: "Tenant Paid", key: "tenantPaid" }, { label: "HAP Received", key: "hapReceived" }, { label: "Balance", key: "balance" }, { label: "Status", key: "status" }], ledger, "payment_status")} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={() => setShowRecordPayment(v => !v)} style={{ ...s.btn(showRecordPayment ? "ghost" : "primary"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
+                {showRecordPayment ? "Cancel" : "💵 Record Payment"}
+              </button>
+              <select style={{ ...s.mSelect(mobile), fontSize: 13, padding: "8px 12px" }} value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
+                {availableMonths.map(m => <option key={m} value={m}>{new Date(m + "-15").toLocaleDateString("en-US", { year: "numeric", month: "long" })}</option>)}
+              </select>
+            </div>
+            <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Resident", key: "name" }, { label: "Unit", key: "unit" }, { label: "Month", key: "month" }, { label: "Rent Due", key: "rentDue" }, { label: "Tenant Paid", key: "tenantPaid" }, { label: "HAP Received", key: "hapReceived" }, { label: "Balance", key: "balance" }, { label: "Status", key: "status" }], ledger, "payment_status")} />
           </div>
           {showRecordPayment && (
             <div style={{ ...s.card, borderLeft: `3px solid ${T.success}`, marginBottom: 16 }}>
