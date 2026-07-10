@@ -4133,6 +4133,31 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 </div>
               </div>
             )}
+            <div style={{ ...s.card, marginBottom: 16, borderLeft: `3px solid ${T.warn}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>Starting Balance</div>
+                  <div style={{ fontSize: 12, color: T.muted }}>Amount owed from before HomeBase</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>$</span>
+                  <input type="number" min="0" step="0.01" placeholder="0.00"
+                    defaultValue={sb || ""}
+                    id={`starting-bal-${selectedResident.id}`}
+                    style={{ ...s.mInput(mobile), width: 120, fontSize: 13 }} />
+                  <button style={{ ...s.btn("primary"), fontSize: 12, padding: "6px 14px" }} onClick={async () => {
+                    const input = document.getElementById(`starting-bal-${selectedResident.id}`);
+                    const val = parseFloat(input?.value) || 0;
+                    try {
+                      await updateResident(selectedResident._uuid, { startingBalance: val });
+                      setSelectedResident(prev => prev ? { ...prev, startingBalance: val } : prev);
+                      showSuccess(`Starting balance set to $${val.toFixed(2)}`);
+                      if (onResidentAdded) await onResidentAdded();
+                    } catch (err) { showSuccess("Error: " + err.message); }
+                  }}>Save</button>
+                </div>
+              </div>
+            </div>
             <div style={{ ...s.card, borderLeft: `3px solid ${T.success}` }}>
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Record Payment</div>
               {(() => {
@@ -9642,9 +9667,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const [tab, setTab] = useState(tabs[0]);
   const [dateRange, setDateRange] = useState({ preset: "all", from: null, to: null });
   const [showRecordPayment, setShowRecordPayment] = useState(false);
-  const [showBackdate, setShowBackdate] = useState(false);
   const [payForm, setPayForm] = useState({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
-  const [balanceSaving, setBalanceSaving] = useState(false);
   const [paySuccess, showPaySuccess] = useSuccess();
 
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
@@ -9787,14 +9810,9 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
         <div>
           <SuccessMessage message={paySuccess} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button onClick={() => { setShowRecordPayment(v => !v); setShowBackdate(false); }} style={{ ...s.btn(showRecordPayment ? "ghost" : "primary"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
-                {showRecordPayment ? "Cancel" : "💵 Record Payment"}
-              </button>
-              <button onClick={() => { setShowBackdate(v => !v); setShowRecordPayment(false); }} style={{ ...s.btn(showBackdate ? "ghost" : "outline"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
-                {showBackdate ? "Cancel" : "📋 Set Starting Balances"}
-              </button>
-            </div>
+            <button onClick={() => setShowRecordPayment(v => !v)} style={{ ...s.btn(showRecordPayment ? "ghost" : "primary"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
+              {showRecordPayment ? "Cancel" : "💵 Record Payment"}
+            </button>
             <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Resident", key: "name" }, { label: "Unit", key: "unit" }, { label: "Rent Due", key: "rentDue" }, { label: "Tenant Paid", key: "tenantPaid" }, { label: "HAP Received", key: "hapReceived" }, { label: "Balance", key: "balance" }, { label: "Status", key: "status" }], ledger, "payment_status")} />
           </div>
           {showRecordPayment && (
@@ -9884,47 +9902,6 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                 setPayForm({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
                 setShowRecordPayment(false);
               }} style={{ ...s.mBtn("primary", mobile) }}>Record Payment</button>
-            </div>
-          )}
-          {showBackdate && (
-            <div style={{ ...s.card, borderLeft: `3px solid ${T.warn}`, marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Set Starting Balances</div>
-              <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Enter the amount each resident currently owes from before you started using HomeBase. Leave at $0 for residents who are current.</div>
-              <table style={s.table}>
-                <thead><tr>{["Resident", "Unit", "Starting Balance", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => {
-                    const ext = LIVE_RESIDENTS_EXTENDED[r.id] || {};
-                    return (
-                      <tr key={r.id}>
-                        <td style={s.td}><span style={{ fontWeight: 600 }}>{r.name}</span></td>
-                        <td style={s.td}>{r.unit}</td>
-                        <td style={s.td}>
-                          <input type="number" min="0" step="0.01" placeholder="0.00"
-                            defaultValue={r.startingBalance || ""}
-                            id={`starting-bal-${r.id}`}
-                            style={{ ...s.mInput(mobile), width: 120, fontSize: 12 }} />
-                        </td>
-                        <td style={s.td}>
-                          <button style={{ ...s.btn("primary"), fontSize: 11, padding: "4px 10px" }} disabled={balanceSaving} onClick={async () => {
-                            const input = document.getElementById(`starting-bal-${r.id}`);
-                            const val = parseFloat(input?.value) || 0;
-                            setBalanceSaving(true);
-                            try {
-                              await updateResident(r._uuid, { startingBalance: val });
-                              r.startingBalance = val;
-                              showPaySuccess(`Starting balance for ${r.name} set to $${val.toFixed(2)}`);
-                            } catch (err) {
-                              showPaySuccess("Error: " + err.message);
-                            }
-                            setBalanceSaving(false);
-                          }}>Save</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           )}
           <SortableTable mobile={mobile} columns={[
