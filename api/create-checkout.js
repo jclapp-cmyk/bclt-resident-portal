@@ -6,6 +6,9 @@ export default async function handler(req, res) {
   }
 
   const stripeKey = (process.env.STRIPE_SECRET_KEY || '').trim();
+  const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_row_key || '').trim();
+
   if (!stripeKey) {
     return res.status(500).json({ error: 'STRIPE_SECRET_KEY not configured' });
   }
@@ -23,8 +26,30 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Amount must be at least $0.50' });
   }
 
+  // Look up the property's Stripe connected account
+  let stripeAccountId = null;
+  if (supabaseUrl && serviceKey && propertyId) {
+    try {
+      const resp = await fetch(
+        `${supabaseUrl}/rest/v1/properties?slug=eq.${encodeURIComponent(propertyId)}&select=stripe_account_id,stripe_onboarded&limit=1`,
+        { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
+      );
+      const props = await resp.json();
+      if (props?.[0]?.stripe_account_id && props[0].stripe_onboarded) {
+        stripeAccountId = props[0].stripe_account_id;
+      }
+    } catch (err) {
+      console.warn('Failed to look up property Stripe account:', err.message);
+    }
+  }
+
+  if (!stripeAccountId) {
+    return res.status(400).json({ error: 'Online payments are not set up for this property yet. Contact your property manager.' });
+  }
+
   const paymentMethodTypes = method === 'ach' ? ['us_bank_account'] : ['card'];
   const description = `${payType || 'Rent'} payment — ${residentName || 'Resident'} (${unit || 'N/A'})`;
+  const feeCents = Math.round(parseFloat(fee || 0) * 100);
 
   try {
     const sessionParams = {
@@ -41,6 +66,12 @@ export default async function handler(req, res) {
         },
         quantity: 1,
       }],
+      payment_intent_data: {
+        application_fee_amount: feeCents,
+        transfer_data: {
+          destination: stripeAccountId,
+        },
+      },
       metadata: {
         residentId,
         residentName: residentName || '',
