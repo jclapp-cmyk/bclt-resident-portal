@@ -47,7 +47,6 @@ export default async function handler(req, res) {
         const payType = meta.payType || 'rent';
         const now = new Date().toISOString();
 
-        // Look up the resident's UUID and property_id from their slug
         const resResp = await fetch(
           `${supabaseUrl}/rest/v1/residents?slug=eq.${encodeURIComponent(residentSlug)}&select=id,property_id&limit=1`,
           { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
@@ -94,30 +93,6 @@ export default async function handler(req, res) {
       } catch (err) {
         console.error('Error processing payment webhook:', err);
       }
-    }
-  }
-
-  // Auto-update onboarded status when a connected account changes
-  if (event.type === 'account.updated') {
-    const account = event.data.object;
-    const onboarded = account.charges_enabled && account.payouts_enabled;
-    try {
-      await fetch(
-        `${supabaseUrl}/rest/v1/properties?stripe_account_id=eq.${encodeURIComponent(account.id)}`,
-        {
-          method: 'PATCH',
-          headers: {
-            apikey: serviceKey,
-            Authorization: `Bearer ${serviceKey}`,
-            'Content-Type': 'application/json',
-            Prefer: 'return=minimal',
-          },
-          body: JSON.stringify({ stripe_onboarded: onboarded }),
-        }
-      );
-      console.log(`Account ${account.id} onboarded: ${onboarded}`);
-    } catch (err) {
-      console.error('Error updating account status:', err);
     }
   }
 

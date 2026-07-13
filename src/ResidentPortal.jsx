@@ -9266,94 +9266,13 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
       {tab === "Payments" && (
         <div>
           <div style={{ ...s.card, borderLeft: `3px solid ${T.info}` }}>
-            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Stripe Connect — Per-Property Payments</div>
-            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Each property needs its own Stripe connected account so payments route to the correct bank. ACH transfers are free, debit $1.50, credit 2.75%.</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginBottom: 14 }}>
-              <thead><tr style={{ borderBottom: `2px solid ${T.border}`, textAlign: "left" }}>
-                <th style={s.th}>Property</th><th style={s.th}>Stripe Status</th><th style={s.th}>Actions</th>
-              </tr></thead>
-              <tbody>
-                {LIVE_PROPERTIES.map(p => {
-                  const connected = !!p.stripeAccountId;
-                  const onboarded = p.stripeOnboarded;
-                  return (
-                    <tr key={p.id} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
-                      <td style={s.td}>{p.name}</td>
-                      <td style={s.td}>
-                        {onboarded ? <span style={s.badge(T.successDim, T.success)}>Active</span>
-                          : connected ? <span style={s.badge(T.warnDim, T.warn)}>Onboarding Incomplete</span>
-                          : <span style={s.badge(T.bg, T.dim)}>Not Connected</span>}
-                      </td>
-                      <td style={s.td}>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {!connected && (
-                            <button style={{ ...s.btn(), fontSize: 12, padding: "4px 12px" }} onClick={async () => {
-                              try {
-                                showSuccess("Creating Stripe account...");
-                                const resp = await fetch("/api/stripe-connect", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ action: "create", propertyId: p.id, propertyName: p.name }),
-                                });
-                                const data = await resp.json();
-                                if (!resp.ok) throw new Error(data.error);
-                                p.stripeAccountId = data.accountId;
-                                window.open(data.url, "_blank");
-                                showSuccess("Stripe onboarding opened in new tab");
-                              } catch (err) { showSuccess("Error: " + err.message); }
-                            }}>Connect Stripe</button>
-                          )}
-                          {connected && !onboarded && (
-                            <button style={{ ...s.btn(), fontSize: 12, padding: "4px 12px" }} onClick={async () => {
-                              try {
-                                const resp = await fetch("/api/stripe-connect", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ action: "onboarding-link", accountId: p.stripeAccountId, propertyId: p.id }),
-                                });
-                                const data = await resp.json();
-                                if (!resp.ok) throw new Error(data.error);
-                                window.open(data.url, "_blank");
-                              } catch (err) { showSuccess("Error: " + err.message); }
-                            }}>Resume Onboarding</button>
-                          )}
-                          {connected && (
-                            <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 12px" }} onClick={async () => {
-                              try {
-                                const resp = await fetch("/api/stripe-connect", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ action: "status", accountId: p.stripeAccountId, propertyId: p.id }),
-                                });
-                                const data = await resp.json();
-                                if (!resp.ok) throw new Error(data.error);
-                                p.stripeOnboarded = data.chargesEnabled && data.payoutsEnabled;
-                                showSuccess(data.chargesEnabled ? "Stripe is active — payments enabled" : "Onboarding not complete — check Stripe for required steps");
-                              } catch (err) { showSuccess("Error: " + err.message); }
-                            }}>Check Status</button>
-                          )}
-                          {onboarded && (
-                            <button style={{ ...s.btn("ghost"), fontSize: 12, padding: "4px 12px" }} onClick={async () => {
-                              try {
-                                const resp = await fetch("/api/stripe-connect", {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ action: "dashboard-link", accountId: p.stripeAccountId }),
-                                });
-                                const data = await resp.json();
-                                if (!resp.ok) throw new Error(data.error);
-                                window.open(data.url, "_blank");
-                              } catch (err) { showSuccess("Error: " + err.message); }
-                            }}>Stripe Dashboard</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <div style={{ fontSize: 11, color: T.dim }}>Platform Stripe keys are configured in Vercel environment variables (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET).</div>
+            <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 15 }}>Online Payments</div>
+            <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Residents can pay rent online via ACH (free), debit ($1.50), or credit card (2.75%). Payments go directly to your BCLT Stripe account.</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <span style={s.badge(T.successDim, T.success)}>Stripe Connected</span>
+              <a href="https://dashboard.stripe.com" target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: T.primary }}>Open Stripe Dashboard →</a>
+            </div>
+            <div style={{ fontSize: 11, color: T.dim }}>Stripe keys are configured in Vercel environment variables (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET).</div>
           </div>
         </div>
       )}
