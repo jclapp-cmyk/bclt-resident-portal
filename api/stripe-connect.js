@@ -157,7 +157,7 @@ export default async function handler(req, res) {
       const existing = await stripe.webhookEndpoints.list({ limit: 10 });
       const alreadyExists = existing.data.find(w => w.url.includes('stripe-webhook'));
       if (alreadyExists) {
-        return res.status(200).json({ status: 'ALREADY_EXISTS', id: alreadyExists.id, url: alreadyExists.url, message: 'Webhook exists. Delete and re-run to get a new secret.' });
+        await stripe.webhookEndpoints.del(alreadyExists.id);
       }
       const endpoint = await stripe.webhookEndpoints.create({
         url: `${portalUrl}/api/stripe-webhook`,
