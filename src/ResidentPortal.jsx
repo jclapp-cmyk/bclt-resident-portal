@@ -1836,8 +1836,8 @@ const RentPayments = ({ mobile, rc }) => {
 
   const FEE_INFO = {
     ach: { labelKey: "rent_method_ach", fee: 0, feeLabelKey: "rent_method_free" },
-    debit: { labelKey: "rent_method_debit", fee: 1.50, feeLabelKey: "rent_method_fee_flat", feeLabelParams: { amount: "$1.50" } },
-    credit: { labelKey: "rent_method_credit", fee: 0.0275, feeLabelKey: "rent_method_fee_pct", feeLabelParams: { pct: "2.75" }, pct: true },
+    debit: { labelKey: "rent_method_debit", fee: 0.029, feeLabelKey: "rent_method_fee_pct", feeLabelParams: { pct: "2.9" }, pct: true },
+    credit: { labelKey: "rent_method_credit", fee: 0.029, feeLabelKey: "rent_method_fee_pct", feeLabelParams: { pct: "2.9" }, pct: true },
   };
   const calcFee = () => {
     const amt = parseFloat(payForm.amount) || 0;
