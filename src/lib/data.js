@@ -1127,13 +1127,14 @@ export async function fetchRentPayments(month) {
     method: p.method,
     paymentDate: p.payment_date,
     month: p.month,
+    payType: p.pay_type || 'rent',
     note: p.note,
     recordedBy: p.recorded_by,
     createdAt: p.created_at,
   }));
 }
 
-export async function recordPayment({ residentSlug, amount, method, paymentDate, month, note }) {
+export async function recordPayment({ residentSlug, amount, method, paymentDate, month, note, payType }) {
   // Look up resident UUID from slug
   const { data: resident } = await supabase
     .from('residents')
@@ -1149,6 +1150,9 @@ export async function recordPayment({ residentSlug, amount, method, paymentDate,
     method,
     payment_date: paymentDate,
     month: month || paymentDate?.slice(0, 7) || new Date().toISOString().slice(0, 7),
+    // Only 'rent' counts toward collections in rent_ledger. Late fees,
+    // utilities and the like are money received but are not rent.
+    pay_type: payType || 'rent',
     note: note || null,
     recorded_by: 'Admin',
   }).select().single();

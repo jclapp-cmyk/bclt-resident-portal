@@ -9723,10 +9723,11 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   // rent_payments keyed by billing month; deposits live in tenant_deposits and
   // cover no month at all. Normalise both into one transaction shape.
   const DEPOSIT_LABELS = { security: "Security Deposit", pet: "Pet Deposit", key: "Key Deposit", other: "Deposit" };
+  const PAY_TYPE_LABELS = { rent: "Rent", late_fee: "Late Fee", utility: "Utility", hap: "HAP", other: "Other" };
   const transactions = filterByProperty([
     ...LIVE_RENT_PAYMENTS.map(p => ({
       _key: `pay-${p.id}`, date: p.paymentDate, name: p.residentName || "—", unit: p.unit || "—",
-      propertyId: p.propertyId, type: p.method === "hap" ? "HAP" : "Rent", appliesTo: p.month || "",
+      propertyId: p.propertyId, type: PAY_TYPE_LABELS[p.payType] || (p.method === "hap" ? "HAP" : "Rent"), appliesTo: p.month || "",
       amount: p.amount, method: p.method || "", note: p.note || "",
     })),
     ...LIVE_DEPOSITS.map(d => {
@@ -9743,8 +9744,14 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
   const totalCollected = ledger.reduce((sum, r) => sum + r.tenantPaid + r.hapReceived, 0);
   const collectionRate = monthlyRentRoll ? Math.round((totalCollected / monthlyRentRoll) * 100) : 0;
-  const delinquent = allLedger.filter(r => r.balance > 0);
-  const totalOutstanding = allLedger.reduce((sum, r) => sum + r.balance, 0);
+  // The ledger spans every month back to each lease's start, but payments were
+  // only ever recorded from the month the portal went live. Counting arrears
+  // before that reports years of "outstanding" rent that is really just absent
+  // history, so arrears start at the earliest month any payment exists for.
+  const arrearsStart = LIVE_RENT_PAYMENTS.reduce((min, p) => (p.month && p.month < min ? p.month : min), curMonth);
+  const arrearsLedger = allLedger.filter(l => l.month >= arrearsStart);
+  const delinquent = arrearsLedger.filter(r => r.balance > 0);
+  const totalOutstanding = arrearsLedger.reduce((sum, r) => sum + r.balance, 0);
   const revenueData = allLedger.map(l => ({ ...l, collected: l.tenantPaid + l.hapReceived }));
   const monthLabels = [...new Set(revenueData.map(r => r.month))].sort();
   const trendPoints = monthLabels.map(m => revenueData.filter(r => r.month === m).reduce((s, r) => s + r.collected, 0));
@@ -9835,7 +9842,8 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
           </div>
           {delinquent.length > 0 && (
             <div style={{ ...s.card, borderLeft: `3px solid ${T.danger}` }}>
-              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15, color: T.danger }}>Outstanding Balances ({delinquent.length})</div>
+              <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15, color: T.danger }}>Outstanding Balances ({delinquent.length})</div>
+              <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Since {arrearsStart} — the first month with recorded payments. Earlier months have no payment history.</div>
               {delinquent.map(d => (
                 <div key={d.unit} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.borderLight}` }}>
                   <div>
@@ -9961,6 +9969,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                       method: payForm.method,
                       paymentDate: payForm.date,
                       month: payForm.month || payForm.date?.slice(0, 7),
+                      payType: payForm.payType || "rent",
                       note: payForm.note || (payForm.payType !== "rent" ? payForm.payType.replace("_", " ") : ""),
                     });
                   }
@@ -10021,7 +10030,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
             { key: "name", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
             { key: "unit", label: "Unit" },
             ...(selectedProperty === "all" ? [{ key: "propertyId", label: "Property", render: v => getProperty(v)?.name?.split(" ")[0] || v }] : []),
-            { key: "type", label: "Type", render: v => <span style={s.badge(v === "Rent" ? T.successDim : T.infoDim, v === "Rent" ? T.success : T.info)}>{v}</span>, filterOptions: [...new Set(transactions.map(t => t.type))] },
+            { key: "type", label: "Type", render: v => <span style={s.badge(v === "Rent" ? T.successDim : T.infoDim, v === "Rent" ? T.success : T.info)}>{v}</span>, filterOptions: [...new Set(transactions.map(t => t.type))].sort() },
             { key: "appliesTo", label: "Applies To", render: v => v || <span style={{ color: T.dim }}>—</span> },
             { key: "amount", label: "Amount", render: v => `$${v.toLocaleString()}`, sortValue: r => r.amount },
             { key: "method", label: "Method", render: v => (v || "—").replace(/_/g, " ") },
