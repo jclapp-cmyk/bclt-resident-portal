@@ -62,23 +62,30 @@ entries plus the deposit). All removed; rent re-recorded against `2026-09`; the
 deposit belongs in `tenant_deposits`. Ledger now reads one `2026-09` row, `paid`,
 tenant paid equal to rent due.
 
+**Payments tab shows money received.** The tab rendered only the rent ledger — a
+per-resident-per-month status table — so a deposit had no row to appear in and
+looked like it had failed to save. An `All Payments Received` table now sits
+beneath it, merging `rent_payments` (keyed by billing month) and
+`tenant_deposits` (which cover no month) into one transaction list. It is
+deliberately not filtered by the month selector above it, since a deposit has no
+billing month to match. Recording now refreshes `LIVE_RENT_PAYMENTS` and
+`LIVE_DEPOSITS` in place; previously `LIVE_DEPOSITS` only loaded on mount.
+
+All of the above is committed and deployed. Verified against the live bundle.
+
 ## Open
 
-1. **Nothing is deployed.** These changes are committed but not pushed, and the
-   live site runs the old build against the new view. Until it ships: production
-   reads $0 Monthly Rent for a future-lease property, its Payments tab shows an
-   empty table for that property, its payment form cannot set a billing month,
-   and deposits still land in `rent_payments`.
-
-2. **`late_fee`, `utility`, and `other` have the deposit's bug.** They still
+1. **`late_fee`, `utility`, and `other` have the deposit's bug.** They still
    write to `rent_payments` and count as rent collected. Deposit was special-cased
    because it had somewhere to go. The general fix is a `pay_type` column on
    `rent_payments`, with the ledger counting only `rent` toward `total_tenant`.
    Needs a migration and a backfill of existing rows.
 
-3. **Re-record the 10 Park Ave deposit** through the payment form's Security
-   Deposit type or the resident page's deposit form, using the original check
-   date. It was deleted from `rent_payments` and not yet re-entered.
+2. **Views do not refresh until reload.** Three separate reports this session
+   ("payment saved but not showing", the deposit, and a Communication message)
+   were all correctly written and simply not re-fetched. Payments and deposits
+   are fixed; the messages view still loads threads on mount only. Worth a
+   general look at refresh-after-write rather than patching case by case.
 
 ## Parked
 
