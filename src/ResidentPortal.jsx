@@ -88,6 +88,7 @@ const getAdjustedLedger = () => LIVE_RENT_LEDGER.map(entry => {
 });
 let LIVE_REG_INSPECTIONS = [];
 let LIVE_DEPOSITS = [];
+let LIVE_RENT_PAYMENTS = [];
 let LIVE_COMPLIANCE_DOCS = [];
 
 // ── DESIGN TOKENS (Light Theme) ──────────────────────────────
@@ -9718,6 +9719,25 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   // silently empty against a dropdown showing a different month.
   const effectiveMonth = availableMonths.includes(selectedMonth) ? selectedMonth : (availableMonths[0] || selectedMonth);
   const ledger = allLedger.filter(l => l.month === effectiveMonth);
+  // "Payments" should show money received, not just rent status. Rent lives in
+  // rent_payments keyed by billing month; deposits live in tenant_deposits and
+  // cover no month at all. Normalise both into one transaction shape.
+  const DEPOSIT_LABELS = { security: "Security Deposit", pet: "Pet Deposit", key: "Key Deposit", other: "Deposit" };
+  const transactions = filterByProperty([
+    ...LIVE_RENT_PAYMENTS.map(p => ({
+      _key: `pay-${p.id}`, date: p.paymentDate, name: p.residentName || "—", unit: p.unit || "—",
+      propertyId: p.propertyId, type: p.method === "hap" ? "HAP" : "Rent", appliesTo: p.month || "",
+      amount: p.amount, method: p.method || "", note: p.note || "",
+    })),
+    ...LIVE_DEPOSITS.map(d => {
+      const dr = LIVE_RESIDENTS.find(x => x._uuid === d.resident_id) || {};
+      return {
+        _key: `dep-${d.id}`, date: d.date_collected, name: dr.name || "—", unit: dr.unit || "—",
+        propertyId: dr.propertyId || "", type: DEPOSIT_LABELS[d.deposit_type] || "Deposit",
+        appliesTo: "", amount: Number(d.amount) || 0, method: d.method || "", note: d.note || "",
+      };
+    }),
+  ], selectedProperty).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
@@ -9947,6 +9967,11 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                   // Refresh ledger from Supabase
                   const fresh = await fetchRentLedger();
                   if (fresh && fresh.length) LIVE_RENT_LEDGER = fresh;
+                  const [freshPays, freshDeps] = await Promise.all([
+                    fetchRentPayments().catch(() => null), fetchAllDeposits().catch(() => null),
+                  ]);
+                  if (freshPays) LIVE_RENT_PAYMENTS = freshPays;
+                  if (freshDeps) LIVE_DEPOSITS = freshDeps;
                   showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} ${payForm.payType === "deposit" ? "deposit" : "payment"} from ${res?.name || "resident"}`);
                   // Email receipt to resident
                   if (res?.email) {
@@ -9983,6 +10008,25 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
             { key: "balance", label: "Balance", render: v => <span style={{ fontWeight: v > 0 ? 700 : 400, color: v > 0 ? T.danger : T.text }}>${v}</span>, sortValue: r => r.balance },
             { key: "status", label: "Status", render: v => { const c = PAYMENT_STATUS[v] || PAYMENT_STATUS.outstanding; return <span style={s.badge(c.bg, c.text)}>{c.label}</span>; }, filterOptions: ["paid", "partial", "outstanding"] },
           ]} data={ledger} keyField="_key" />
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "28px 0 12px", flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>All Payments Received ({transactions.length})</div>
+              <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Every payment and deposit on record, newest first. Not limited to the month selected above.</div>
+            </div>
+            <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Date", key: "date" }, { label: "Resident", key: "name" }, { label: "Unit", key: "unit" }, { label: "Type", key: "type" }, { label: "Applies To", key: "appliesTo" }, { label: "Amount", key: "amount" }, { label: "Method", key: "method" }, { label: "Note", key: "note" }], transactions, "payments_received")} />
+          </div>
+          <SortableTable mobile={mobile} columns={[
+            { key: "date", label: "Date", render: v => v || "—" },
+            { key: "name", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
+            { key: "unit", label: "Unit" },
+            ...(selectedProperty === "all" ? [{ key: "propertyId", label: "Property", render: v => getProperty(v)?.name?.split(" ")[0] || v }] : []),
+            { key: "type", label: "Type", render: v => <span style={s.badge(v === "Rent" ? T.successDim : T.infoDim, v === "Rent" ? T.success : T.info)}>{v}</span>, filterOptions: [...new Set(transactions.map(t => t.type))] },
+            { key: "appliesTo", label: "Applies To", render: v => v || <span style={{ color: T.dim }}>—</span> },
+            { key: "amount", label: "Amount", render: v => `$${v.toLocaleString()}`, sortValue: r => r.amount },
+            { key: "method", label: "Method", render: v => (v || "—").replace(/_/g, " ") },
+            { key: "note", label: "Note", render: v => v || <span style={{ color: T.dim }}>—</span> },
+          ]} data={transactions} keyField="_key" />
         </div>
       )}
     </div>
@@ -10594,17 +10638,18 @@ export default function App() {
   const reloadData = useCallback(async () => {
     try {
       const safe = (fn) => fn().catch(err => { console.warn('Fetch failed:', err.message); return null; });
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes, aUnits, checklists, deposits] = await Promise.all([
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes, aUnits, checklists, deposits, rentPays] = await Promise.all([
         safe(fetchProperties), safe(fetchResidents), safe(fetchResidentsExtended), safe(fetchLeaseDocsByResident),
         safe(fetchRentLedger), safe(fetchMaintenanceRequests), safe(fetchVendors),
         safe(fetchUnitInspections), safe(fetchRegInspections), safe(fetchThreads), safe(fetchMessages),
         safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers), safe(fetchAdminNotes), safe(fetchAllUnits), safe(fetchInspectionChecklists),
-        safe(fetchAllDeposits),
+        safe(fetchAllDeposits), safe(fetchRentPayments),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
       LIVE_REG_INSPECTIONS = rInsp || [];
       LIVE_DEPOSITS = deposits || [];
+      LIVE_RENT_PAYMENTS = rentPays || [];
       LIVE_COMPLIANCE_DOCS = compDocs || [];
       setSbProperties(props || []); setSbResidents(res || []); setSbResidentsExt(resExt || {});
       setSbRentLedger(ledger || []); setLeaseDocs(docs || {});
@@ -10802,15 +10847,16 @@ export default function App() {
   const resetAllState = async () => {
     // Re-fetch Supabase data for core tables
     try {
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, deps] = await Promise.all([
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, deps, rentPays] = await Promise.all([
         fetchProperties(), fetchResidents(), fetchResidentsExtended(), fetchLeaseDocsByResident(), fetchRentLedger(),
         fetchMaintenanceRequests(), fetchVendors(), fetchUnitInspections(), fetchRegInspections(), fetchThreads(), fetchMessages(),
-        fetchComplianceDocs(), fetchOnboardingWorkflows(), fetchAllDeposits(),
+        fetchComplianceDocs(), fetchOnboardingWorkflows(), fetchAllDeposits(), fetchRentPayments(),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
       LIVE_REG_INSPECTIONS = rInsp || [];
       LIVE_DEPOSITS = deps || [];
+      LIVE_RENT_PAYMENTS = rentPays || [];
       LIVE_COMPLIANCE_DOCS = compDocs || [];
       setSbProperties(props || []); setSbResidents(res || []); setSbResidentsExt(resExt || {}); setSbRentLedger(ledger || []); setLeaseDocs(docs || {});
       setMaintenance(maint || []);
