@@ -78,6 +78,19 @@ let LIVE_PROPERTIES = [];
 let LIVE_RESIDENTS = [];
 let LIVE_RESIDENTS_EXTENDED = {};
 let LIVE_RENT_LEDGER = [];
+// The ledger spans every month back to each lease's start, but payments were
+// only ever recorded from the month the portal went live. Summing balance over
+// all of it reports years of "outstanding" rent that is really absent history.
+// Anything aggregating arrears across months must scope to this cutoff.
+const getArrearsStart = () => LIVE_RENT_PAYMENTS.reduce(
+  (min, p) => (p.month && p.month < min ? p.month : min),
+  new Date().toISOString().slice(0, 7)
+);
+const scopeToArrears = (ledger) => {
+  const start = getArrearsStart();
+  return ledger.filter(l => (l.month || "") >= start);
+};
+
 const getAdjustedLedger = () => LIVE_RENT_LEDGER.map(entry => {
   const res = LIVE_RESIDENTS.find(r => r.id === entry.residentId);
   const sb = res?.startingBalance || 0;
@@ -880,11 +893,12 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
   const finCollected = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0) + (l.hapReceived || 0), 0);
   const finTenantPaid = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0), 0);
   const finHap = finRollupLedger.reduce((s, l) => s + (l.hapReceived || 0), 0);
-  const finOutstanding = finLedger.reduce((s, l) => s + Math.max(0, l.balance || 0), 0)
+  const finArrears = scopeToArrears(finLedger);
+  const finOutstanding = finArrears.reduce((s, l) => s + Math.max(0, l.balance || 0), 0)
     + filterByProperty(LIVE_RESIDENTS, selectedProperty).reduce((s, r) => s + (r.startingBalance || 0), 0);
   const finRate = finRent > 0 ? Math.round((finCollected / finRent) * 100) : 0;
   const finByResident = {};
-  finLedger.forEach(l => {
+  finArrears.forEach(l => {
     if (!finByResident[l.residentId]) finByResident[l.residentId] = { ...l, balance: 0, monthsBehind: 0 };
     finByResident[l.residentId].balance += Math.max(0, l.balance || 0);
     if (l.balance > 0) finByResident[l.residentId].monthsBehind++;
@@ -4789,11 +4803,12 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const collected = ledgerForRollup.reduce((s, l) => s + (l.tenantPaid || 0) + (l.hapReceived || 0), 0);
   const tenantCollected = ledgerForRollup.reduce((s, l) => s + (l.tenantPaid || 0), 0);
   const hapCollected = ledgerForRollup.reduce((s, l) => s + (l.hapReceived || 0), 0);
-  const outstanding = propLedger.reduce((s, l) => s + Math.max(0, l.balance || 0), 0)
+  const propArrears = scopeToArrears(propLedger);
+  const outstanding = propArrears.reduce((s, l) => s + Math.max(0, l.balance || 0), 0)
     + propResidents.reduce((s, r) => s + (r.startingBalance || 0), 0);
   const collectionRate = monthlyRent > 0 ? Math.round((collected / monthlyRent) * 100) : 0;
   const propByResident = {};
-  propLedger.forEach(l => {
+  propArrears.forEach(l => {
     if (!propByResident[l.residentId]) propByResident[l.residentId] = { ...l, balance: 0, monthsBehind: 0 };
     propByResident[l.residentId].balance += Math.max(0, l.balance || 0);
     if (l.balance > 0) propByResident[l.residentId].monthsBehind++;
@@ -9744,12 +9759,8 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
   const totalCollected = ledger.reduce((sum, r) => sum + r.tenantPaid + r.hapReceived, 0);
   const collectionRate = monthlyRentRoll ? Math.round((totalCollected / monthlyRentRoll) * 100) : 0;
-  // The ledger spans every month back to each lease's start, but payments were
-  // only ever recorded from the month the portal went live. Counting arrears
-  // before that reports years of "outstanding" rent that is really just absent
-  // history, so arrears start at the earliest month any payment exists for.
-  const arrearsStart = LIVE_RENT_PAYMENTS.reduce((min, p) => (p.month && p.month < min ? p.month : min), curMonth);
-  const arrearsLedger = allLedger.filter(l => l.month >= arrearsStart);
+  const arrearsStart = getArrearsStart();
+  const arrearsLedger = scopeToArrears(allLedger);
   const delinquent = arrearsLedger.filter(r => r.balance > 0);
   const totalOutstanding = arrearsLedger.reduce((sum, r) => sum + r.balance, 0);
   const revenueData = allLedger.map(l => ({ ...l, collected: l.tenantPaid + l.hapReceived }));
@@ -9791,7 +9802,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                     const pTen = pRes.reduce((s, r) => s + (r.tenantPortion || 0), 0);
                     const pColl = pLedger.reduce((s, r) => s + r.tenantPaid + r.hapReceived, 0);
                     const pRate = pRent ? Math.round((pColl / pRent) * 100) : 0;
-                    const pDel = pLedger.filter(r => r.balance > 0).reduce((s, r) => s + r.balance, 0);
+                    const pDel = scopeToArrears(pLedger).filter(r => r.balance > 0).reduce((s, r) => s + r.balance, 0);
                     return (
                       <tr key={p.id} onClick={() => onSelectProperty?.(p.id, "financial")} style={{ cursor: "pointer" }}>
                         <td style={s.td}><span style={{ fontWeight: 600, color: T.accent }}>{p.name.split(" ")[0]} {p.name.split(" ")[1]} →</span><br /><span style={{ fontSize: 11, color: T.muted }}>{p.totalUnits} units</span></td>
