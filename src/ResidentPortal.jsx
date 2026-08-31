@@ -870,7 +870,12 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
         if (!acc[l.residentId] || acc[l.residentId].month < l.month) acc[l.residentId] = l;
         return acc;
       }, {}));
-  const finRent = finRollupLedger.reduce((s, l) => s + (l.rentDue || 0), 0);
+  // Rent roll comes from the active lease per resident (same source as the
+  // Financial Overview page). The rent_ledger view can return zero rows when a
+  // lease is not marked active, which used to blank this card out entirely.
+  const finResidents = filterByProperty(LIVE_RESIDENTS, selectedProperty)
+    .map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
+  const finRent = finResidents.reduce((s, r) => s + (r.rentAmount || 0), 0);
   const finCollected = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0) + (l.hapReceived || 0), 0);
   const finTenantPaid = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0), 0);
   const finHap = finRollupLedger.reduce((s, l) => s + (l.hapReceived || 0), 0);
