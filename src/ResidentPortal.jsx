@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchEmailTemplates, updateEmailTemplate, insertEmailTemplate, deleteEmailTemplate, fetchAllDeposits, fetchTenantDeposits, insertTenantDeposit, updateTenantDeposit, deleteTenantDeposit, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
+import { fetchProperties, fetchResidents, fetchResidentsExtended, fetchLeaseDocsByResident, fetchRentLedger, fetchRentPayments, recordPayment, recordDeposit, fetchMaintenanceRequests, insertMaintenanceRequest, updateMaintenanceRequest, fetchVendors, insertVendor, updateVendor, fetchUnitInspections, insertUnitInspection, updateUnitInspection, deleteUnitInspection, fetchRegInspections, insertRegInspection, updateRegInspection, deleteRegInspection, fetchThreads, fetchMessages, insertThread, insertMessage, updateThread as updateThreadDb, fetchComplianceDocs, fetchOnboardingWorkflows, insertOnboardingWorkflow, updateOnboardingWorkflow, insertResident, insertLease, uploadLeaseFile, getLeaseFileUrl, deleteLeaseFile, uploadInspectionAttachment, getInspectionAttachmentUrl, deleteInspectionAttachment, insertLeaseDocument, deleteLeaseDocument, fetchAuditLog, insertProperty, insertUnit, fetchUnits, updateProperty, updateUnit, deleteUnit, updateResident, deleteResident, updateLease, fetchResidentLease, fetchHouseholdMembers, insertHouseholdMember, updateHouseholdMember, deleteHouseholdMember, fetchStaffMembers, insertStaffMember, updateStaffMember, deleteStaffMember, deleteProperty, deleteThread as deleteThreadFromDb, fetchAllUnits, fetchInspectionChecklists, insertInspectionChecklist, updateInspectionChecklist, fetchIncomeCertifications, insertIncomeCertification, updateIncomeCertification, fetchTICMembers, insertTICMember, updateTICMember, deleteTICMember, fetchTICIncome, insertTICIncome, updateTICIncome, deleteTICIncome, fetchTICAssets, insertTICAsset, updateTICAsset, deleteTICAsset, fetchAMIReference, fetchRentLimits, uploadTICDocument, getTICDocumentUrl, fetchEmailTemplates, updateEmailTemplate, insertEmailTemplate, deleteEmailTemplate, fetchAllDeposits, fetchTenantDeposits, insertTenantDeposit, updateTenantDeposit, deleteTenantDeposit, fetchAdminNotes, insertAdminNote, deleteAdminNote, uploadMessageAttachment, uploadMaintenancePhoto, fetchInspectionTemplates, insertInspectionTemplate, updateInspectionTemplate, deleteInspectionTemplate, fetchPropertyDocuments, uploadPropertyDocument, getPropertyDocumentUrl, deletePropertyDocument } from "./lib/data";
 import { signInWithMagicLink, signOut, onAuthStateChange, getCurrentSession, fetchProfile, fetchUserProfiles, inviteUser, updateUserProfile, deleteUserProfile } from "./lib/auth";
 import { sendNotification, sendSMS, sendBoth } from "./lib/notify";
 import { supabase } from "./lib/supabase";
@@ -3623,7 +3623,7 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
   const [msgSubject, setMsgSubject] = useState("");
   const [msgBody, setMsgBody] = useState("");
   const [msgChannel, setMsgChannel] = useState("email");
-  const [payForm, setPayForm] = useState({ amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), note: "" });
+  const [payForm, setPayForm] = useState({ amount: "", method: "cash", date: new Date().toISOString().slice(0, 10), month: new Date().toISOString().slice(0, 7), note: "" });
   const [householdMembers, setHouseholdMembers] = useState([]);
   const [hhForm, setHhForm] = useState({ name: "", relationship: "Spouse", phone: "", email: "" });
   const [residentDocs, setResidentDocs] = useState([]);
@@ -4194,10 +4194,11 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               {(() => {
                 const [pAmt, setPAmt] = [payForm?.amount || "", (v) => setPayForm(f => ({ ...f, amount: v }))];
                 return (
-                <div style={{ ...s.grid("1fr 1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
+                <div style={{ ...s.grid("1fr 1fr", mobile), gap: 14, marginBottom: 14 }}>
                   <div><label style={s.label}>Amount ($)</label><input type="number" min="0" step="0.01" placeholder="0.00" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
                   <div><label style={s.label}>Method</label><select style={{ ...s.mSelect(mobile), width: "100%" }} value={payForm.method} onChange={e => setPayForm(f => ({ ...f, method: e.target.value }))}><option value="cash">Cash</option><option value="check">Check</option><option value="money_order">Money Order</option></select></div>
-                  <div><label style={s.label}>Date</label><input type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+                  <div><label style={s.label}>Date Received</label><input type="date" value={payForm.date} onChange={e => setPayForm(f => ({ ...f, date: e.target.value, month: (!f.month || f.month === f.date?.slice(0, 7)) ? e.target.value.slice(0, 7) : f.month }))} style={{ ...s.mInput(mobile), width: "100%" }} /></div>
+                  <div><label style={s.label}>Applies To</label><input type="month" value={payForm.month || payForm.date?.slice(0, 7) || ""} onChange={e => setPayForm(f => ({ ...f, month: e.target.value }))} style={{ ...s.mInput(mobile), width: "100%" }} /><div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Billing month this covers</div></div>
                 </div>
                 );
               })()}
@@ -4206,9 +4207,9 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                 const amt = parseFloat(payForm.amount);
                 if (!amt || !selectedResident._uuid) return;
                 try {
-                  await recordPayment({ residentSlug: selectedResident.id, amount: amt, method: payForm.method, paymentDate: payForm.date, note: payForm.note });
+                  await recordPayment({ residentSlug: selectedResident.id, amount: amt, method: payForm.method, paymentDate: payForm.date, month: payForm.month || payForm.date?.slice(0, 7), note: payForm.note });
                   showSuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment`);
-                  setPayForm({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
+                  setPayForm({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), month: new Date().toISOString().slice(0, 7), note: "" });
                   loadResidentExtra(); // refresh payments locally
                   if (onDataChanged) onDataChanged();
                 } catch (err) { showSuccess("Error: " + err.message); }
@@ -5688,7 +5689,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
   const overdueInsp = regInsp.filter(i => new Date(i.nextDue) < new Date()).length;
   const activeVendors = vendors.filter(v => v.active).length;
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
-  const revenueData = filterByProperty([], selectedProperty);
+  const revenueData = filterByProperty(getAdjustedLedger(), selectedProperty).map(l => ({ ...l, collected: l.tenantPaid + l.hapReceived }));
   const monthLabels = [...new Set(revenueData.map(r => r.month))].sort();
   const trendPoints = monthLabels.map(m => revenueData.filter(r => r.month === m).reduce((s, r) => s + r.collected, 0));
 
@@ -9705,13 +9706,18 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const [showRecordPayment, setShowRecordPayment] = useState(false);
   const curMonth = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(curMonth);
-  const [payForm, setPayForm] = useState({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
+  const [payForm, setPayForm] = useState({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), month: new Date().toISOString().slice(0, 7), note: "" });
   const [paySuccess, showPaySuccess] = useSuccess();
 
   const residents = filterByProperty(LIVE_RESIDENTS, selectedProperty).map(r => ({ ...r, ...(LIVE_RESIDENTS_EXTENDED[r.id] || {}) }));
   const allLedger = filterByProperty(getAdjustedLedger(), selectedProperty);
-  const ledger = allLedger.filter(l => l.month === selectedMonth);
   const availableMonths = [...new Set(allLedger.map(l => l.month))].sort().reverse();
+  // selectedMonth defaults to the current month, but the visible ledger may not
+  // contain it — a future-dated lease has rows only from its start month on.
+  // Fall back to the newest month that actually exists so the table is never
+  // silently empty against a dropdown showing a different month.
+  const effectiveMonth = availableMonths.includes(selectedMonth) ? selectedMonth : (availableMonths[0] || selectedMonth);
+  const ledger = allLedger.filter(l => l.month === effectiveMonth);
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
@@ -9719,7 +9725,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const collectionRate = monthlyRentRoll ? Math.round((totalCollected / monthlyRentRoll) * 100) : 0;
   const delinquent = allLedger.filter(r => r.balance > 0);
   const totalOutstanding = allLedger.reduce((sum, r) => sum + r.balance, 0);
-  const revenueData = filterByProperty([], selectedProperty);
+  const revenueData = allLedger.map(l => ({ ...l, collected: l.tenantPaid + l.hapReceived }));
   const monthLabels = [...new Set(revenueData.map(r => r.month))].sort();
   const trendPoints = monthLabels.map(m => revenueData.filter(r => r.month === m).reduce((s, r) => s + r.collected, 0));
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
@@ -9851,7 +9857,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
               <button onClick={() => setShowRecordPayment(v => !v)} style={{ ...s.btn(showRecordPayment ? "ghost" : "primary"), fontSize: 13, padding: mobile ? "10px 16px" : "8px 14px" }}>
                 {showRecordPayment ? "Cancel" : "💵 Record Payment"}
               </button>
-              <select style={{ ...s.mSelect(mobile), fontSize: 13, padding: "8px 12px" }} value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
+              <select style={{ ...s.mSelect(mobile), fontSize: 13, padding: "8px 12px" }} value={effectiveMonth} onChange={e => setSelectedMonth(e.target.value)}>
                 {availableMonths.map(m => <option key={m} value={m}>{new Date(m + "-15").toLocaleDateString("en-US", { year: "numeric", month: "long" })}</option>)}
               </select>
             </div>
@@ -9895,10 +9901,18 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                   </select>
                 </div>
                 <div>
-                  <label style={s.label}>Date</label>
-                  <input type="date" value={payForm.date} onChange={e => setPayForm(p => ({ ...p, date: e.target.value }))}
+                  <label style={s.label}>Date Received</label>
+                  <input type="date" value={payForm.date} onChange={e => setPayForm(p => ({ ...p, date: e.target.value, month: (!p.month || p.month === p.date?.slice(0, 7)) ? e.target.value.slice(0, 7) : p.month }))}
                     style={{ ...s.mInput(mobile), width: "100%" }} />
                 </div>
+                {payForm.payType !== "deposit" && (
+                <div>
+                  <label style={s.label}>Applies To</label>
+                  <input type="month" value={payForm.month || payForm.date?.slice(0, 7) || ""} onChange={e => setPayForm(p => ({ ...p, month: e.target.value }))}
+                    style={{ ...s.mInput(mobile), width: "100%" }} />
+                  <div style={{ fontSize: 11, color: T.muted, marginTop: 4 }}>Billing month this covers</div>
+                </div>
+                )}
               </div>
               <div style={{ marginBottom: 14 }}>
                 <label style={s.label}>Note (optional)</label>
@@ -9910,18 +9924,30 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                 const res = LIVE_RESIDENTS.find(r => r.id === payForm.residentId);
                 const amt = parseFloat(payForm.amount);
                 try {
-                  await recordPayment({
-                    residentSlug: payForm.residentId,
-                    amount: amt,
-                    method: payForm.method,
-                    paymentDate: payForm.date,
-                    month: payForm.date?.slice(0, 7),
-                    note: payForm.note || (payForm.payType !== "rent" ? payForm.payType.replace("_", " ") : ""),
-                  });
+                  // A deposit is not rent — it belongs in tenant_deposits, or the
+                  // ledger counts it toward the month and reads over-collected.
+                  if (payForm.payType === "deposit") {
+                    await recordDeposit({
+                      residentSlug: payForm.residentId,
+                      amount: amt,
+                      method: payForm.method,
+                      dateCollected: payForm.date,
+                      note: payForm.note || null,
+                    });
+                  } else {
+                    await recordPayment({
+                      residentSlug: payForm.residentId,
+                      amount: amt,
+                      method: payForm.method,
+                      paymentDate: payForm.date,
+                      month: payForm.month || payForm.date?.slice(0, 7),
+                      note: payForm.note || (payForm.payType !== "rent" ? payForm.payType.replace("_", " ") : ""),
+                    });
+                  }
                   // Refresh ledger from Supabase
                   const fresh = await fetchRentLedger();
                   if (fresh && fresh.length) LIVE_RENT_LEDGER = fresh;
-                  showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} payment from ${res?.name || "resident"}`);
+                  showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} ${payForm.payType === "deposit" ? "deposit" : "payment"} from ${res?.name || "resident"}`);
                   // Email receipt to resident
                   if (res?.email) {
                     const entry = fresh?.find(l => l.residentId === payForm.residentId);
@@ -9941,7 +9967,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                   }
                   showPaySuccess(`Recorded $${amt.toFixed(2)} ${payForm.method} (offline — will sync later)`);
                 }
-                setPayForm({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), note: "" });
+                setPayForm({ residentId: "", amount: "", method: "cash", payType: "rent", date: new Date().toISOString().slice(0, 10), month: new Date().toISOString().slice(0, 7), note: "" });
                 setShowRecordPayment(false);
               }} style={{ ...s.mBtn("primary", mobile) }}>Record Payment</button>
             </div>

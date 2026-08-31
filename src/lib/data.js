@@ -1081,6 +1081,32 @@ export async function fetchRentLedger() {
   }));
 }
 
+// ── DEPOSITS RECORDED FROM THE PAYMENT FORM ──
+// A security deposit is not rent. It must land in tenant_deposits, or the
+// rent_ledger view counts it as rent paid and the month reads over-collected.
+export async function recordDeposit({ residentSlug, amount, method, dateCollected, depositType, note }) {
+  const { data: resident } = await supabase
+    .from('residents')
+    .select('id, property_id')
+    .eq('slug', residentSlug)
+    .single();
+  if (!resident) throw new Error('Resident not found');
+
+  const { data, error } = await supabase.from('tenant_deposits').insert({
+    resident_id: resident.id,
+    property_id: resident.property_id,
+    deposit_type: depositType || 'security',
+    amount,
+    date_collected: dateCollected || new Date().toISOString().slice(0, 10),
+    method: method || 'check',
+    status: 'held',
+    note: note || null,
+    recorded_by: 'Admin',
+  }).select().single();
+  if (error) throw error;
+  return data;
+}
+
 // ── RENT PAYMENTS ──
 
 export async function fetchRentPayments(month) {

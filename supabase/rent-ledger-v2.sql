@@ -2,6 +2,13 @@
 -- RENT LEDGER VIEW v2 — generates a row for every month
 -- from lease start to current month, so missed months
 -- automatically appear as outstanding.
+--
+-- A lease starting in a future month yields exactly one row, at
+-- that lease's first month, so a pre-move-in prepayment has a
+-- billing month to land on. Pre-lease months are never generated,
+-- so a resident is never billed before their lease starts.
+-- start_date is COALESCEd because a NULL would otherwise make
+-- generate_series return no rows and drop the resident entirely.
 -- ══════════════════════════════════════════════════════
 
 CREATE OR REPLACE VIEW rent_ledger AS
@@ -31,8 +38,11 @@ JOIN leases l ON l.resident_id = r.id AND l.status = 'active'
 CROSS JOIN LATERAL (
   SELECT TO_CHAR(g, 'YYYY-MM') AS month
   FROM generate_series(
-    GREATEST(DATE_TRUNC('month', l.start_date), DATE_TRUNC('month', CURRENT_DATE)),
-    DATE_TRUNC('month', CURRENT_DATE),
+    COALESCE(DATE_TRUNC('month', l.start_date), DATE_TRUNC('month', CURRENT_DATE)),
+    GREATEST(
+      DATE_TRUNC('month', CURRENT_DATE),
+      COALESCE(DATE_TRUNC('month', l.start_date), DATE_TRUNC('month', CURRENT_DATE))
+    ),
     '1 month'::interval
   ) g
 ) months
