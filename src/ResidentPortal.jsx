@@ -91,6 +91,31 @@ const scopeToArrears = (ledger) => {
   return ledger.filter(l => (l.month || "") >= start);
 };
 
+// Arrears are totalled per resident across the window, then floored once.
+// The view floors each month individually, which throws away the credit from a
+// resident paying extra to catch up — their balance would never fall. Totals
+// here use the raw due/paid fields because getAdjustedLedger folds
+// startingBalance into every month's balance; it is added once instead.
+const arrearsByResident = (ledger, residents) => {
+  const acc = {};
+  scopeToArrears(ledger).forEach(l => {
+    if (!acc[l.residentId]) acc[l.residentId] = { ...l, due: 0, paid: 0, balance: 0, monthsBehind: 0 };
+    const due = l.rentDue || 0;
+    const paid = (l.tenantPaid || 0) + (l.hapReceived || 0);
+    acc[l.residentId].due += due;
+    acc[l.residentId].paid += paid;
+    if (due - paid > 0) acc[l.residentId].monthsBehind++;
+  });
+  (residents || []).forEach(r => {
+    const sb = r.startingBalance || 0;
+    if (!sb) return;
+    if (!acc[r.id]) acc[r.id] = { residentId: r.id, name: r.name, unit: r.unit, propertyId: r.propertyId, due: 0, paid: 0, balance: 0, monthsBehind: 0 };
+    acc[r.id].due += sb;
+  });
+  return Object.values(acc).map(a => ({ ...a, balance: Math.max(0, a.due - a.paid) }));
+};
+const totalArrears = (ledger, residents) => arrearsByResident(ledger, residents).reduce((s, a) => s + a.balance, 0);
+
 const getAdjustedLedger = () => LIVE_RENT_LEDGER.map(entry => {
   const res = LIVE_RESIDENTS.find(r => r.id === entry.residentId);
   const sb = res?.startingBalance || 0;
@@ -893,20 +918,10 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
   const finCollected = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0) + (l.hapReceived || 0), 0);
   const finTenantPaid = finRollupLedger.reduce((s, l) => s + (l.tenantPaid || 0), 0);
   const finHap = finRollupLedger.reduce((s, l) => s + (l.hapReceived || 0), 0);
-  const finArrears = scopeToArrears(finLedger);
-  const finOutstanding = finArrears.reduce((s, l) => s + Math.max(0, l.balance || 0), 0)
-    + filterByProperty(LIVE_RESIDENTS, selectedProperty).reduce((s, r) => s + (r.startingBalance || 0), 0);
+  const finArrearsList = arrearsByResident(finLedger, filterByProperty(LIVE_RESIDENTS, selectedProperty));
+  const finOutstanding = finArrearsList.reduce((s, a) => s + a.balance, 0);
   const finRate = finRent > 0 ? Math.round((finCollected / finRent) * 100) : 0;
-  const finByResident = {};
-  finArrears.forEach(l => {
-    if (!finByResident[l.residentId]) finByResident[l.residentId] = { ...l, balance: 0, monthsBehind: 0 };
-    finByResident[l.residentId].balance += Math.max(0, l.balance || 0);
-    if (l.balance > 0) finByResident[l.residentId].monthsBehind++;
-  });
-  filterByProperty(LIVE_RESIDENTS, selectedProperty).forEach(r => {
-    if (r.startingBalance > 0 && finByResident[r.id]) finByResident[r.id].balance += r.startingBalance;
-  });
-  const finTopDelinquent = Object.values(finByResident)
+  const finTopDelinquent = finArrearsList
     .filter(l => l.balance > 0)
     .sort((a, b) => b.balance - a.balance)
     .slice(0, 5)
@@ -3848,11 +3863,11 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
               </div>
             </div>
             {(() => {
-              const resEntries = getAdjustedLedger().filter(l => l.residentId === selectedResident.id);
+              const resEntries = scopeToArrears(getAdjustedLedger().filter(l => l.residentId === selectedResident.id));
               if (!resEntries.length) return null;
               const curEntry = resEntries.find(l => l.month === new Date().toISOString().slice(0, 7)) || resEntries[resEntries.length - 1];
               const totalBal = Math.max(0, (selectedResident.startingBalance || 0) + resEntries.reduce((s, l) => s + l.rentDue - l.tenantPaid - l.hapReceived, 0));
-              const unpaidMonths = resEntries.filter(l => l.balance > 0).length;
+              const unpaidMonths = resEntries.filter(l => (l.rentDue || 0) - (l.tenantPaid || 0) - (l.hapReceived || 0) > 0).length;
               return (
                 <div style={s.card}>
                   <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Payment Status</div>
@@ -4159,10 +4174,10 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         )}
 
         {tab === "Payments" && (() => {
-          const resEntries = getAdjustedLedger().filter(l => l.residentId === selectedResident.id);
+          const resEntries = scopeToArrears(getAdjustedLedger().filter(l => l.residentId === selectedResident.id));
           const sb = selectedResident.startingBalance || 0;
           const totalBalance = Math.max(0, sb + resEntries.reduce((s, l) => s + l.rentDue - l.tenantPaid - l.hapReceived, 0));
-          const unpaidMonths = resEntries.filter(l => l.balance > 0).length;
+          const unpaidMonths = resEntries.filter(l => (l.rentDue || 0) - (l.tenantPaid || 0) - (l.hapReceived || 0) > 0).length;
           const curEntry = resEntries.find(l => l.month === new Date().toISOString().slice(0, 7)) || resEntries[resEntries.length - 1];
           return (
           <div>
@@ -4803,20 +4818,10 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
   const collected = ledgerForRollup.reduce((s, l) => s + (l.tenantPaid || 0) + (l.hapReceived || 0), 0);
   const tenantCollected = ledgerForRollup.reduce((s, l) => s + (l.tenantPaid || 0), 0);
   const hapCollected = ledgerForRollup.reduce((s, l) => s + (l.hapReceived || 0), 0);
-  const propArrears = scopeToArrears(propLedger);
-  const outstanding = propArrears.reduce((s, l) => s + Math.max(0, l.balance || 0), 0)
-    + propResidents.reduce((s, r) => s + (r.startingBalance || 0), 0);
+  const propArrearsList = arrearsByResident(propLedger, propResidents);
+  const outstanding = propArrearsList.reduce((s, a) => s + a.balance, 0);
   const collectionRate = monthlyRent > 0 ? Math.round((collected / monthlyRent) * 100) : 0;
-  const propByResident = {};
-  propArrears.forEach(l => {
-    if (!propByResident[l.residentId]) propByResident[l.residentId] = { ...l, balance: 0, monthsBehind: 0 };
-    propByResident[l.residentId].balance += Math.max(0, l.balance || 0);
-    if (l.balance > 0) propByResident[l.residentId].monthsBehind++;
-  });
-  propResidents.forEach(r => {
-    if (r.startingBalance > 0 && propByResident[r.id]) propByResident[r.id].balance += r.startingBalance;
-  });
-  const topDelinquent = Object.values(propByResident)
+  const topDelinquent = propArrearsList
     .filter(l => l.balance > 0)
     .sort((a, b) => b.balance - a.balance)
     .slice(0, 5)
@@ -9760,9 +9765,8 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const totalCollected = ledger.reduce((sum, r) => sum + r.tenantPaid + r.hapReceived, 0);
   const collectionRate = monthlyRentRoll ? Math.round((totalCollected / monthlyRentRoll) * 100) : 0;
   const arrearsStart = getArrearsStart();
-  const arrearsLedger = scopeToArrears(allLedger);
-  const delinquent = arrearsLedger.filter(r => r.balance > 0);
-  const totalOutstanding = arrearsLedger.reduce((sum, r) => sum + r.balance, 0);
+  const delinquent = arrearsByResident(allLedger, residents).filter(r => r.balance > 0);
+  const totalOutstanding = delinquent.reduce((sum, r) => sum + r.balance, 0);
   const revenueData = allLedger.map(l => ({ ...l, collected: l.tenantPaid + l.hapReceived }));
   const monthLabels = [...new Set(revenueData.map(r => r.month))].sort();
   const trendPoints = monthLabels.map(m => revenueData.filter(r => r.month === m).reduce((s, r) => s + r.collected, 0));
@@ -9802,7 +9806,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                     const pTen = pRes.reduce((s, r) => s + (r.tenantPortion || 0), 0);
                     const pColl = pLedger.reduce((s, r) => s + r.tenantPaid + r.hapReceived, 0);
                     const pRate = pRent ? Math.round((pColl / pRent) * 100) : 0;
-                    const pDel = scopeToArrears(pLedger).filter(r => r.balance > 0).reduce((s, r) => s + r.balance, 0);
+                    const pDel = totalArrears(pLedger, pRes);
                     return (
                       <tr key={p.id} onClick={() => onSelectProperty?.(p.id, "financial")} style={{ cursor: "pointer" }}>
                         <td style={s.td}><span style={{ fontWeight: 600, color: T.accent }}>{p.name.split(" ")[0]} {p.name.split(" ")[1]} →</span><br /><span style={{ fontSize: 11, color: T.muted }}>{p.totalUnits} units</span></td>
@@ -9856,7 +9860,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
               <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15, color: T.danger }}>Outstanding Balances ({delinquent.length})</div>
               <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>Since {arrearsStart} — the first month with recorded payments. Earlier months have no payment history.</div>
               {delinquent.map(d => (
-                <div key={d.unit} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.borderLight}` }}>
+                <div key={d.residentId || d.unit} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.borderLight}` }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{d.name}</div>
                     <div style={{ fontSize: 12, color: T.muted }}>Unit {d.unit}{selectedProperty === "all" ? ` · ${getProperty(d.propertyId)?.name?.split(" ")[0] || ""}` : ""}</div>
