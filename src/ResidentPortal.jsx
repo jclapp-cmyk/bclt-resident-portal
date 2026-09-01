@@ -96,6 +96,17 @@ const scopeToArrears = (ledger) => {
 // resident paying extra to catch up — their balance would never fall. Totals
 // here use the raw due/paid fields because getAdjustedLedger folds
 // startingBalance into every month's balance; it is added once instead.
+// One month's outcome for a resident. Months before payments were ever
+// recorded are "No records" rather than "Missed" — the absence is bookkeeping,
+// not non-payment.
+const rentMonthState = (r, trackedFrom) => {
+  if (r.month < trackedFrom) return "No records";
+  const d = (r.rentDue || 0) - (r.tenantPaid || 0) - (r.hapReceived || 0);
+  if (d < 0) return "Paid +extra";
+  if (d === 0) return "Paid";
+  return d < (r.rentDue || 0) ? "Partial" : "Missed";
+};
+
 const arrearsByResident = (ledger, residents) => {
   const acc = {};
   scopeToArrears(ledger).forEach(l => {
@@ -4174,7 +4185,10 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
         )}
 
         {tab === "Payments" && (() => {
-          const resEntries = scopeToArrears(getAdjustedLedger().filter(l => l.residentId === selectedResident.id));
+          const resEntriesAll = getAdjustedLedger().filter(l => l.residentId === selectedResident.id);
+          const resEntries = scopeToArrears(resEntriesAll);
+          const trackedFrom = getArrearsStart();
+          const rentHistory = [...resEntriesAll].sort((a, b) => String(b.month).localeCompare(String(a.month)));
           const sb = selectedResident.startingBalance || 0;
           const totalBalance = Math.max(0, sb + resEntries.reduce((s, l) => s + l.rentDue - l.tenantPaid - l.hapReceived, 0));
           const unpaidMonths = resEntries.filter(l => (l.rentDue || 0) - (l.tenantPaid || 0) - (l.hapReceived || 0) > 0).length;
@@ -4256,6 +4270,41 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                   { key: "note", label: "Note", render: v => v || "—", filterable: false },
                   { key: "recorded_by", label: "Recorded By", filterable: false },
                 ]} data={residentPayments} />
+              </div>
+            )}
+
+            {rentHistory.length > 0 && (
+              <div style={s.card}>
+                <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>Rent History ({rentHistory.length} months)</div>
+                <div style={{ fontSize: 12, color: T.muted, marginBottom: 14 }}>
+                  Every month since the lease started. Payments were first recorded in {trackedFrom}; earlier months are listed for completeness but have no records, so they are not counted as missed.
+                </div>
+                <SortableTable mobile={mobile} keyField="_key" columns={[
+                  { key: "month", label: "Month" },
+                  { key: "rentDue", label: "Rent Due", render: v => `$${(v || 0).toLocaleString()}` },
+                  { key: "_paid", label: "Paid", filterable: false, sortValue: r => (r.tenantPaid || 0) + (r.hapReceived || 0),
+                    render: (_, r) => {
+                      if (r.month < trackedFrom) return <span style={{ color: T.dim }}>—</span>;
+                      const paid = (r.tenantPaid || 0) + (r.hapReceived || 0);
+                      return <span style={{ color: paid > 0 ? T.success : T.dim, fontWeight: paid > 0 ? 600 : 400 }}>${paid.toLocaleString()}</span>;
+                    } },
+                  { key: "_diff", label: "Short / Over", filterable: false, sortValue: r => (r.rentDue || 0) - (r.tenantPaid || 0) - (r.hapReceived || 0),
+                    render: (_, r) => {
+                      if (r.month < trackedFrom) return <span style={{ color: T.dim }}>—</span>;
+                      const d = (r.rentDue || 0) - (r.tenantPaid || 0) - (r.hapReceived || 0);
+                      if (d > 0) return <span style={{ color: T.danger, fontWeight: 700 }}>${d.toLocaleString()}</span>;
+                      if (d < 0) return <span style={{ color: T.success, fontWeight: 600 }}>+${Math.abs(d).toLocaleString()}</span>;
+                      return <span style={{ color: T.dim }}>—</span>;
+                    } },
+                  { key: "_state", label: "Status",
+                    filterOptions: ["No records", "Paid", "Paid +extra", "Partial", "Missed"],
+                    filterValue: r => rentMonthState(r, trackedFrom),
+                    render: (_, r) => {
+                      const st = rentMonthState(r, trackedFrom);
+                      const c = { "No records": [T.dimLight, T.muted], "Paid": [T.successDim, T.success], "Paid +extra": [T.successDim, T.success], "Partial": [T.warnDim, T.warn], "Missed": [T.dangerDim, T.danger] }[st];
+                      return <span style={s.badge(c[0], c[1])}>{st}</span>;
+                    } },
+                ]} data={rentHistory} />
               </div>
             )}
 
