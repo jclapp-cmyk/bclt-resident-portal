@@ -82,13 +82,37 @@ let LIVE_RENT_LEDGER = [];
 // only ever recorded from the month the portal went live. Summing balance over
 // all of it reports years of "outstanding" rent that is really absent history.
 // Anything aggregating arrears across months must scope to this cutoff.
+// Rent is due on the 1st with a grace period; a month is not in arrears until
+// that window closes. On the 1st of September, unpaid September rent is simply
+// due, not late, so the current month is excluded from arrears until day 8.
+const RENT_GRACE_DAYS = 7;
+const ymOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+const lastDueMonth = () => {
+  const now = new Date();
+  if (now.getDate() > RENT_GRACE_DAYS) return ymOf(now);
+  return ymOf(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+};
+const inGracePeriod = (month) => month === ymOf(new Date()) && new Date().getDate() <= RENT_GRACE_DAYS;
+
+// The ledger reaches back to each lease's start, which for the trend chart means
+// 100+ points, almost all zero, and an unreadable axis. Show a rolling year, and
+// never earlier than the first recorded payment.
+const TREND_MONTHS = 12;
+const trendStart = () => {
+  const now = new Date();
+  const floor = ymOf(new Date(now.getFullYear(), now.getMonth() - (TREND_MONTHS - 1), 1));
+  const start = getArrearsStart();
+  return floor > start ? floor : start;
+};
+
 const getArrearsStart = () => LIVE_RENT_PAYMENTS.reduce(
   (min, p) => (p.month && p.month < min ? p.month : min),
   new Date().toISOString().slice(0, 7)
 );
 const scopeToArrears = (ledger) => {
   const start = getArrearsStart();
-  return ledger.filter(l => (l.month || "") >= start);
+  const end = lastDueMonth();
+  return ledger.filter(l => (l.month || "") >= start && (l.month || "") <= end);
 };
 
 // Arrears are totalled per resident across the window, then floored once.
@@ -104,13 +128,16 @@ const rentMonthState = (r, trackedFrom) => {
   const d = (r.rentDue || 0) - (r.tenantPaid || 0) - (r.hapReceived || 0);
   if (d < 0) return "Paid +extra";
   if (d === 0) return "Paid";
+  if (inGracePeriod(r.month)) return "Due";
   return d < (r.rentDue || 0) ? "Partial" : "Missed";
 };
 
 const arrearsByResident = (ledger, residents) => {
   const acc = {};
   scopeToArrears(ledger).forEach(l => {
-    if (!acc[l.residentId]) acc[l.residentId] = { ...l, due: 0, paid: 0, balance: 0, monthsBehind: 0 };
+    // Deliberately not spreading the ledger row: a per-month status, month and
+    // amounts have no meaning on a cumulative total and were being rendered.
+    if (!acc[l.residentId]) acc[l.residentId] = { residentId: l.residentId, name: l.name, unit: l.unit, propertyId: l.propertyId, due: 0, paid: 0, balance: 0, monthsBehind: 0 };
     const due = l.rentDue || 0;
     const paid = (l.tenantPaid || 0) + (l.hapReceived || 0);
     acc[l.residentId].due += due;
@@ -966,7 +993,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 8 }}>Top delinquencies</div>
             <table style={s.table}>
-              <thead><tr>{["Resident", "Unit", "Month", "Balance"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+              <thead><tr>{["Resident", "Unit", "Months Behind", "Balance"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
               <tbody>
                 {finTopDelinquent.map((l, i) => (
                   <tr key={i} onClick={() => onNavigateTo && onNavigateTo("financial")} style={{ cursor: onNavigateTo ? "pointer" : "default" }}
@@ -974,7 +1001,7 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
                     onMouseLeave={e => { if (onNavigateTo) e.currentTarget.style.background = "transparent"; }}>
                     <td style={s.td}>{l.resident?.name || "—"}</td>
                     <td style={s.td}>{l.resident?.unit || "—"}</td>
-                    <td style={s.td}>{l.month}</td>
+                    <td style={s.td}>{l.monthsBehind || 0}</td>
                     <td style={{ ...s.td, fontWeight: 600, color: T.danger }}>${(l.balance || 0).toLocaleString()}</td>
                   </tr>
                 ))}
@@ -4297,11 +4324,11 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
                       return <span style={{ color: T.dim }}>—</span>;
                     } },
                   { key: "_state", label: "Status",
-                    filterOptions: ["No records", "Paid", "Paid +extra", "Partial", "Missed"],
+                    filterOptions: ["No records", "Due", "Paid", "Paid +extra", "Partial", "Missed"],
                     filterValue: r => rentMonthState(r, trackedFrom),
                     render: (_, r) => {
                       const st = rentMonthState(r, trackedFrom);
-                      const c = { "No records": [T.dimLight, T.muted], "Paid": [T.successDim, T.success], "Paid +extra": [T.successDim, T.success], "Partial": [T.warnDim, T.warn], "Missed": [T.dangerDim, T.danger] }[st];
+                      const c = { "No records": [T.dimLight, T.muted], "Due": [T.infoDim, T.info], "Paid": [T.successDim, T.success], "Paid +extra": [T.successDim, T.success], "Partial": [T.warnDim, T.warn], "Missed": [T.dangerDim, T.danger] }[st];
                       return <span style={s.badge(c[0], c[1])}>{st}</span>;
                     } },
                 ]} data={rentHistory} />
@@ -4919,13 +4946,13 @@ const PropertyDetails = ({ leaseDocs, setLeaseDocs, mobile, selectedProperty, on
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: T.muted, marginBottom: 8 }}>Top delinquencies</div>
             <table style={s.table}>
-              <thead><tr>{["Resident", "Unit", "Month", "Balance"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+              <thead><tr>{["Resident", "Unit", "Months Behind", "Balance"].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
               <tbody>
                 {topDelinquent.map((l, i) => (
                   <tr key={i} onClick={() => l.resident && onSelectProperty?.(selectedProperty, "residents", l.resident.id)} style={{ cursor: l.resident && onSelectProperty ? "pointer" : "default" }}>
                     <td style={s.td}>{l.resident?.name || "—"}</td>
                     <td style={s.td}>{l.resident?.unit || "—"}</td>
-                    <td style={s.td}>{l.month}</td>
+                    <td style={s.td}>{l.monthsBehind || 0}</td>
                     <td style={{ ...s.td, fontWeight: 600, color: T.danger }}>${(l.balance || 0).toLocaleString()}</td>
                   </tr>
                 ))}
@@ -5759,7 +5786,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
   const overdueInsp = regInsp.filter(i => new Date(i.nextDue) < new Date()).length;
   const activeVendors = vendors.filter(v => v.active).length;
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
-  const revenueData = filterByProperty(getAdjustedLedger(), selectedProperty).map(l => ({ ...l, collected: l.tenantPaid + l.hapReceived }));
+  const revenueData = filterByProperty(getAdjustedLedger(), selectedProperty).filter(l => (l.month || "") >= trendStart()).map(l => ({ ...l, collected: l.tenantPaid + l.hapReceived }));
   const monthLabels = [...new Set(revenueData.map(r => r.month))].sort();
   const trendPoints = monthLabels.map(m => revenueData.filter(r => r.month === m).reduce((s, r) => s + r.collected, 0));
 
@@ -5835,7 +5862,7 @@ const AdminReports = ({ mobile, maintenance, vendors, unitInspections, selectedP
             <div style={{ fontWeight: 700, marginBottom: 14 }}>Monthly Trend</div>
             <SparkLine points={trendPoints.length ? trendPoints : [0]} color={T.success} width={mobile ? 280 : 500} height={48} mobile={mobile} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.muted, marginTop: 6, maxWidth: mobile ? 280 : 500 }}>
-              {monthLabels.map(m => <span key={m}>{new Date(m + "-15").toLocaleDateString("en", { month: "short" })}</span>)}
+              {monthLabels.map(m => <span key={m} style={{ whiteSpace: "nowrap" }}>{new Date(m + "-15").toLocaleDateString("en", { month: "short" })}{m.slice(5) === "01" ? ` '${m.slice(2, 4)}` : ""}</span>)}
             </div>
           </div>
           <div style={s.card}>
@@ -9808,6 +9835,10 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
       };
     }),
   ], selectedProperty).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  // The date-range control was rendered but never applied, so every preset
+  // showed the same rows. It governs this list, which is keyed by the date
+  // money arrived; the month dropdown above governs rent status by billing month.
+  const transactionsInRange = filterByDateRange(transactions, "date", dateRange);
   const monthlyRentRoll = residents.reduce((sum, r) => sum + (r.rentAmount || 0), 0);
   const totalHAP = residents.reduce((sum, r) => sum + (r.hapPayment || 0), 0);
   const totalTenant = residents.reduce((sum, r) => sum + (r.tenantPortion || 0), 0);
@@ -9816,7 +9847,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
   const arrearsStart = getArrearsStart();
   const delinquent = arrearsByResident(allLedger, residents).filter(r => r.balance > 0);
   const totalOutstanding = delinquent.reduce((sum, r) => sum + r.balance, 0);
-  const revenueData = allLedger.map(l => ({ ...l, collected: l.tenantPaid + l.hapReceived }));
+  const revenueData = allLedger.filter(l => (l.month || "") >= trendStart()).map(l => ({ ...l, collected: l.tenantPaid + l.hapReceived }));
   const monthLabels = [...new Set(revenueData.map(r => r.month))].sort();
   const trendPoints = monthLabels.map(m => revenueData.filter(r => r.month === m).reduce((s, r) => s + r.collected, 0));
   const propLabel = selectedProperty === "all" ? "All Properties" : getProperty(selectedProperty).name;
@@ -9900,7 +9931,7 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
               <div style={{ fontWeight: 700, marginBottom: 14 }}>Monthly Trend</div>
               <SparkLine points={trendPoints.length ? trendPoints : [0]} color={T.success} width={mobile ? 280 : 500} height={48} mobile={mobile} />
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.muted, marginTop: 6, maxWidth: mobile ? 280 : 500 }}>
-                {monthLabels.map(m => <span key={m}>{new Date(m + "-15").toLocaleDateString("en", { month: "short" })}</span>)}
+                {monthLabels.map(m => <span key={m} style={{ whiteSpace: "nowrap" }}>{new Date(m + "-15").toLocaleDateString("en", { month: "short" })}{m.slice(5) === "01" ? ` '${m.slice(2, 4)}` : ""}</span>)}
               </div>
             </div>
           </div>
@@ -9915,8 +9946,8 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
                     <div style={{ fontSize: 12, color: T.muted }}>Unit {d.unit}{selectedProperty === "all" ? ` · ${getProperty(d.propertyId)?.name?.split(" ")[0] || ""}` : ""}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 700, color: T.danger }}>${d.balance}</div>
-                    <span style={s.badge(PAYMENT_STATUS[d.status].bg, PAYMENT_STATUS[d.status].text)}>{PAYMENT_STATUS[d.status].label}</span>
+                    <div style={{ fontWeight: 700, color: T.danger }}>${d.balance.toLocaleString()}</div>
+                    <span style={s.badge(T.dangerDim, T.danger)}>{d.monthsBehind} month{d.monthsBehind === 1 ? "" : "s"} behind</span>
                   </div>
                 </div>
               ))}
@@ -10084,22 +10115,24 @@ const FinancialOverview = ({ mobile, selectedProperty, onSelectProperty }) => {
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "28px 0 12px", flexWrap: "wrap", gap: 8 }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>All Payments Received ({transactions.length})</div>
-              <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Every payment and deposit on record, newest first. Not limited to the month selected above.</div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Payments Received ({transactionsInRange.length}{transactionsInRange.length !== transactions.length ? ` of ${transactions.length}` : ""})</div>
+              <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>
+                Payments and deposits by the date received, newest first{dateRange.preset && dateRange.preset !== "all" ? ` — ${(DATE_RANGE_PRESETS.find(pr => pr.value === dateRange.preset) || {}).label || "custom range"}` : ""}. The month selector above filters rent status, not this list.
+              </div>
             </div>
-            <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Date", key: "date" }, { label: "Resident", key: "name" }, { label: "Unit", key: "unit" }, { label: "Type", key: "type" }, { label: "Applies To", key: "appliesTo" }, { label: "Amount", key: "amount" }, { label: "Method", key: "method" }, { label: "Note", key: "note" }], transactions, "payments_received")} />
+            <ExportButton mobile={mobile} onClick={() => generateCSV([{ label: "Date", key: "date" }, { label: "Resident", key: "name" }, { label: "Unit", key: "unit" }, { label: "Type", key: "type" }, { label: "Applies To", key: "appliesTo" }, { label: "Amount", key: "amount" }, { label: "Method", key: "method" }, { label: "Note", key: "note" }], transactionsInRange, "payments_received")} />
           </div>
           <SortableTable mobile={mobile} columns={[
             { key: "date", label: "Date", render: v => v || "—" },
             { key: "name", label: "Resident", render: v => <span style={{ fontWeight: 600 }}>{v}</span> },
             { key: "unit", label: "Unit" },
             ...(selectedProperty === "all" ? [{ key: "propertyId", label: "Property", render: v => getProperty(v)?.name?.split(" ")[0] || v }] : []),
-            { key: "type", label: "Type", render: v => <span style={s.badge(v === "Rent" ? T.successDim : T.infoDim, v === "Rent" ? T.success : T.info)}>{v}</span>, filterOptions: [...new Set(transactions.map(t => t.type))].sort() },
+            { key: "type", label: "Type", render: v => <span style={s.badge(v === "Rent" ? T.successDim : T.infoDim, v === "Rent" ? T.success : T.info)}>{v}</span>, filterOptions: [...new Set(transactionsInRange.map(t => t.type))].sort() },
             { key: "appliesTo", label: "Applies To", render: v => v || <span style={{ color: T.dim }}>—</span> },
             { key: "amount", label: "Amount", render: v => `$${v.toLocaleString()}`, sortValue: r => r.amount },
             { key: "method", label: "Method", render: v => (v || "—").replace(/_/g, " ") },
             { key: "note", label: "Note", render: v => v || <span style={{ color: T.dim }}>—</span> },
-          ]} data={transactions} keyField="_key" />
+          ]} data={transactionsInRange} keyField="_key" />
         </div>
       )}
     </div>
