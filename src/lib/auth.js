@@ -160,6 +160,32 @@ export async function inviteUser(email, role, residentId, displayName) {
     }
   }
 
+  // Verify the profile actually exists before promising the user can log in.
+  // The create paths above can report success without inserting — a silent RPC
+  // no-op, or a duplicate swallowed as a re-send — and /api/invite then creates
+  // the auth.users entry as a side effect of generate_link. That combination
+  // produces an account that authenticates but has no profile to land on, which
+  // is indistinguishable from a broken link for the recipient. Fail loudly here
+  // instead of sending a welcome email to someone who cannot get in.
+  const { data: confirmed } = await supabase
+    .from('user_profiles')
+    .select('id, resident_id, role')
+    .eq('email', emailLc)
+    .maybeSingle();
+
+  if (!confirmed) {
+    throw new Error(
+      `Could not create a portal profile for ${email}. No welcome email was sent — ` +
+      `sending one would let them sign in with nowhere to land. Check that the ` +
+      `address is not already attached to another profile, then try again.`
+    );
+  }
+  if (role === 'resident' && residentId && !confirmed.resident_id) {
+    // Profile exists but is not linked to the resident, so the portal cannot
+    // resolve whose data to show. Repair it rather than leaving a dead account.
+    await supabase.from('user_profiles').update({ resident_id: residentId }).eq('id', confirmed.id);
+  }
+
   // Always send the warm welcome email via our serverless function.
   // It generates a fresh Supabase magic link each call — links are valid for
   // ~1 hour, so re-sends naturally produce a working link.

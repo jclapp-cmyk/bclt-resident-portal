@@ -165,6 +165,7 @@ const getAdjustedLedger = () => LIVE_RENT_LEDGER.map(entry => {
 let LIVE_REG_INSPECTIONS = [];
 let LIVE_DEPOSITS = [];
 let LIVE_RENT_PAYMENTS = [];
+let LIVE_USER_PROFILES = [];
 let LIVE_COMPLIANCE_DOCS = [];
 
 // ── DESIGN TOKENS (Light Theme) ──────────────────────────────
@@ -4667,6 +4668,18 @@ const AdminResidents = ({ mobile, maintenance, threads, emergencyContacts, admin
           { key: "unit", label: "Unit" },
           { key: "bedrooms", label: "BR", render: (v, row) => row.unitType === "commercial" ? "—" : (v ? `${v}BR` : "—") },
           { key: "rentAmount", label: "Rent", render: v => v ? `$${v.toLocaleString()}` : "—" },
+          { key: "_portal", label: "Portal", sortable: false,
+            filterOptions: ["Can sign in", "No access"],
+            filterValue: row => LIVE_USER_PROFILES.some(u => u.resident_id === row._uuid) ? "Can sign in" : "No access",
+            render: (_, row) => {
+              // A resident with no user_profiles row authenticates fine and is
+              // then dropped back to the sign-in page. That has to be visible
+              // here, before they try, rather than after they complain.
+              const has = LIVE_USER_PROFILES.some(u => u.resident_id === row._uuid);
+              return has
+                ? <span style={s.badge(T.successDim, T.success)}>Can sign in</span>
+                : <span style={s.badge(T.warnDim, T.warn)}>No access</span>;
+            } },
           { key: "_deposit", label: "Deposit", sortable: false, filterable: false, render: (_, row) => {
             const deps = LIVE_DEPOSITS.filter(d => d.resident_id === row._uuid);
             if (!deps.length) return <span style={{ color: T.dim }}>—</span>;
@@ -10757,18 +10770,19 @@ export default function App() {
   const reloadData = useCallback(async () => {
     try {
       const safe = (fn) => fn().catch(err => { console.warn('Fetch failed:', err.message); return null; });
-      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes, aUnits, checklists, deposits, rentPays] = await Promise.all([
+      const [props, res, resExt, docs, ledger, maint, vend, uInsp, rInsp, thr, msgs, compDocs, onboard, staff, notes, aUnits, checklists, deposits, rentPays, userProfs] = await Promise.all([
         safe(fetchProperties), safe(fetchResidents), safe(fetchResidentsExtended), safe(fetchLeaseDocsByResident),
         safe(fetchRentLedger), safe(fetchMaintenanceRequests), safe(fetchVendors),
         safe(fetchUnitInspections), safe(fetchRegInspections), safe(fetchThreads), safe(fetchMessages),
         safe(fetchComplianceDocs), safe(fetchOnboardingWorkflows), safe(fetchStaffMembers), safe(fetchAdminNotes), safe(fetchAllUnits), safe(fetchInspectionChecklists),
-        safe(fetchAllDeposits), safe(fetchRentPayments),
+        safe(fetchAllDeposits), safe(fetchRentPayments), safe(fetchUserProfiles),
       ]);
       LIVE_PROPERTIES = props || []; LIVE_RESIDENTS = res || []; LIVE_RESIDENTS_EXTENDED = resExt || {};
       LIVE_RENT_LEDGER = ledger || [];
       LIVE_REG_INSPECTIONS = rInsp || [];
       LIVE_DEPOSITS = deposits || [];
       LIVE_RENT_PAYMENTS = rentPays || [];
+      LIVE_USER_PROFILES = userProfs || [];
       LIVE_COMPLIANCE_DOCS = compDocs || [];
       setSbProperties(props || []); setSbResidents(res || []); setSbResidentsExt(resExt || {});
       setSbRentLedger(ledger || []); setLeaseDocs(docs || {});
