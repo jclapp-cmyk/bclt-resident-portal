@@ -1,91 +1,102 @@
-# Handoff — HomeBase portal, Aug 31 2026
+# Handoff — HomeBase portal, Sept 2 2026
 
-Delete this file when the Open items below are closed.
+Delete this file when the Open items are closed.
 
-## Database state
+## Ground rules
 
-All migrations below are **already applied to production**. There is one
-Supabase project and no staging environment — `.env.local` holds the only
-connection string, and running the app locally reads and writes production data.
+There is one Supabase project and no staging. `.env.local` holds the only
+connection string, so running the app locally reads and writes **production
+data**. Every migration below is already applied to production.
 
-## Done
+Do not print resident names, rent amounts, lease dates, or email addresses into
+a Claude Code transcript. Write diagnostics that return verdicts and counts —
+`supabase/diagnose-missing-ledger-resident.sql` is the pattern.
 
-### `697441f` — dashboard rent roll (not yet pushed)
+`residents`, `leases`, `rent_payments`, `user_profiles` and `message_threads`
+are RLS-blocked for the anon key. `rent_ledger`, `properties`, `units` and
+`tenant_deposits` are readable. Anything needing the blocked tables has to run
+in the Supabase SQL editor.
 
-The admin dashboard Financials card computed Monthly Rent from `rent_ledger`
-while Financial Overview computed it from each resident's active lease. Those
-disagreed. The dashboard now uses the lease-based source.
+## Shipped Aug 31 – Sept 2
 
-### This session
+**Rent ledger month generation.** The view generated its series from
+`GREATEST(lease_start, current_month)`, so it always started at the current
+month: one row per resident, no history. It also dropped residents outright — a
+lease starting in a future month made `generate_series` run with start > stop,
+returning zero rows, and the `CROSS JOIN LATERAL` removed them from the view.
+That was the cause of both "one resident missing" and "payment saves but does
+not display". The series now runs from lease start to
+`GREATEST(current_month, lease_start)`, with `start_date` COALESCEd because NULL
+would produce zero rows and drop the resident again.
 
-**Rent ledger view rewritten.** `supabase/rent-ledger-v2.sql` generated its month
-series from `GREATEST(lease_start, current_month)`, which meant the series always
-started at the current month — one month per resident, no history, contradicting
-the file's own header. It also silently dropped residents: a lease starting in a
-future month made `generate_series` run with start > stop, returning zero rows,
-and the `CROSS JOIN LATERAL` removed that resident from the view entirely. That
-was the cause of both "one resident missing from rent_ledger" and "payment saves
-but does not display" — the payment was in `rent_payments` the whole time with no
-ledger row to join to.
+**Prepayments.** Both admin payment forms have an `Applies To` month picker
+beside `Date Received`. `month` is the billing period the money covers,
+`payment_date` is when it arrived.
 
-The series now runs from lease start to `GREATEST(current_month, lease_start)`,
-so a past lease gets full history, a future lease gets exactly one row at its
-first month, and no resident is ever billed for a pre-lease month. `start_date`
-is `COALESCE`d because a NULL would otherwise produce zero rows and drop the
-resident again.
+**Deposits.** `recordDeposit` writes the Security Deposit pay type to
+`tenant_deposits`, not `rent_payments`, where it had been counted as rent.
 
-**Prepayment support.** Both admin payment forms now have an `Applies To` month
-picker beside the date field, which is relabelled `Date Received`. `month` is the
-billing period the money covers; `payment_date` is when it arrived. The month
-follows the date until edited, then holds. This is what makes a pre-move-in check
-recordable against the month it actually pays for.
+**`rent_payments.pay_type`.** Only `pay_type = 'rent'` counts toward
+`tenant_paid`; HAP is caught by pay type or method. Late fee, utility and other
+count toward neither. All 18 pre-existing rows backfilled as rent.
 
-**Deposits routed out of `rent_payments`.** The `Security Deposit` pay type wrote
-to `rent_payments` with the type recorded only in the note text, so the ledger
-counted it as rent — a resident who paid rent plus deposit read 200% collected.
-New `recordDeposit` in `src/lib/data.js` writes to `tenant_deposits` instead, and
-`Applies To` hides for deposits since a deposit covers no billing month.
+**Arrears.** Totalled per resident across the window and floored once, so credit
+from residents paying extra to catch up actually reduces what they owe.
+Previously each month was floored independently and the excess discarded.
+Starting balances are added once rather than per month. All six reporting sites
+share `arrearsByResident`.
 
-**Month selector clamped.** `selectedMonth` defaulted to the current month even
-when the filtered ledger had no rows for it, so a future-lease property showed an
-empty table beneath a dropdown displaying a different month — and could not be
-corrected, since re-picking the only option fires no change event.
-`effectiveMonth` falls back to the newest month that exists.
+**Rent grace period.** Rent is due on the 1st with 7 days to pay
+(`RENT_GRACE_DAYS`). Arrears stop at the last month past its grace window. On
+Sept 1 this was showing ten of eleven residents delinquent and $14,458
+outstanding against a real $3,135 and two residents.
 
-**Monthly Trend chart wired up.** `src/ResidentPortal.jsx` 5691 and 9722 built
-`revenueData` from a hardcoded `[]` left over from the mock-data removal. Both
-now derive from the ledger.
+**Rent History** per resident — every month since lease start, with paid,
+short/over, and a status. Months before the first recorded payment read
+"No records", not "Missed".
 
-**10 Park Ave data corrected.** Resident prepaid rent and deposit by check before
-a 2026-09 move-in. Three rows sat in `rent_payments` under `2026-08` (two test
-entries plus the deposit). All removed; rent re-recorded against `2026-09`; the
-deposit belongs in `tenant_deposits`. Ledger now reads one `2026-09` row, `paid`,
-tenant paid equal to rent due.
+**Payments Received** on Financial Overview merges `rent_payments` and
+`tenant_deposits` into one transaction list. The date-range control, which was
+rendered but never applied, now filters it.
 
-**Payments tab shows money received.** The tab rendered only the rent ledger — a
-per-resident-per-month status table — so a deposit had no row to appear in and
-looked like it had failed to save. An `All Payments Received` table now sits
-beneath it, merging `rent_payments` (keyed by billing month) and
-`tenant_deposits` (which cover no month) into one transaction list. It is
-deliberately not filtered by the month selector above it, since a deposit has no
-billing month to match. Recording now refreshes `LIVE_RENT_PAYMENTS` and
-`LIVE_DEPOSITS` in place; previously `LIVE_DEPOSITS` only loaded on mount.
+**Monthly Trend** shows a rolling 12 months instead of every month back to lease
+start.
 
-All of the above is committed and deployed. Verified against the live bundle.
+**Login diagnosis.** A resident looped between the sign-in page and their inbox
+for days. Their magic link always worked; they had no `user_profiles` row, so
+the app found no profile and re-rendered the sign-in screen with no message.
+`/api/invite` creates the `auth.users` entry as a side effect of `generate_link`
+while `inviteUser` creates the profile separately, so a failed profile insert
+leaves an account that authenticates and cannot enter. Fixed by an invite that
+happened to name their address. `inviteUser` now verifies the profile exists and
+throws without sending mail if it does not; the login page explains the state;
+the Residents list has a **Portal** column showing "Can sign in" / "No access".
 
 ## Open
 
-1. **`late_fee`, `utility`, and `other` have the deposit's bug.** They still
-   write to `rent_payments` and count as rent collected. Deposit was special-cased
-   because it had somewhere to go. The general fix is a `pay_type` column on
-   `rent_payments`, with the ledger counting only `rent` toward `total_tenant`.
-   Needs a migration and a backfill of existing rows.
+1. **Ten of twelve active residents have no portal profile.** Residents →
+   filter Portal to "No access" → invite each. They will all hit the login wall
+   otherwise.
 
-2. **Views do not refresh until reload.** Three separate reports this session
-   ("payment saved but not showing", the deposit, and a Communication message)
-   were all correctly written and simply not re-fetched. Payments and deposits
-   are fixed; the messages view still loads threads on mount only. Worth a
-   general look at refresh-after-write rather than patching case by case.
+2. **The invite is two steps that can disagree.** `inviteUser` creates the
+   profile from the browser under RLS; `/api/invite` creates the auth user with
+   the service key. No shared transaction. Today's check makes divergence
+   visible, not impossible. The fix is to move it all into `/api/invite` and
+   reduce the client to a single fetch — a few hours with testing, and it
+   removes the RPC / fallback / placeholder-UUID layering six earlier patches
+   built up. Do not attempt mid-incident.
+
+3. **Welcome email does not sign anyone in.** `cc33bcf` replaced the magic link
+   with a plain portal URL, deliberately — a generated link is single-use and
+   expires in about an hour, so most recipients would meet a dead button. Jeff's
+   call on Sept 2 was to leave this alone. If revisited, the only version worth
+   doing carries the address to a pre-filled sign-in box, at the cost of an
+   email address in a URL.
+
+4. **Views do not refresh until reload.** Payments and deposits were fixed;
+   the messages view still loads threads on mount only. Three separate "it did
+   not save" reports this session were all correctly written data that simply
+   was not re-fetched. Worth handling generally.
 
 ## Parked
 
@@ -95,16 +106,12 @@ has no signer field. Jeff decided to leave the model as-is.
 
 ## Notes
 
-`fetchResidentsExtended` falls back to `r.leases?.[0]` regardless of status,
+`fetchResidentsExtended` falls back to `r.leases?.[0]` regardless of status
 while `rent_ledger` requires `status = 'active'`. Worth reconciling.
 
-`20 Wharf Rd` (`20-wharf-rd-jcwt`) declares `total_units = 7` but has zero rows
-in `units`. Not investigated.
+`20 Wharf Rd` (`20-wharf-rd-jcwt`) declares `total_units = 7` and has zero rows
+in `units`.
 
-`residents`, `leases`, and `rent_payments` are RLS-blocked for the anon key;
-`rent_ledger`, `properties`, and `units` are readable. Diagnostics that need the
-blocked tables have to run in the Supabase SQL editor.
-
-Do not print resident names, rent amounts, or lease dates into a Claude Code
-transcript. Write diagnostics that return verdicts and counts —
-`supabase/diagnose-missing-ledger-resident.sql` is the pattern.
+`getAdjustedLedger` folds `startingBalance` into every month's balance, so never
+aggregate `l.balance` across months — use raw due/paid and add the starting
+balance once. `arrearsByResident` does this; anything new should too.
