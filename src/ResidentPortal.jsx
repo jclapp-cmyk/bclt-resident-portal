@@ -10424,7 +10424,7 @@ const OnboardingChecklist = ({ mobile, selectedProperty, initialRecords }) => {
 
 // ── LOGIN PAGE ─────────────────────────────────────────────
 
-const LoginPage = () => {
+const LoginPage = ({ accessNotice }) => {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -10450,6 +10450,15 @@ const LoginPage = () => {
       <div style={{ ...s.card, maxWidth: 420, width: "100%", padding: 32, textAlign: "center" }}>
         <div style={{ fontSize: 28, fontWeight: 800, color: T.accent, marginBottom: 4 }}>BCLT HomeBase</div>
         <div style={{ fontSize: 13, color: T.muted, marginBottom: 28 }}>Bolinas Community Land Trust</div>
+        {accessNotice && (
+          <div style={{ background: T.warnLight, border: `1px solid ${T.warn}`, borderRadius: 8, padding: "14px 16px", marginBottom: 20, textAlign: "left" }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: T.warn, marginBottom: 6 }}>Your link worked — but this address has no access yet</div>
+            <div style={{ fontSize: 12.5, color: T.text, lineHeight: 1.5 }}>
+              You signed in as <strong>{accessNotice}</strong>, but it isn't set up for the portal. Ask your property manager to send you an invite for this exact address, then use the link in that email.
+            </div>
+            <button onClick={() => signOut()} style={{ ...s.btn("ghost"), fontSize: 12, padding: "5px 10px", marginTop: 10 }}>Try a different email</button>
+          </div>
+        )}
         {sent ? (
           <div>
             <div style={{ fontSize: 40, marginBottom: 16 }}>📬</div>
@@ -10624,6 +10633,10 @@ export default function App() {
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  // Set when a magic link authenticates successfully but no user_profiles row
+  // can be found. Without this the app silently re-renders the login screen,
+  // which is indistinguishable from the link having failed.
+  const [accessNotice, setAccessNotice] = useState("");
   const actualRole = profile?.role || "resident";
   // Admins can "View As" another role for testing. Persist across reloads.
   const [viewAsRole, setViewAsRole] = useState(() => localStorage.getItem("bclt_viewAsRole") || null);
@@ -10813,6 +10826,7 @@ export default function App() {
       for (let attempt = 0; attempt < 3; attempt++) {
         const p = await fetchProfile(user.id, user.email);
         if (p) {
+          setAccessNotice("");
           setProfile(p);
           reloadData(); // Reload data now that we're authenticated
           return;
@@ -10820,6 +10834,7 @@ export default function App() {
         if (attempt < 2) await new Promise(r => setTimeout(r, 500));
       }
       console.warn('Profile load failed after 3 attempts for', user.email);
+      setAccessNotice(user.email || "this address");
     };
 
     // L2 fix: Removed getCurrentSession() — onAuthStateChange with
@@ -10830,6 +10845,7 @@ export default function App() {
       } else {
         setAuthUser(null);
         setProfile(null);
+        setAccessNotice("");
       }
       setAuthLoading(false);
     });
@@ -11347,7 +11363,7 @@ export default function App() {
 
   // Auth gate
   if (authLoading) return <div style={{ ...s.page, ...themeVars, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}><div style={{ color: T.muted, fontSize: 14 }}>Loading...</div></div>;
-  if (!authUser || !profile) return <div style={themeVars}><LoginPage /></div>;
+  if (!authUser || !profile) return <div style={themeVars}><LoginPage accessNotice={accessNotice} /></div>;
 
   // Resident-only Spanish. Admin/maint always see English regardless
   // of any residents.preferred_language stored on the resident record.
