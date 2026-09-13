@@ -11,12 +11,20 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'RESEND_API_KEY not configured' });
   }
 
+  const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_row_key || '').trim();
+
   const { type, data } = req.body;
   if (!type || !data) {
     return res.status(400).json({ error: 'Missing type or data' });
   }
 
   const fromEmail = process.env.FROM_EMAIL || 'BCLT HomeBase <residentportal@bolinaslandtrust.org>';
+
+  // ── maintenance_new: look up staff contacts and send email + SMS to each ──
+  if (type === 'maintenance_new') {
+    return handleMaintenanceNew(req, res, data, apiKey, fromEmail, supabaseUrl, serviceKey);
+  }
 
   let email;
   try {
@@ -145,6 +153,151 @@ function buildInspectionNoticeEmail({ residentEmail, residentName, inspectionTyp
       <p>If you need to reschedule, please contact the office at (415) 555-0100.</p>
     `,
   };
+}
+
+// ── Maintenance New Request Handler ──
+// Looks up staff (admin + maintenance roles) and the property manager,
+// sends email + SMS to everyone who should know about the new request.
+
+async function handleMaintenanceNew(req, res, data, apiKey, fromEmail, supabaseUrl, serviceKey) {
+  const { requestId, unit, category, priority, description, propertyName, propertySlug, residentName, source } = data;
+
+  // Build the notification content
+  const priorityEmoji = { emergency: '🚨', high: '🔴', medium: '🟡', low: '🟢' }[priority] || '🔧';
+  const subject = `${priorityEmoji} New Maintenance Request — ${unit || 'Unknown Unit'}`;
+  const smsBody = `${priorityEmoji} BCLT Maintenance: New ${priority || ''} request for ${unit || 'unit'}${propertyName ? ` at ${propertyName}` : ''} — ${(description || '').slice(0, 100)}${description?.length > 100 ? '…' : ''}. Check HomeBase for details.`;
+
+  const emailBody = `
+    <h2>${priorityEmoji} New Maintenance Request</h2>
+    <p>A new maintenance request has been submitted${source === 'qr_code' ? ' via QR code' : ''}.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">Request ID</td><td style="padding:8px;border:1px solid #ddd;">${requestId || '—'}</td></tr>
+      <tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">Unit</td><td style="padding:8px;border:1px solid #ddd;">${unit || '—'}</td></tr>
+      ${propertyName ? `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">Property</td><td style="padding:8px;border:1px solid #ddd;">${propertyName}</td></tr>` : ''}
+      <tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">Category</td><td style="padding:8px;border:1px solid #ddd;">${category || '—'}</td></tr>
+      <tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">Priority</td><td style="padding:8px;border:1px solid #ddd;">${priority || 'normal'}</td></tr>
+      <tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">Submitted By</td><td style="padding:8px;border:1px solid #ddd;">${residentName || 'Resident'}</td></tr>
+      <tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">Description</td><td style="padding:8px;border:1px solid #ddd;">${description || '—'}</td></tr>
+    </table>
+    <p><a href="https://bclt-resident-portal.vercel.app" style="display:inline-block;background:#2E5090;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open HomeBase</a></p>
+  `;
+
+  // Gather recipients: staff members + property manager email
+  const recipients = []; // { email?, phone?, name }
+
+  if (supabaseUrl && serviceKey) {
+    try {
+      // Fetch staff members (admin and maintenance roles)
+      const staffResp = await fetch(
+        `${supabaseUrl}/rest/v1/staff_members?active=eq.true&select=name,email,phone,role`,
+        { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
+      );
+      const staff = await staffResp.json();
+      if (Array.isArray(staff)) {
+        for (const s of staff) {
+          if (s.role === 'admin' || s.role === 'manager' || s.role === 'maintenance') {
+            recipients.push({ email: s.email, phone: s.phone, name: s.name });
+          }
+        }
+      }
+
+      // Also check the property's manager_email
+      if (propertySlug) {
+        const propResp = await fetch(
+          `${supabaseUrl}/rest/v1/properties?slug=eq.${encodeURIComponent(propertySlug)}&select=manager_email`,
+          { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
+        );
+        const props = await propResp.json();
+        const mgrEmail = props?.[0]?.manager_email;
+        if (mgrEmail && !recipients.some(r => r.email === mgrEmail)) {
+          recipients.push({ email: mgrEmail, phone: null, name: 'Property Manager' });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to look up staff for maintenance notification:', err.message);
+    }
+  }
+
+  // Fallback: if no recipients found, use ADMIN_NOTIFY_EMAIL / ADMIN_NOTIFY_PHONE env vars
+  if (recipients.length === 0) {
+    const fallbackEmail = (process.env.ADMIN_NOTIFY_EMAIL || '').trim();
+    const fallbackPhone = (process.env.ADMIN_NOTIFY_PHONE || '').trim();
+    if (fallbackEmail || fallbackPhone) {
+      recipients.push({ email: fallbackEmail || null, phone: fallbackPhone || null, name: 'Admin' });
+    }
+  }
+
+  if (recipients.length === 0) {
+    return res.status(200).json({ success: true, warning: 'No recipients found — no notifications sent' });
+  }
+
+  const results = { emails: [], sms: [], errors: [] };
+
+  // Send emails
+  const emailRecipients = recipients.filter(r => r.email);
+  for (const r of emailRecipients) {
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: fromEmail,
+          to: r.email,
+          subject,
+          html: wrapHtml(emailBody),
+        }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        results.emails.push({ to: r.email, id: result.id });
+      } else {
+        const err = await response.text();
+        results.errors.push({ type: 'email', to: r.email, error: err });
+      }
+    } catch (err) {
+      results.errors.push({ type: 'email', to: r.email, error: err.message });
+    }
+  }
+
+  // Send SMS
+  const twilioSid = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+  const twilioToken = (process.env.TWILIO_AUTH_TOKEN || '').trim();
+  const twilioMsgSvc = (process.env.TWILIO_MESSAGING_SERVICE_SID || '').trim();
+  const twilioFrom = (process.env.TWILIO_PHONE_NUMBER || '').trim();
+
+  if (twilioSid && twilioToken) {
+    const smsRecipients = recipients.filter(r => r.phone);
+    for (const r of smsRecipients) {
+      try {
+        const phone = r.phone.startsWith('+') ? r.phone : `+1${r.phone.replace(/\D/g, '')}`;
+        const params = new URLSearchParams({ To: phone, Body: smsBody });
+        if (twilioMsgSvc) params.set('MessagingServiceSid', twilioMsgSvc);
+        else if (twilioFrom) params.set('From', twilioFrom);
+
+        const response = await fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64'),
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+          }
+        );
+        const smsData = await response.json();
+        if (response.ok) {
+          results.sms.push({ to: phone, sid: smsData.sid });
+        } else {
+          results.errors.push({ type: 'sms', to: phone, error: smsData.message });
+        }
+      } catch (err) {
+        results.errors.push({ type: 'sms', to: r.phone, error: err.message });
+      }
+    }
+  }
+
+  return res.status(200).json({ success: true, sent: results });
 }
 
 // ── HTML Wrapper ──

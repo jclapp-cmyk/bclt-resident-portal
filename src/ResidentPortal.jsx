@@ -10516,7 +10516,7 @@ const PublicMaintenanceForm = ({ unitId, mobile, themeVars }) => {
     // Look up unit info from Supabase
     (async () => {
       try {
-        const { data } = await supabase.from("units").select("*, properties(name)").or(`id.eq.${unitId},number.eq.${unitId}`).limit(1).single();
+        const { data } = await supabase.from("units").select("*, properties(name, slug)").or(`id.eq.${unitId},number.eq.${unitId}`).limit(1).single();
         if (data) setUnitInfo(data);
       } catch (e) {
         // Try by number match
@@ -10546,6 +10546,27 @@ const PublicMaintenanceForm = ({ unitId, mobile, themeVars }) => {
         notes: form.name ? `Submitted by: ${form.name}${form.phone ? ` | Phone: ${form.phone}` : ""}${form.email ? ` | Email: ${form.email}` : ""}` : "",
         source: "qr_code",
       });
+
+      // Send email + SMS notifications to staff/admin
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'maintenance_new',
+          data: {
+            requestId,
+            unit: unitInfo?.number || unitId,
+            category: form.category,
+            priority: form.priority,
+            description: form.description.trim(),
+            propertyName: unitInfo?.properties?.name || '',
+            propertySlug: unitInfo?.properties?.slug || '',
+            residentName: form.name || 'QR Code Submission',
+            source: 'qr_code',
+          },
+        }),
+      }).catch(err => console.warn('Maintenance notification failed:', err));
+
       setSubmitted(true);
     } catch (err) {
       setError("Failed to submit: " + (err.message || "Please try again"));
@@ -10906,6 +10927,27 @@ export default function App() {
         assignedTo: req.assignedTo, vendorId: req.vendorId, status: req.status, photos: req.photos,
       });
       if (saved?.code) setMaintenance(prev => prev.map(m => m.id === optimistic.id ? { ...optimistic, id: saved.code } : m));
+
+      // Send email + SMS notifications to staff/admin
+      const propName = properties.find(p => p.id === req.propertyId)?.name || req.propertyId || '';
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'maintenance_new',
+          data: {
+            requestId: saved?.code || optimistic.id,
+            unit: req.unit,
+            category: req.category,
+            priority: req.priority,
+            description: req.description,
+            propertyName: propName,
+            propertySlug: req.propertyId,
+            residentName: req.requesterName || rc?.name || '',
+            source: req.source || 'resident',
+          },
+        }),
+      }).catch(err => console.warn('Maintenance notification failed:', err));
     } catch (err) { console.warn('Supabase insert maintenance failed:', err); }
   };
   const updateMaintenance = async (id, changes) => {
