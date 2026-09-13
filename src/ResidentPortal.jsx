@@ -11169,11 +11169,33 @@ export default function App() {
   const addThreadN = async (t) => {
     await addThread(t);
     pushNotif({ id: `N-${Date.now()}`, type: "message", icon: "💬", message: `New message: ${t.subject}`, timestamp: new Date().toISOString(), roles: ["resident", "admin"].filter(r => r !== role) });
+    // Email + SMS notification to staff when a resident sends a new message
+    if (role === "resident") {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'message_new',
+          data: { subject: t.subject, body: t.lastMessage || '', senderName: residentCtx?.name || 'Resident', senderRole: 'resident', threadId: t.id },
+        }),
+      }).catch(err => console.warn('Message notification failed:', err));
+    }
   };
   const addMessageN = async (msg) => {
     await addMessage(msg);
     const thread = threads.find(t => t.id === msg.threadId);
     pushNotif({ id: `N-${Date.now()}`, type: "message", icon: "💬", message: `Reply in "${thread?.subject || "thread"}"`, timestamp: new Date().toISOString(), roles: ["resident", "admin"].filter(r => r !== role) });
+    // Email + SMS notification to staff when a resident replies
+    if (role === "resident") {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'message_new',
+          data: { subject: thread?.subject || 'Message', body: msg.text || '', senderName: residentCtx?.name || 'Resident', senderRole: 'resident', threadId: msg.threadId },
+        }),
+      }).catch(err => console.warn('Message notification failed:', err));
+    }
   };
   const addVendorN = (v) => {
     addVendor(v);

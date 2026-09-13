@@ -26,6 +26,11 @@ export default async function handler(req, res) {
     return handleMaintenanceNew(req, res, data, apiKey, fromEmail, supabaseUrl, serviceKey);
   }
 
+  // ── message_new: resident sent a message, notify staff ──
+  if (type === 'message_new') {
+    return handleMessageNew(req, res, data, apiKey, fromEmail, supabaseUrl, serviceKey);
+  }
+
   let email;
   try {
     switch (type) {
@@ -295,6 +300,120 @@ async function handleMaintenanceNew(req, res, data, apiKey, fromEmail, supabaseU
         } else {
           results.errors.push({ type: 'sms', to: phone, error: smsData.message });
         }
+      } catch (err) {
+        results.errors.push({ type: 'sms', to: r.phone, error: err.message });
+      }
+    }
+  }
+
+  return res.status(200).json({ success: true, sent: results });
+}
+
+// ── Message New Handler ──
+// Notifies staff when a resident sends a portal message.
+
+async function handleMessageNew(req, res, data, apiKey, fromEmail, supabaseUrl, serviceKey) {
+  const { subject, body, senderName, senderRole, threadId } = data;
+
+  const emailSubject = `💬 New Message from ${senderName || 'Resident'}: ${subject || '(no subject)'}`;
+  const smsBody = `💬 BCLT: New message from ${senderName || 'Resident'} — "${(subject || body || '').slice(0, 80)}${(subject || body || '').length > 80 ? '…' : ''}". Check HomeBase.`;
+
+  const emailBody = `
+    <h2>💬 New Message</h2>
+    <p><strong>${senderName || 'A resident'}</strong> sent a message in HomeBase.</p>
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      <tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">Subject</td><td style="padding:8px;border:1px solid #ddd;">${subject || '—'}</td></tr>
+      <tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">From</td><td style="padding:8px;border:1px solid #ddd;">${senderName || 'Resident'}</td></tr>
+      ${body ? `<tr><td style="padding:8px;border:1px solid #ddd;font-weight:600;">Message</td><td style="padding:8px;border:1px solid #ddd;">${body.length > 500 ? body.slice(0, 500) + '…' : body}</td></tr>` : ''}
+    </table>
+    <p><a href="https://bclt-resident-portal.vercel.app/#/communications" style="display:inline-block;background:#2E5090;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Open HomeBase</a></p>
+  `;
+
+  // Get staff recipients
+  const recipients = [];
+  if (supabaseUrl && serviceKey) {
+    try {
+      const staffResp = await fetch(
+        `${supabaseUrl}/rest/v1/staff_members?active=eq.true&select=name,email,phone,role,notify_email,notify_sms`,
+        { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
+      );
+      const staff = await staffResp.json();
+      if (Array.isArray(staff)) {
+        for (const s of staff) {
+          if (s.role === 'admin' || s.role === 'property_manager' || s.role === 'manager') {
+            recipients.push({
+              email: (s.notify_email !== false) ? s.email : null,
+              phone: (s.notify_sms !== false) ? s.phone : null,
+              name: s.name,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to look up staff for message notification:', err.message);
+    }
+  }
+
+  if (recipients.length === 0) {
+    const fallbackEmail = (process.env.ADMIN_NOTIFY_EMAIL || '').trim();
+    const fallbackPhone = (process.env.ADMIN_NOTIFY_PHONE || '').trim();
+    if (fallbackEmail || fallbackPhone) {
+      recipients.push({ email: fallbackEmail || null, phone: fallbackPhone || null, name: 'Admin' });
+    }
+  }
+
+  if (recipients.length === 0) {
+    return res.status(200).json({ success: true, warning: 'No recipients found' });
+  }
+
+  const results = { emails: [], sms: [], errors: [] };
+
+  // Send emails
+  for (const r of recipients.filter(r => r.email)) {
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: fromEmail, to: r.email, subject: emailSubject, html: wrapHtml(emailBody) }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        results.emails.push({ to: r.email, id: result.id });
+      } else {
+        results.errors.push({ type: 'email', to: r.email, error: await response.text() });
+      }
+    } catch (err) {
+      results.errors.push({ type: 'email', to: r.email, error: err.message });
+    }
+  }
+
+  // Send SMS
+  const twilioSid = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+  const twilioToken = (process.env.TWILIO_AUTH_TOKEN || '').trim();
+  const twilioMsgSvc = (process.env.TWILIO_MESSAGING_SERVICE_SID || '').trim();
+  const twilioFrom = (process.env.TWILIO_PHONE_NUMBER || '').trim();
+
+  if (twilioSid && twilioToken) {
+    for (const r of recipients.filter(r => r.phone)) {
+      try {
+        const phone = r.phone.startsWith('+') ? r.phone : `+1${r.phone.replace(/\D/g, '')}`;
+        const params = new URLSearchParams({ To: phone, Body: smsBody });
+        if (twilioMsgSvc) params.set('MessagingServiceSid', twilioMsgSvc);
+        else if (twilioFrom) params.set('From', twilioFrom);
+        const response = await fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Basic ' + Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64'),
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+          }
+        );
+        const smsData = await response.json();
+        if (response.ok) results.sms.push({ to: phone, sid: smsData.sid });
+        else results.errors.push({ type: 'sms', to: phone, error: smsData.message });
       } catch (err) {
         results.errors.push({ type: 'sms', to: r.phone, error: err.message });
       }
