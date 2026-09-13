@@ -1316,6 +1316,8 @@ export async function fetchStaffMembers() {
     propertyId: s.property_id,
     propertyName: s.properties?.name || null,
     active: s.active,
+    notifyEmail: s.notify_email ?? true,
+    notifySms: s.notify_sms ?? true,
   }));
 }
 
@@ -1340,6 +1342,8 @@ export async function updateStaffMember(id, changes) {
   if (changes.phone !== undefined) mapped.phone = changes.phone;
   if (changes.propertyId !== undefined) mapped.property_id = changes.propertyId;
   if (changes.active !== undefined) mapped.active = changes.active;
+  if (changes.notifyEmail !== undefined) mapped.notify_email = changes.notifyEmail;
+  if (changes.notifySms !== undefined) mapped.notify_sms = changes.notifySms;
   const { error } = await supabase.from('staff_members').update(mapped).eq('id', id);
   if (error) throw error;
 }

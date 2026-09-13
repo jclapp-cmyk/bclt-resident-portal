@@ -187,16 +187,20 @@ async function handleMaintenanceNew(req, res, data, apiKey, fromEmail, supabaseU
 
   if (supabaseUrl && serviceKey) {
     try {
-      // Fetch staff members (admin and maintenance roles)
+      // Fetch staff members (admin and maintenance roles) with notification preferences
       const staffResp = await fetch(
-        `${supabaseUrl}/rest/v1/staff_members?active=eq.true&select=name,email,phone,role`,
+        `${supabaseUrl}/rest/v1/staff_members?active=eq.true&select=name,email,phone,role,notify_email,notify_sms`,
         { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
       );
       const staff = await staffResp.json();
       if (Array.isArray(staff)) {
         for (const s of staff) {
-          if (s.role === 'admin' || s.role === 'manager' || s.role === 'maintenance') {
-            recipients.push({ email: s.email, phone: s.phone, name: s.name });
+          if (s.role === 'admin' || s.role === 'manager' || s.role === 'property_manager' || s.role === 'maintenance') {
+            recipients.push({
+              email: (s.notify_email !== false) ? s.email : null,
+              phone: (s.notify_sms !== false) ? s.phone : null,
+              name: s.name,
+            });
           }
         }
       }

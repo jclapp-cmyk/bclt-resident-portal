@@ -9358,6 +9358,65 @@ const AdminSettings = ({ mobile, settings, setSettings, darkMode, setDarkMode, m
       {tab === "Notifications" && (
         <div>
           <div style={s.card}>
+            <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Maintenance Notification Recipients</div>
+            <p style={{ fontSize: 13, color: T.muted, marginBottom: 14 }}>Choose which staff members get notified when a maintenance request is submitted, and how.</p>
+            {(() => {
+              const allStaff = (parentStaffMembers || staffList || []).filter(st => st.active);
+              if (!allStaff.length) return <p style={{ fontSize: 13, color: T.muted }}>No active staff members. Add staff in the Staff tab first.</p>;
+              return (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead><tr style={{ borderBottom: `2px solid ${T.border}`, textAlign: "left" }}>
+                    <th style={s.th}>Name</th>
+                    <th style={s.th}>Role</th>
+                    <th style={{ ...s.th, textAlign: "center" }}>📧 Email</th>
+                    <th style={{ ...s.th, textAlign: "center" }}>📱 SMS</th>
+                  </tr></thead>
+                  <tbody>
+                    {allStaff.map(st => (
+                      <tr key={st.id} style={{ borderBottom: `1px solid ${T.borderLight}` }}>
+                        <td style={s.td}>
+                          <div>{st.name}</div>
+                          {st.email && <div style={{ fontSize: 11, color: T.muted }}>{st.email}</div>}
+                          {st.phone && <div style={{ fontSize: 11, color: T.muted }}>{st.phone}</div>}
+                        </td>
+                        <td style={s.td}>
+                          <span style={s.badge(
+                            st.role === "admin" ? T.infoDim : st.role === "property_manager" ? T.successDim : T.warnDim,
+                            st.role === "admin" ? T.info : st.role === "property_manager" ? T.success : T.warn
+                          )}>{st.role === "property_manager" ? "Manager" : st.role === "admin" ? "Admin" : "Maintenance"}</span>
+                        </td>
+                        <td style={{ ...s.td, textAlign: "center" }}>
+                          {st.email ? (
+                            <input type="checkbox" checked={st.notifyEmail !== false} onChange={async (e) => {
+                              const val = e.target.checked;
+                              try {
+                                await updateStaffMember(st.id, { notifyEmail: val });
+                                if (onDataChanged) onDataChanged();
+                                showSuccess(val ? `Email notifications ON for ${st.name}` : `Email notifications OFF for ${st.name}`);
+                              } catch (err) { showSuccess("Error: " + err.message); }
+                            }} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                          ) : <span style={{ fontSize: 11, color: T.dim }}>No email</span>}
+                        </td>
+                        <td style={{ ...s.td, textAlign: "center" }}>
+                          {st.phone ? (
+                            <input type="checkbox" checked={st.notifySms !== false} onChange={async (e) => {
+                              const val = e.target.checked;
+                              try {
+                                await updateStaffMember(st.id, { notifySms: val });
+                                if (onDataChanged) onDataChanged();
+                                showSuccess(val ? `SMS notifications ON for ${st.name}` : `SMS notifications OFF for ${st.name}`);
+                              } catch (err) { showSuccess("Error: " + err.message); }
+                            }} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                          ) : <span style={{ fontSize: 11, color: T.dim }}>No phone</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
+          <div style={s.card}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Alert Preferences</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <Toggle label="Maintenance Alerts" description="Get notified when new requests are submitted or updated" checked={settings.notifications.maintenanceAlerts} onChange={v => upd("notifications", "maintenanceAlerts", v)} />
