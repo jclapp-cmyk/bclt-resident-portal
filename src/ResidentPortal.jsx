@@ -11306,7 +11306,17 @@ export default function App() {
   const renderPage = () => {
     if (role === "resident") {
       const rc = residentCtx;
-      const myMaint = rc?.unit ? maintenance.filter(m => m.unit === rc.unit) : maintenance;
+      const myMaint = maintenance.filter(m => {
+        // Match by resident slug first (most reliable), then by unit + property
+        if (rc?.id && m.residentSlug && m.residentSlug === rc.id) return true;
+        if (rc?._uuid && m._uuid && false) return false; // placeholder
+        // Fall back to unit match scoped to same property
+        if (rc?.unit && rc.unit !== "—" && m.unit === rc.unit) {
+          if (rc.propertyId && m.propertyId) return m.propertyId === rc.propertyId;
+          return true;
+        }
+        return false;
+      });
       const myThreads = rc?.id ? threads.filter(t => t.type === "broadcast" || t.participants.includes(rc.id)) : threads;
       switch (page) {
         case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} messages={messages} unitInspections={unitInspections} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;
