@@ -1050,18 +1050,24 @@ const AdminDashboard = ({ mobile, maintenance, vendors: vendorData, notification
       )}
 
       <div style={{ ...s.grid("1fr 1fr", mobile), marginBottom: 24 }}>
-        <div style={s.card}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Work Order Status</div>
-          <DonutChart segments={[
-            { value: maintenance.filter(m => MAINT_AWAITING(m)).length, color: T.info, label: "Submitted" },
-            { value: maintenance.filter(m => m.status === "in-progress").length, color: T.warn, label: "In Progress" },
-            { value: maintenance.filter(m => MAINT_DONE(m)).length, color: T.success, label: "Completed" },
-          ]} size={120} centerValue={String(maintenance.length)} centerLabel="Total" mobile={mobile} />
-        </div>
-        <div style={s.card}>
-          <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Orders by Category</div>
-          <MiniBarChart bars={Object.entries(maintenance.reduce((acc, m) => ({ ...acc, [m.category]: (acc[m.category] || 0) + 1 }), {})).map(([label, value]) => ({ label, value, color: T.accent }))} mobile={mobile} />
-        </div>
+        {(() => {
+          const active = maintenance.filter(m => m.status !== "rejected");
+          const openCount = active.filter(m => MAINT_OPEN(m)).length;
+          return (<>
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Work Order Status</div>
+              <DonutChart segments={[
+                { value: active.filter(m => MAINT_AWAITING(m)).length, color: T.info, label: "New / Submitted" },
+                { value: active.filter(m => MAINT_ACTIVE_WO(m)).length, color: T.warn, label: "To Do / In Progress" },
+                { value: active.filter(m => MAINT_DONE(m)).length, color: T.success, label: "Completed" },
+              ]} size={120} centerValue={String(openCount)} centerLabel="Open" mobile={mobile} />
+            </div>
+            <div style={s.card}>
+              <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Orders by Category</div>
+              <MiniBarChart bars={Object.entries(active.filter(m => MAINT_OPEN(m)).reduce((acc, m) => ({ ...acc, [m.category]: (acc[m.category] || 0) + 1 }), {})).map(([label, value]) => ({ label, value, color: T.accent }))} mobile={mobile} />
+            </div>
+          </>);
+        })()}
       </div>
       <div style={s.card}>
         <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 15 }}>Recent Work Orders</div>
