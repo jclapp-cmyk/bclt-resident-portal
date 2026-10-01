@@ -11008,7 +11008,7 @@ export default function App() {
             description: req.description,
             propertyName: propName,
             propertySlug: req.propertyId,
-            residentName: req.requesterName || rc?.name || '',
+            residentName: req.requesterName || residentCtx?.name || '',
             source: req.source || 'resident',
           },
         }),
@@ -11126,31 +11126,7 @@ export default function App() {
   const addMaintenanceN = (req) => {
     addMaintenance(req);
     pushNotif({ id: `N-${Date.now()}`, type: "maintenance", icon: "🔧", message: `New request: ${req.description.slice(0, 50)} (${req.unit})${req.priority === "critical" ? " — Critical" : ""}`, timestamp: new Date().toISOString(), roles: ["admin", "maintenance"] });
-    // Notify the shared portal mailbox — one email, not one per admin's personal inbox
-    sendNotification("custom", {
-      to: "residentportal@bolinaslandtrust.org",
-      subject: `New Maintenance Request — ${req.unit}`,
-      body: `A new ${req.priority} priority maintenance request has been submitted for Unit ${req.unit}.\n\nCategory: ${req.category}\nDescription: ${req.description}\n\nPlease log in to the Resident Portal to review and assign.`,
-    }).catch((err) => { console.error('Maintenance notification failed:', err); });
-    // SMS the configured notify list (Admin Settings → Maintenance → Notify Phones)
-    const notifyPhones = (settings?.maint?.notifyPhones || []).filter(Boolean);
-    if (notifyPhones.length > 0) {
-      const building = LIVE_PROPERTIES.find(p => p.id === req.propertyId)?.name || "";
-      const requester = req.requesterName
-        || LIVE_RESIDENTS.find(r => r.unit === req.unit && r.propertyId === req.propertyId)?.name
-        || LIVE_RESIDENTS.find(r => r.unit === req.unit)?.name
-        || "";
-      const locParts = [building, req.unit ? `Unit ${req.unit}` : ""].filter(Boolean).join(" · ");
-      const requesterLine = requester ? `From: ${requester}\n` : "";
-      const smsBody =
-        `BCLT: New ${req.priority} maintenance request\n` +
-        (locParts ? `${locParts}\n` : "") +
-        requesterLine +
-        `${req.category}: ${req.description.slice(0, 120)}${req.description.length > 120 ? "…" : ""}`;
-      for (const phone of notifyPhones) {
-        sendSMS(phone, smsBody).catch(err => console.warn(`SMS notify ${phone} failed:`, err));
-      }
-    }
+    // Email + SMS notifications are handled inside addMaintenance via /api/notify
   };
   const updateMaintenanceN = (id, changes) => {
     updateMaintenance(id, changes);
@@ -11334,17 +11310,18 @@ export default function App() {
   const renderPage = () => {
     if (role === "resident") {
       const rc = residentCtx;
-      const myMaint = maintenance.filter(m => {
-        // Match by resident slug first (most reliable), then by unit + property
-        if (rc?.id && m.residentSlug && m.residentSlug === rc.id) return true;
-        if (rc?._uuid && m._uuid && false) return false; // placeholder
-        // Fall back to unit match scoped to same property
-        if (rc?.unit && rc.unit !== "—" && m.unit === rc.unit) {
-          if (rc.propertyId && m.propertyId) return m.propertyId === rc.propertyId;
-          return true;
-        }
-        return false;
-      });
+      const myMaint = (!rc?.id && (!rc?.unit || rc.unit === "—"))
+        ? [] // Unlinked resident — no maintenance to show
+        : maintenance.filter(m => {
+          // Match by resident slug first (most reliable), then by unit + property
+          if (rc?.id && m.residentSlug && m.residentSlug === rc.id) return true;
+          // Fall back to unit match scoped to same property
+          if (rc?.unit && rc.unit !== "—" && m.unit === rc.unit) {
+            if (rc.propertyId && m.propertyId) return m.propertyId === rc.propertyId;
+            return true;
+          }
+          return false;
+        });
       const myThreads = rc?.id ? threads.filter(t => t.type === "broadcast" || t.participants.includes(rc.id)) : threads;
       switch (page) {
         case "dashboard": return <ResidentDashboard mobile={mobile} maintenance={myMaint} threads={myThreads} messages={messages} unitInspections={unitInspections} notifications={roleNotifs} rc={rc} onNavigate={handleNav} />;

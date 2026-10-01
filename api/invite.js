@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
-  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_row_key || '').trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_role_key || '').trim();
   const resendKey = (process.env.RESEND_API_KEY || '').trim();
   const fromEmail = process.env.FROM_EMAIL || 'BCLT HomeBase <residentportal@bolinaslandtrust.org>';
   const portalUrl = (process.env.PORTAL_URL || 'https://bclt-resident-portal.vercel.app').trim();

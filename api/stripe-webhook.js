@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   const stripeKey = (process.env.STRIPE_SECRET_KEY || '').trim();
   const webhookSecret = (process.env.STRIPE_WEBHOOK_SECRET || '').trim();
   const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
-  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_row_key || '').trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_role_key || '').trim();
 
   if (!stripeKey || !webhookSecret) {
     return res.status(500).json({ error: 'Stripe keys not configured' });

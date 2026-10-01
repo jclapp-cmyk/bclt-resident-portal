@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   const stripeKey = (process.env.STRIPE_SECRET_KEY || '').trim();
   const supabaseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
-  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_row_key || '').trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.Supabase_service_role_key || '').trim();
 
   if (!stripeKey) {
     return res.status(500).json({ error: 'STRIPE_SECRET_KEY not configured' });
